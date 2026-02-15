@@ -1,0 +1,18 @@
+{
+  "workspace": {
+    "path": "${workspaceFolder}\\bootloader\\globalScaleBootloader.eww"
+  },
+  "workspaces": {
+    "${workspaceFolder}\\bootloader\\globalScaleBootloader.eww": {
+      "configs": {
+        "${workspaceFolder}\\bootloader\\globalScaleBootloader.ewp": "flexspi_nor_sdram_debug"
+      },
+      "selected": {
+        "path": "${workspaceFolder}\\bootloader\\globalScaleBootloader.ewp"
+      }
+    }
+  },
+  "workbench": {
+    "path": "C:\\Program Files\\IAR Systems\\Embedded Workbench 9.1"
+  }
+}

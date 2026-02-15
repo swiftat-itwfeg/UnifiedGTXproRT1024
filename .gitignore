@@ -1,0 +1,32 @@
+.svn/
+# IAR Settings  
+**/settings/*.crun  
+**/settings/*.dbgdt  
+**/settings/*.cspy  
+**/settings/*.cspy.*  
+**/settings/*.xcl  
+**/settings/*.dni  
+**/settings/*.wsdt  
+**/settings/*.wspos  
+
+# IAR Debug Exe  
+**/Exe/*.sim  
+
+# Debug and Compilation Mess
+*.o
+flexspi_nor_sdram_debug/*
+
+# IAR Debug Obj  
+**/Obj/*.pbd  
+**/Obj/*.pbd.*  
+**/Obj/*.pbi  
+**/Obj/*.pbi.*  
+
+bootloader/globalScaleBootloader.dep
+bootloader/globalScaleBootloader.dep
+globalScaleRT1024.dep
+settings/globalScaleRT1024.dnx
+settings/globalScaleRT1024_flexspi_nor_sdram_debug.pemicro
+bootloader/globalScaleBootloader.dep
+globalScaleRT1024.dep
+settings/globalScaleRT1024.dnx
