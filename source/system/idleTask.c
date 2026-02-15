@@ -33,22 +33,6 @@ static void idleTask( void *pvParameters )
      
     while( !suspend_ ) {
         
-        while(1)
-        {
-            static unsigned short printfThrottle = 0;
-            printfThrottle++;
-            if(printfThrottle >= 500) {
-               //PRINTF("Media Reading: %d, outOfMedia?: %d\r\n", pollMediaCounts(),getOutOfMedia());
-               //sendLowLabelMinMax(0, 0, 0, 0);
-               printfThrottle = 0;  
-            }
-           
-            //printStepsTakenTPHIntr();
-            printFromInterrupt();
-            printLLAverageTime();
-            vTaskDelay( pdMS_TO_TICKS( 20 ) );
-        }
     }
-    vTaskSuspend(NULL);  
-    
+    vTaskSuspend( NULL );     
 }

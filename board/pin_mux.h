@@ -50,7 +50,7 @@ void BOARD_InitBootPins(void);
 void BOARD_InitPins(void);
 void configurePinAD_B1_15AsGPIO(void);
 void configurePinAD_B1_15AsSPI3MISO(void);
-void reconfigureAccelPinsForDebug(void);
+
 
 
 //#define RK3568_ARK_REV_1_0_MOD  

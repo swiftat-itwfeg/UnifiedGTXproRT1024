@@ -25,10 +25,6 @@ static unsigned short x[ CC_TWENTY_FIVE_POINT_FIVE + 1 ];
 static unsigned short y[ CC_TWENTY_FIVE_POINT_FIVE + 1 ];
 static unsigned short z[ CC_TWENTY_FIVE_POINT_FIVE + 1 ];
 
-//uint16_t relaxedVals[255] = { 0 };
-//uint16_t tightenedVals[255] = { 0 };
-//uint16_t deltaVals[255] = { 0 };
-
 static bool gapCal_ = false;
 static bool TUCal_ = false;
 
@@ -358,9 +354,9 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 memset( &calStatus, 0, sizeof(PrGapCalStatus) );
                 
                 /* allocate buffers for storing measurements */
-                pBackingS = pBacking        = &x[0];    /* pvPortMalloc( CC_TWENTY_FIVE_POINT_FIVE + 1 ); */
-                pLabelS = pLabel            = &y[0];    /* pvPortMalloc( CC_TWENTY_FIVE_POINT_FIVE + 1 ); */
-                pDeflectionS = pDeflection  = &z[0];    /* pvPortMalloc( CC_TWENTY_FIVE_POINT_FIVE + 1 ); */   
+                pBackingS = pBacking        = &x[0];    
+                pLabelS = pLabel            = &y[0];  
+                pDeflectionS = pDeflection  = &z[0];      
                 if( pBacking && pLabel && pDeflection ) {
                      
                      memset( pBackingS, 0, ( CC_TWENTY_FIVE_POINT_FIVE + 1 ) );
@@ -415,8 +411,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 lp5521Cfg.redCurrentReg = CC_Zero; 
                 setGapCurrent( lp5521Cfg.redCurrentReg );
                 
-                /* give the adc a chance to sample 
-                delay_uS( FIVE_MILISECONDS );*/
+                /* give the adc a chance to sample */
                 delay_uS( TEN_MILISECONDS );
                 
                 /* read the voltage across the detector */
@@ -431,7 +426,6 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                       
                         /* get the average of 10 sensor readings */
                         *pBacking = getShootAverage();
-                        //PRINTF("gapSensorCal():backing bias: %d backing cnts: %d\r\n", lp5521Cfg.redCurrentReg, *pBacking );
                         taskYIELD(); 
                         pBacking++;
                     } else {
@@ -487,8 +481,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                         delay_uS(110);
                       
                         /* get the average of 10 sensor readings */
-                        *pLabel = getShootAverage(); 
-                         //PRINTF("gapSensorCal():label bias: %d label cnts: %d\r\n", lp5521Cfg.redCurrentReg, *pLabel );
+                        *pLabel = getShootAverage();                          
                          taskYIELD(); 
                         pLabel++;
                     } else {
@@ -525,9 +518,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 /* calculate deflections */
                 for( int i = 0; i < CC_TWENTY_FIVE_POINT_FIVE; i++ ) {
                     *pDeflection = abs( *pLabel - *pBacking );
-                    /*
-                    PRINTF("gapSensorCal(): index: %d deflection: %d \r\n", i, *pDeflection); 
-                    taskYIELD(); */
+
                     pDeflection++;
                     pLabel++;
                     pBacking++;            
@@ -542,12 +533,11 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 pDeflection += 10;
                 /* now find the greatest deflection point */
                 unsigned short dmax = *pDeflection++;    
-                //PRINTF("gapSensorCal(): 1) deflection: %d \r\n", dmax ); 
+
                 for( int i = 11; i < CC_TWENTY_FIVE_POINT_FIVE; i++ ) {
                     if( *pDeflection > dmax ) {
                         /* drive current for our greatest deflection value */
                         dmax = *pDeflection; 
-                        //PRINTF("gapSensorCal(): cal point: %d deflection: %d \r\n", i, z[i]); 
                         taskYIELD();
                         *pBias = i;
                     } 
@@ -565,18 +555,14 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 
                 
                 /* reset our pointer */
-                pDeflection = pDeflectionS; 
-                
-                //vTaskDelay(pdMS_TO_TICKS(50)); //Allow time for PRINTF to finish
-
-
+                pDeflection = pDeflectionS;                
                 *pBias = ((float)*pBias); 
 
-                PRINTF("\r\n\r\n****************************************************\r\n");
-                PRINTF("Drive current set to DEFAULT: %d\r\n", *pBias);
-                
+
+                PRINTF("drive current set to: %d\r\n", *pBias);                
                 PRINTF("pBacking = %d\r\n", pBacking[*pBias]);
                 PRINTF("pLabel = %d\r\n\r\n", pLabel[*pBias]);
+                
                 setConfigBackingValue( pBacking[*pBias] );
                 setConfigLabelValue( pLabel[*pBias] );
                 
@@ -587,10 +573,8 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 calStatus.TUSensorDriveCurrent = (int)config_.takeup_sensor_drive_current;
                 calStatus.driveCurrent = (*pBias);
                 /* add backing paper val at calibration point to config */
-                //setConfigBackingValue( pBacking[*pBias] );
                 calStatus.backingVoltage = *pBacking;  
                 /* add backing paper plus label val at calibration point to config */
-                //setConfigLabelValue( pLabel[*pBias] );
                 calStatus.labelBackVoltage = *pLabel;
                
                 sendPrGapCalStatus( &calStatus );
@@ -598,17 +582,20 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 pBacking += *pBias;    
                 pLabel += *pBias;
                 pDeflection += *pBias;
-                              
+
+#if 0           /* add for debug */                                
                 float w = (float)( (float)*pDeflection * AD_RESOLUTION );
                 float x  = (float)( (float)*pBias / 10);
                 float y  = (float)( (float)*pBacking * AD_RESOLUTION );               
                 float z = (float)( (float)*pLabel * AD_RESOLUTION );
                                 
-                //PRINTF("gapSensorCal(): calibrated values: \r\n");
-                //PRINTF("gapSensorCal(): detectorVoltage: %2.3fV\r\n", w );
-                //PRINTF("gapSensorCal(): driveCurrent: %2.3fV\r\n", x );
-                //PRINTF("gapSensorCal(): backingVoltage: %2.3fV\r\n", y );
-                //PRINTF("gapSensorCal(): labelBackVoltage: %2.3fV\r\n", z );
+                PRINTF("gapSensorCal(): calibrated values: \r\n");
+                PRINTF("gapSensorCal(): detectorVoltage: %2.3fV\r\n", w );
+                PRINTF("gapSensorCal(): driveCurrent: %2.3fV\r\n", x );
+                PRINTF("gapSensorCal(): backingVoltage: %2.3fV\r\n", y );
+                PRINTF("gapSensorCal(): labelBackVoltage: %2.3fV\r\n", z );
+#endif
+                
                 taskYIELD();
                 /* cleanup */
                 pBacking = pBackingS; 
@@ -616,12 +603,11 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 pDeflection = pDeflectionS;                
                 result = true;
             } else {
-                PRINTF("gapSensorCal(): Abort cal results!\r\n");
+                PRINTF("gapSensorCal(): abort cal results!\r\n");
             }
             break;
         }
-        case _CALDONE: {
-            PRINTF("gapSensorCal(): here 4\r\n");          
+        case _CALDONE: {        
             result = true;
             calStatus.state =_Done;        
             
@@ -639,10 +625,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
             PRINTF("gapSensorCal(): Unknown cal step!\r\n");
             break;
         }
-    }
-    
-    
-    
+    }    
     return result;
 }
 
@@ -694,7 +677,6 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
                 TUVal = getTakeUpTorque();
                 x[TUIndex] = TUVal;
               
-                //PRINTF("TUVal = %d     current = %d\r\n", TUVal, TUCurrent);
                 TUCurrent++;
                 TUIndex++;
                 
@@ -774,23 +756,7 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
                 else
                    z[i] = y[i] - x[i];
             }
-            
-            /*
-            for(int i = 0; i < 255; i++)
-            {
-                //PRINTF("deltaVals = %d \r\n", deltaVals[i], i);
-                
-                for(int i = 0; i < 1000; i++)
-                {
-                    __NOP();
-                    for(int i2 = 0; i2 < 1000; i2++)
-                    {
-                        __NOP();
-                    }
-                }
-            }
-            */
-            
+                        
             if (size <= 0) 
             {
                 // Handle invalid size
@@ -822,8 +788,6 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
             PRINTF("\r\n\r\n****************************************************\r\n");
             PRINTF("largest deflection detected at current level %d\r\n", largestValueIndex);
             PRINTF("deflection value = %d\r\n", largestValue);
-            //PRINTF("TU arm resting torque value = %d\r\n", relaxedVals[largestValueIndex]);
-            //PRINTF("TU arm tightened torque value = %d\r\n", tightenedVals[largestValueIndex]);
                            
             //set our calibrated torque sensor current
             setPaperTakeupCurrent( largestValueIndex );
@@ -831,11 +795,7 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
             //DVT 3 springs
             unsigned short max = (int)(MAX_TENSION_MULTIPLIER * (float)y[largestValueIndex]);
             unsigned short min = (int)(MIN_TENSION_MULTIPLIER * (float)y[largestValueIndex]);
-            
-            //randys new springs
-            //unsigned short max = (int)(0.60 * tightenedVals[largestValueIndex]);
-            //unsigned short min = (int)(0.55 * tightenedVals[largestValueIndex]);
-            
+                        
             setConfigTakeupSensorValue( largestValueIndex,  max, min);
             
             TUDrive = largestValueIndex;
@@ -856,9 +816,6 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
             sendPrGapCalStatus( &calStatus );
             
             taskYIELD();
-            
-            //TUCal_ = false;
-            
             result = true;
                     
             break;
@@ -989,31 +946,16 @@ static void configureAvery( LP5521CFG *pLP5521Cfg )
 *******************************************************************************/
 static void configureHobart( LP5521CFG *pLP5521Cfg )
 {
-    /*
-    typedef enum
-    {
-        DC_0_PRECENT,
-        DC_5_PRECENT =                      0x05,
-        DC_10_PRECENT =                     0x10,
-        DC_25_PRECENT =                     0x3f,
-        DC_50_PRECENT =                     0x7f,
-        DC_75_PRECENT =                     0xbf,
-        DC_90_PRECENT =                     0xe6,
-        DC_97_PERCENT =                     0xFc,
-        DC_100_PERCENT =                    0xff    
-    }PWMDutyCycle;
-    */
-  
     /* setup the register according to Hobart's configuration */
     pLP5521Cfg->deviceAddr = LP5521_I2C_ADDR;
     pLP5521Cfg->opModeReg = ( CH_R_DIRECT_CONTROL | CH_G_DIRECT_CONTROL | CH_B_DIRECT_CONTROL );
     pLP5521Cfg->enableReg = LP5521_OPERATE;
     pLP5521Cfg->configReg = ( PWM_558_FREQ | /*CP_AUTO_MODE*/ CP_FORCED_1_MODE | LED_SOURCE_DEFAULT | CLK_INTERNAL_A );
-    //PRINTF("\r\n\r\nconfig_.media_sensor_adjustment = %d\r\n\r\n", config_.media_sensor_adjustment);
+    
     pLP5521Cfg->redCurrentReg = CC_Zero;
     pLP5521Cfg->greenCurrentReg = CC_Zero;
     pLP5521Cfg->blueCurrentReg = CC_Zero;
-    //pLP5521Cfg->redPwmReg = DC_90_PRECENT;
+
     pLP5521Cfg->redPwmReg = DC_100_PERCENT;  
     pLP5521Cfg->greenPwmReg = DC_100_PERCENT;  
     pLP5521Cfg->bluePwmReg = DC_100_PERCENT;
@@ -1062,15 +1004,10 @@ static bool writeRegister( unsigned char reg, unsigned char data )
     size_t txCnts = 0xFFU;              /* full */ 
     uint8_t txBffr[3] = { 0 };    
     bool x = false;
-    
-    #if 0
-    txBffr[0] = LP5521_I2C_ADDR;
-    txBffr[1] = reg;
-    txBffr[2] = data;
-    #else
+
     txBffr[0] = reg;
     txBffr[1] = data;    
-    #endif
+
     /* send the start of frame */
     if( kStatus_Success == LPI2C_MasterStart( (LPI2C_Type *)LPI2C1_BASE, LP5521_I2C_ADDR, kLPI2C_Write ) ) {
         /* check master tx fifo */
@@ -1122,53 +1059,43 @@ uint8_t readRegister( char slaveAdd, char reg )
     size_t txCount        = 0xFFU;
     
     
-    if (kStatus_Success == LPI2C_MasterStart((LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Write))
-    {
-        /* Check master tx FIFO empty or not */
-        LPI2C_MasterGetFifoCounts((LPI2C_Type *)LPI2C1_BASE, NULL, &txCount);
-        while (txCount)
-        {
+    if( kStatus_Success == LPI2C_MasterStart( (LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Write ) ) {
+        /* check master tx FIFO empty or not */
+        LPI2C_MasterGetFifoCounts( (LPI2C_Type *)LPI2C1_BASE, NULL, &txCount );
+        while( txCount ) {
             LPI2C_MasterGetFifoCounts((LPI2C_Type *)LPI2C1_BASE, NULL, &txCount);
         }
-        /* Check communicate with slave successful or not */
-        if (LPI2C_MasterGetStatusFlags((LPI2C_Type *)LPI2C1_BASE) & kLPI2C_MasterNackDetectFlag)
-        {
+        /* check communicate with slave successful or not */
+        if( LPI2C_MasterGetStatusFlags( (LPI2C_Type *)LPI2C1_BASE) & kLPI2C_MasterNackDetectFlag ) {
             return -1;
         }
 
-        reVal = LPI2C_MasterSend((LPI2C_Type *)LPI2C1_BASE, (void *)&reg, 1);
-        if (reVal != kStatus_Success)
-        {
-            if (reVal == kStatus_LPI2C_Nak)
-            {
-                LPI2C_MasterStop((LPI2C_Type *)LPI2C1_BASE);
+        reVal = LPI2C_MasterSend( (LPI2C_Type *)LPI2C1_BASE, (void *)&reg, 1 );
+        if( reVal != kStatus_Success ) {
+            if( reVal == kStatus_LPI2C_Nak ) {
+                LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
             }
             return -1;
         }
 
-        reVal = LPI2C_MasterRepeatedStart((LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Read);
-        if (reVal != kStatus_Success)
-        {
+        reVal = LPI2C_MasterRepeatedStart( (LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Read );
+        if( reVal != kStatus_Success ) {
             return -1;
         }
 
-        reVal = LPI2C_MasterReceive((LPI2C_Type *)LPI2C1_BASE, g_master_rxBuff, 1);
-        if (reVal != kStatus_Success)
-        {
-            if (reVal == kStatus_LPI2C_Nak)
-            {
-                LPI2C_MasterStop((LPI2C_Type *)LPI2C1_BASE);
+        reVal = LPI2C_MasterReceive( (LPI2C_Type *)LPI2C1_BASE, g_master_rxBuff, 1 );
+        if( reVal != kStatus_Success ) {
+            if( reVal == kStatus_LPI2C_Nak ) {
+                LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
             }
             return -1;
         }
 
-        reVal = LPI2C_MasterStop((LPI2C_Type *)LPI2C1_BASE);
-        if (reVal != kStatus_Success)
-        {
+        reVal = LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
+        if( reVal != kStatus_Success ) {
             return -1;
         }
     }
-
     return g_master_rxBuff[0];
 }
 
@@ -1196,19 +1123,7 @@ bool getTUCalStatus( void )
 
 void setTUCalStatus( bool status )
 {
-    TUCal_ = status;
-    
-    /*
-    if(status == true)
-    {
-        PRINTF("TU cal status == true\r\n");
-    }
-    else
-    {
-      
-        PRINTF("TU cal status == false\r\n");
-    }
-    */
+    TUCal_ = status; 
 }
 
 unsigned short getLabelLowThreshold( void )

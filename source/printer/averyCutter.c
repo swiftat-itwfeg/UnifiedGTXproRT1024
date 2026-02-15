@@ -696,18 +696,6 @@ static void averyCutterTask( void *pvParameters )
             }
             
             case AC_WAIT_FOR_COMMAND_: {
-#if 1        
-                ICMessages msg;
-                /* wait for  message */
-                //if( xQueueReceive( pMsgQHandle_, &msg, portMAX_DELAY ) ) {           
-                //    handleInternalMessage( &msg );    
-                //} else {
-                //    PRINTF("averyCutterTask(): Failed to get cutter message from queue!\r\n" );  
-                //}
-#else 
-                /* TO DO: remove when ready */
-                //vTaskDelay( deepSleep );               
-#endif 
                 break;
             }            
             case AC_PROCESS_CUT_ : {
@@ -770,10 +758,6 @@ static void averyCutterTask( void *pvParameters )
             }
             
             case AC_PROCESS_HOME_RESPONSE_: {
-                //cutterMgr_.msgReady = true;
-              
-                //PRINTF("AC_PROCESS_HOME_RESPONSE_\r\n");
-              
                 if( cutterMgr_.msgReady ) {
                     handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );
                     if( cutterMgr_.error == AC_ERR_NONE_ ) {
@@ -789,33 +773,18 @@ static void averyCutterTask( void *pvParameters )
                             /* tell the printer that we are ready to process cmds */
                             ICutterGeneric imsg;
                             imsg.msgType = _I_CUTTER_READY_FOR_CMD;
-                            //BaseType_t result = xQueueSend( pIPMsgQueue, (void *)&imsg, 0 );
-                            //if( result != pdPASS ) {
-                            //    PRINTF("printerTask(): Failed to post Cutter message!\r\n" );       
-                            //}                                                        
                             actState_ =  AC_WAIT_FOR_COMMAND_;
                             
                             cutterHome = true;
                             
                             PRINTF("AC_PROCESS_HOME_RESPONSE_ wait for command\r\n");
                         }
-                        /* add to cycle cutter 
-                        vTaskDelay( lightSleep ); 
-                        actState_ = AC_PROCESS_CUT_; */
-                    //} else {
-                        //vTaskDelay( lightSleep );   
-                        //actState_ = AC_PROCESS_HOME_RESPONSE_; 
-                        /* request status */
-                        //if( sendACReqStatus( &cutterMgr_ ) ) { 
-                         //   receiveCutterMsg( DEFAULT_MSG_RX_SIZE_ );  
-                        //}                        
                     }                    
                 }                                
                 break;
             }
 
             case AC_ERROR_: {
-                /* TO DO: replace with task deletion */
                 /* sleep for a second */
                 vTaskDelay( deepSleep );
                 break;

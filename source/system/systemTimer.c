@@ -191,19 +191,3 @@ bool deleteOneShot( TimerHandle_t timer )
     return result;
 }
 
-/******************************************************************************/
-/*!   \fn void initializeExpansionPort( void )
-
-      \brief
-        This function initializes all expansion port io as output active low.
-   
-      \author
-          Aaron Swift
-*******************************************************************************/
-void initializeExpansionPort( void )
-{
-    /* TO DO */
-    /* initialize all extra io as output low */
-    
-}
-

@@ -1,14 +1,6 @@
 #include "takeupMotor.h"
 #include "fsl_pit.h"
-#include "virtualScope.h"
-#include "developmentSettings.h"
 #include "globalPrinterTask.h"
-
-#define LongLblFix  /* TFinkToDo3 Remove after changes validated */
-
-
-
-//#define LARGE_GAP_HARDCODING
 
 #define STEPS_TO_PEEL 240   /* Label is about 1/8" past the peel bar when 240 steps reached. Of course, depends on print position*/
 
@@ -45,7 +37,7 @@
 
 #define TU_MOTOR_MIN_STEP_TIME_US 620   
 #define TU_MOTOR_MAX_STEP_TIME_US 3000 
-#define MAX_TU_STEP_PERIOD_CHANGE 200     //TFinkToDo Carlos thinks this should be 60 max
+#define MAX_TU_STEP_PERIOD_CHANGE 200    
 
 uint16_t loosenSteps = 0;
 
@@ -592,69 +584,49 @@ void takeupIntrHandler( void )
         /* peelSpeedTarget is the speed setpoint for the first STEPS_TO_PEEL steps. finalSpeedTarget is the
            speed for the rest of the label. STEPS_TO_PEEL was set so the label is about 1/8" past the peel bar */
         /** See below. peelSpeedTarget set to 1100 no matter what the contrast */
-        switch(config_.contrast_adjustment)
+        switch( config_.contrast_adjustment )
         {
             case 0: 
                 finalSpeedTarget = 616;
-                //peelSpeedTarget = (1231-616)/2+616;  //~931
-                
                 break;
             case 1: 
                 finalSpeedTarget = 616;
-                //peelSpeedTarget = (1231-616)/2+616;
-                
                 break;
             case 2: 
                 finalSpeedTarget = 709;
-                //peelSpeedTarget = (1231-709)/2+709;  
-                
                 break;
             case 3: 
                 finalSpeedTarget = 862;
-                //peelSpeedTarget = (1231-862)/2+862;   //~1051
-                
                 break;
             case 4: 
                 finalSpeedTarget = 862;
-                //peelSpeedTarget = (1231-862)/2+862;
-                
                 break;
             case 5: 
                 finalSpeedTarget = 1077;
-                //peelSpeedTarget = (1231-1077)/2+1077;
-                
                 break;
             case 6: 
                 finalSpeedTarget = 1077;
-                //peelSpeedTarget = (1231-1077)/2+1077;
-                
                 break;
             case 7: 
                 finalSpeedTarget = 1077;
-                //peelSpeedTarget = (1231-1077)/2+1077;
-                
                 break;
             default: 
-                //finalSpeedTarget = 1231;
-                //peelSpeedTarget = 1400;
-                
                 break;
         }
         
         /* Setting peelSpeedTarget to 1100uS for all contrast levels. */
         /* During testing, we've been going back and forth over a fixed peelSpeedTarget for all contrast levels and 
            a variable peelSpeedTarget based on contrast. Clean up code when a final decision has been made */
-        if(finalSpeedTarget >= 1077)
-          peelSpeedTarget = finalSpeedTarget;
+        if( finalSpeedTarget >= 1077 )
+            peelSpeedTarget = finalSpeedTarget;
         else      
-           peelSpeedTarget = 1000;     /* was 1100. get a lot more "shuddering" printing at C0 with 1100. Similar to shuddering with
+            peelSpeedTarget = 1000;     /* was 1100. get a lot more "shuddering" printing at C0 with 1100. Similar to shuddering with
                                        flood coated labels. Label sticking to PH? */
             
         /* set the ramp target based on before or after peel. Peeling at a slower speed appears
            to reduce the number of user interactions (peel problems) */
-        if(getTakingUpPaper() == true)
-        {
-            if(stepsTakenTPHIntr < STEPS_TO_PEEL) {
+        if( getTakingUpPaper() == true ) {
+            if( stepsTakenTPHIntr < STEPS_TO_PEEL ) {
                rampTarget = peelSpeedTarget;
                GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );
             }
@@ -662,115 +634,88 @@ void takeupIntrHandler( void )
                rampTarget = finalSpeedTarget;
                GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, true );
             }
-        }
-        else { /* disable peel at slow speed when we're not taking up paper */
+        } else { 
+          /* disable peel at slow speed when we're not taking up paper */
           rampTarget = finalSpeedTarget;   
         }
            
         
         /* ramp at start of print */
-        if(TPHSteps < 10)
-        {
-            if((TPHSpeed > rampTarget))
-            {
+        if( TPHSteps < 10 ) {
+            if( ( TPHSpeed > rampTarget ) ) {
                 TPHSpeed = (TPHSpeed - 20);
             }
-        }
-        else if(TPHSteps >= 10 && TPHSteps < 20) 
-        {
-            if((TPHSpeed >= rampTarget))
-            {
+        } else if( TPHSteps >= 10 && TPHSteps < 20 ) {
+            if( ( TPHSpeed >= rampTarget ) ) {
                 TPHSpeed = (TPHSpeed - 30);
             }
-        }
-        //else if(TPHSteps >= 20 && TPHSteps < 30)   /* TFinkSlowPeelToDo */
-        else if(TPHSteps >= 20) 
-        {
-            if((TPHSpeed >= rampTarget))
-            {
-                TPHSpeed = (TPHSpeed - 40);
+        } else if( TPHSteps >= 20 ) {
+            if( ( TPHSpeed >= rampTarget ) ) {
+                TPHSpeed = ( TPHSpeed - 40 );
             }          
         }
         
         /* We've "overshot" during acceleration. So set to exact target
            This is also ensures rollerMotorPercentFinalSpeed is set to '1'
            when we reach full speed.  */
-        if((TPHSpeed <= rampTarget))
-        {
-           TPHSpeed = rampTarget;
+        if( ( TPHSpeed <= rampTarget ) ) {
+            TPHSpeed = rampTarget;
         }
         
         /* limit lower bounds of TPHSpeed based on contrast setting */
-        switch(config_.contrast_adjustment)
+        switch( config_.contrast_adjustment )
         {
             case 0: 
-                if(TPHSpeed < 616)
-                {
+                if( TPHSpeed < 616 ) {
                     TPHSpeed = 616;
                 }
                 break;
             case 1: 
-                if(TPHSpeed < 616)
-                {
+                if( TPHSpeed < 616 ) {
                     TPHSpeed = 616;
                 }
                 break;
             case 2: 
-                if(TPHSpeed < 709)
-                {
+                if( TPHSpeed < 709 ) {
                     TPHSpeed = 709;
                 }
                 break;
             case 3: 
-                if(TPHSpeed < 862)
-                {
+                if( TPHSpeed < 862 ) {
                     TPHSpeed = 862;
                 }
                 break;
             case 4: 
-                if(TPHSpeed < 862)
-                {
+                if( TPHSpeed < 862 ) {
                     TPHSpeed = 862;
                 }
                 break;
             case 5: 
-                if(TPHSpeed < 1077)
-                {
+                if( TPHSpeed < 1077 ) {
                     TPHSpeed = 1077;
                 }
                 break;
             case 6: 
-                if(TPHSpeed < 1077)
-                {
+                if( TPHSpeed < 1077 ) {
                     TPHSpeed = 1077;
                 }
                 break;
             case 7: 
-                if(TPHSpeed < 1077)
-                {
+                if( TPHSpeed < 1077 ) {
                     TPHSpeed = 1077;
                 }
                 break;
             default: 
-                if(TPHSpeed < 1231)
-                {
+                if( TPHSpeed < 1231 ) {
                     TPHSpeed = 1231;
                 }
         }
         
         /* limit upper bounds of TPHSpeed */
-        if(TPHSpeed > 1300)
-        {
+        if( TPHSpeed > 1300 ) {
             TPHSpeed = 1300;
         }
-        
-        /* TFinkToDo - can this code replace the above switch statement?
-        if(TPHSpeed < finalSpeedTarget)
-        {
-            TPHSpeed = finalSpeedTarget;
-        }
-        */
-        
+                
         /* rollerMotorPercentFinalSpeed is used to scale the takeup motor "static steps" 
            and the print line time (so we don't have compressed print */
         rollerMotorPercentFinalSpeed = (float)TPHSpeed/(float)finalSpeedTarget;
@@ -795,14 +740,6 @@ void takeupIntrHandler( void )
             currentStatus.sensor2 |= JAMMED_LABEL;
             
             PRINTF("LT: %d\r\n", getLabelTaken());
-            /*
-            PRINTF("\r\n\r\n");
-            PRINTF("LABEL_JAMMED        LABEL_JAMMED\r\n");
-            PRINTF("TOTAL LINES TO PRINT: %d\r\n", engine->totalLinesToPrint);
-            PRINTF("NUMBER OF PRINT LINES LEFT: %d\r\n", engine->numPrintLines);
-            PRINTF("JAM AT PRINT LINE: %d\r\n", (engine->totalLinesToPrint - engine->numPrintLines));
-            PRINTF("\r\n");
-            */
             
             TPHStepsThisPrint = 0;
             TPHSteps = 0;
@@ -1330,9 +1267,10 @@ void singleStepTUMotor(void)
    {
       GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, true );
       GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, true );
-      vScopeRecordTakeUp();
+
       delay_uS(6);  //TFink - stepper IC requirement is 1uS but Chris recommends 6 based on experience. 
       stepsTaken++;
+      
       GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, false );
       GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false );
    }
@@ -1352,7 +1290,7 @@ void shutDownStepTUMotorIntr(void)
 {
    stopTakeupIntr(); 
    powerOnMotors(); 
-   startPrintVScope();  
+
    if(immediateAdustStaticTUSpeedDueToHighTorque > longTermAjustStaticTUSpeedDueToHighTorque)
      longTermAjustStaticTUSpeedDueToHighTorque += (immediateAdustStaticTUSpeedDueToHighTorque/8);  //Adjust for rest of roll or until "head up"
    sendTorqeAdjustmentsToPrintf(adjustDesiredTorqueDueToHighTorque, adjustDesiredTorqueForAccurracy, immediateAdustStaticTUSpeedDueToHighTorque,longTermAjustStaticTUSpeedDueToHighTorque);
@@ -1597,8 +1535,6 @@ static uint8_t stepToLtIntr( void )
     
     LTVal = getLabelTaken();
     
-    //PRINTF("\r\nLT VAL: %d\r\n", LTVal);
-    
     if(LTVal >= LABEL_TAKEN_THRESHOLD_LABEL)
     {
         PRINTF("steps taken to LT: %d\r\n", stepsTaken);
@@ -1688,29 +1624,13 @@ static uint8_t sizeLabelIntr( void )
             if( (firstDip - firstDipStart) >= GAP_WIDTH_THRESHOLD || (lastDip - lastDipStart) >= GAP_WIDTH_THRESHOLD)
             {
                 desiredPercentage = LARGE_GAP_THRESHOLD;
-                //largeGapFlag = true;
-                //largeGapFlagPersist = true;
             }
             else
             {
                 desiredPercentage = SMALL_GAP_THRESHOLD;
-                //largeGapFlag = false;
             }
         }
-        
-        if( unfilteredShootCount >= (config_.backingAndlabel * 1.6) || syncBarFlag == true)
-        {
-            //largeGapFlagPersist = true;
-            //syncBarFlag = true;
-            //unfilteredShootCount = 0;
-        }
-        
-        if( largeGapFlagPersist == true )
-        {
-            //largeGapFlagPersist = true;
-            //largeGapFlag = true;
-        }
-        
+                
         numDips = 0;
         
         // Call the function to average and store values
@@ -1769,19 +1689,6 @@ static uint8_t sizeLabelIntr( void )
     
     if( stepsToTake == stepsTaken )
     {    
-        /*
-        PRINTF("\r\n");
-        PRINTF("shoot through counts:");
-        PRINTF("\r\n");
-        for(uint16_t ind = 0; ind < endFilterIdx; ind++)
-        {
-            PRINTF("%d,", shootCounts[ind]);
-            takeupDelayShort();
-            takeupDelayShort();
-        }
-        PRINTF("\r\n");
-        */
-
         PRINTF("\r\n");
         PRINTF("largeGapFlag - %d\r\n", largeGapFlag);
         PRINTF("syncBarFlag - %d\r\n", syncBarFlag);
@@ -1848,7 +1755,6 @@ static uint8_t sizeLabelIntr( void )
         firstGapIndex = 0;
         secondGapIndex = 0;
         stepsBackToGap = 0;
-        //largeGapFlagPersist = false;
 
         PRINTF("continuousDetectionSteps >= 4999\r\n");
 
@@ -2140,17 +2046,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 
 	QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(tMotor.speed, TMR2_SOURCE_CLOCK) );
 
-#if 0	
-	/* Bail if recording array is null or max steps are reached */
-	if( tMotor.TUCalArray == NULL || tMotor.steps >= TUCAL_ARRAY_SIZE)
-	{
-		stopTakeupIntr();
-		tMotor.tightenDone					= true;			 
-		takeupBusy							= false;   
-		tMotor.risingTensionDetectedTUCal	= false;
-		return 0;
-	}
-#endif	
 		
 	/* record TU Tension every motor step */
 	tMotor.TUCalArray[tMotor.steps-1] = getPaperTakeUp();
@@ -2168,12 +2063,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 		/*
 		*	Ok, we detected stall, now parse array and pick highest tension value
 		*/
-#if 0//create error
-		for(unsigned int p=150; p<TUCAL_ARRAY_SIZE; p++)
-		{
-			tMotor.TUCalArray[p] = 2375;
-		}
-#endif 		
 		//find max index
 		current_peak = tMotor.TUCalArray[0];
 		//PRINTF("###\r\n");
@@ -2184,9 +2073,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 				current_peak = tMotor.TUCalArray[index];
 				max_index = index;
 			}
-#if 0
-			PRINTF("%d\r\n", tMotor.TUCalArray[index]);
-#endif			
 		}
 
 		//reverse parse array to look for peak tension
@@ -2199,9 +2085,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 				max_index2 = index;
 			}	   
 		}
-#if 0			
-		PRINTF("**\t%d\t%d\t\t%d\t%d\r\n\r\n", max_index, tMotor.TUCalArray[max_index],max_index2, tMotor.TUCalArray[max_index2]);
-#endif		
 		
 		//Normally current_peak and current_peak2 match, but if they don't, select the largest
 		if( current_peak >= current_peak2 )
@@ -4055,8 +3938,6 @@ void clearSizingVariables( void )
     firstGapIndex = 0;
     secondGapIndex = 0;
     stepsBackToGap = 0;
-    //largeGapFlagPersist = false;
-    //RFIDStockFlag = false;
 
     for(uint16_t dipsIndex = 0; dipsIndex < DIPS_ARRAY_SIZE; dipsIndex++)
     {

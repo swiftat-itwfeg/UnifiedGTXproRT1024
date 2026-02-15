@@ -538,7 +538,7 @@ void BOARD_InitPins(void) {
 
     /* weigher accelerometer group1 pin30 configured as lpspi3 mosi */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_14_LPSPI3_SDO, 0U );
-    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_LPSPI3_SDO, 0x70B0U ); //TFink 6/24/24 was 0x10B0. PUS=01: 47K PU, PUE=1: Enable Pullup, PKE=1: Pull Enabled. See AN5078
+    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_LPSPI3_SDO, 0x70B0U ); 
     
     /* weigher accelerometer group1 pin31 configured as lpspi3 miso */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0U);    
@@ -586,87 +586,6 @@ void BOARD_InitPins(void) {
 
 
 
-/*! ****************************************************************************   
-      \fn reconfigureAccelPinsForDebug
- 
-      \brief
-       Test/Debug only function. Should NOT be called if value max is enabled!
-       Reconfigures Accelerometer pins for use as debug output 
-      \author
-          Tom Fink
-*******************************************************************************/ 
-void reconfigureAccelPinsForDebug(void)
-{  
-    gpio_pin_config_t outCfg;
-    
-    outCfg.direction            = kGPIO_DigitalOutput;
-    outCfg.outputLogic          = 1U;
-    outCfg.interruptMode        = kGPIO_NoIntmode;
 
-    /* weigher accelerometer group1 pin28 configured as lpspi3 clk */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_12_GPIO1_IO28, 0U );
-    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_12_GPIO1_IO28, 0x70A0U );  
-    GPIO_PinInit( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, &outCfg ); 
-    GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false ); 
-
-    /* weigher accelerometer group1 pin30 configured as lpspi3 mosi */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_14_GPIO1_IO30, 0U );
-    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_GPIO1_IO30, 0x70A0U ); //TFink 6/24/24 was 0x10B0. PUS=01: 47K PU, PUE=1: Enable Pullup, PKE=1: Pull Enabled. See AN5078
-    GPIO_PinInit( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, &outCfg ); 
-    GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false ); 
-    
-    /* weigher accelerometer group1 pin31 configured as lpspi3 miso */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0U);    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0x70A0U );  
-    GPIO_PinInit( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, &outCfg ); 
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false ); 
-     
-    /* weigher accelerometer spi cs a group1 pin29 configured as output */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_13_GPIO1_IO29, 0U );                                                
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_13_GPIO1_IO29, 0x70A0U );   
-    GPIO_PinInit( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, &outCfg ); 
-    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );  
-}
-
-/*! ****************************************************************************   
-      \fn configurePinAD_B1_15AsSPI3MISO(void)
- 
-      \brief
-        configure pin AD_B1_15 for SPI3 MISO function. This pin has to be 
-        dynamically switched from SPI configuration to an Input to accomodate 
-        weigher accelerometer serial EEP write and erase cycles.
-
-      \author
-          Tom Fink
-*******************************************************************************/ 
-void configurePinAD_B1_15AsSPI3MISO(void)
-{   //GPIO_EMC_35
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0U);    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0x10B0U ); 
-}
-
-/*! ****************************************************************************   
-      \fn 
- 
-      \brief
-        Configure pin AD_B1_15 as a GP Input. This pin has to be 
-        dynamically switched from SPI configuration to an Input to accomodate 
-        weigher accelerometer serial EEP write and erase cycles.
-
-      \author
-          Tom Fink
-*******************************************************************************/ 
-void configurePinAD_B1_15AsGPIO(void)
-{
-    gpio_pin_config_t inCfg;
-    
-    inCfg.direction             = kGPIO_DigitalInput;    
-    inCfg.interruptMode         = kGPIO_NoIntmode;
-   
-    /* weigher accelerometer group1 pin31 configured as gpio out */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0U );                                    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0x0190B0U );
-    GPIO_PinInit( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, &inCfg );
-}
 
 

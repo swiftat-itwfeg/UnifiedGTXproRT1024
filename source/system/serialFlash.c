@@ -251,24 +251,14 @@ bool setSerialWgDfltConfig( WgConfiguration *pWeighConfig )
 *******************************************************************************/ 
 bool getSerialPrConfiguration(Pr_Config *pPrConfig)
 {
-   bool result = false;
-   //Pr_Config tmpCfg;
-    
+    bool result = false;
+
     /* printer config starts at sector 3, page 2*/
     unsigned long addr = SECTOR3_BASE_ADDR + ( PAGE_SIZE * 2);
     
-    if( readSerialFlash(addr, (uint8_t *)pPrConfig, sizeof(Pr_Config)) )
-    {   
-        /*if we have read the data without errors then get the data and copy 
-        pTmpCfg = ( Pr_Config * )getReadData(4);  */
-
-        //if( pTmpCfg != NULL )
-        //{
-            //memcpy( pPrConfig, pTmpCfg, sizeof(Pr_Config) ); 
+    if( readSerialFlash(addr, (uint8_t *)pPrConfig, sizeof(Pr_Config)) ) {   
             result = true;
-        //}
-    }
-    
+    }    
     return result;  
 }
 
@@ -290,8 +280,7 @@ bool setSerialPrConfiguration(Pr_Config *pPrConfig)
     
     /* printer configuration starts at sector 3 page 2 */
     unsigned long addr = SECTOR3_BASE_ADDR + ( PAGE_SIZE * 2 );
-    if( writeSerialFlash( (unsigned char *)pPrConfig, addr, sizeof(Pr_Config), SECTOR_3 ) )
-    {
+    if( writeSerialFlash( (unsigned char *)pPrConfig, addr, sizeof(Pr_Config), SECTOR_3 ) ) {
         result = true;        
     }    
     return result;  
@@ -312,7 +301,7 @@ bool setSerialPrConfiguration(Pr_Config *pPrConfig)
 bool setSerialPrDfltConfiguration( Pr_Config *pPrConfig )
 {
     Pr_Config oldConfig;
-    getSerialPrConfiguration(&oldConfig);
+    getSerialPrConfiguration( &oldConfig );
   
     PRINTF("setSerialPrDfltConfiguration()\r\n");
     PRINTF("config pre-default\r\n");
@@ -340,12 +329,8 @@ bool setSerialPrDfltConfiguration( Pr_Config *pPrConfig )
         pPrConfig->instance = PRIMARY_PRINTER;
     }
 
-#if 0//turn this On to simulate blank eep 
-	memset(pPrConfig, 0xff, sizeof(Pr_Config) );
-	memset(&oldConfig, 0xff, sizeof(Pr_Config) );
-#endif	
-	
-	pPrConfig->instance							= 0;
+    
+    pPrConfig->instance			        = 0;
     pPrConfig->label_width                      = UFW_LABEL_STOCK;   /* service scale stock */
     pPrConfig->contrast_adjustment              = 3;
     pPrConfig->peel_position                    = 75;  
@@ -362,23 +347,10 @@ bool setSerialPrDfltConfiguration( Pr_Config *pPrConfig )
     pPrConfig->labelCalCnts                     = oldConfig.labelCalCnts;
     pPrConfig->noLabelCalCnts                   = oldConfig.noLabelCalCnts;
 
-	pPrConfig->takeup_sensor_drive_current      = CC_SEVEN_POINT_FIVE;
+    pPrConfig->takeup_sensor_drive_current      = CC_SEVEN_POINT_FIVE;
     pPrConfig->takeup_sensor_max_tension_counts = MIN_TU_CAL_DELTA_CNTS;
     pPrConfig->takeup_sensor_min_tension_counts = MIN_TU_CAL_DELTA_CNTS;
-  
-    /*
-    pPrConfig->media_sensor_adjustment          = 0; 
-    pPrConfig->out_of_media_count               = 0;
-    pPrConfig->backingPaper                     = 0;
-    pPrConfig->backingAndlabel                  = 0;
-    pPrConfig->labelCalCnts                     = 0;
-    pPrConfig->noLabelCalCnts                   = 0;
-    pPrConfig->takeup_sensor_drive_current      = 0;
-    pPrConfig->takeup_sensor_max_tension_counts = 0;
-    pPrConfig->takeup_sensor_min_tension_counts = 0;
-    */
-    
-    PRINTF("\r\n\r\n");
+      
     PRINTF("setSerialPrDfltConfiguration()\r\n");
     PRINTF("config post-default\r\n");
     PRINTF("instance: %d\r\n", pPrConfig->instance );
@@ -403,7 +375,8 @@ bool setSerialPrDfltConfiguration( Pr_Config *pPrConfig )
     
     return( setSerialPrConfiguration( pPrConfig ) );
 }
-#if 1
+
+
 /******************************************************************************/
 /*!   \fn bool getSerialPrInfo( PrInfo *prInfo )                                                              
  
@@ -461,7 +434,7 @@ bool setSerialPrInfo( PrInfo *prInfo )
     }    
     return result;      
 }
-#endif
+
 /******************************************************************************/
 /*!   \fn bool eraseSerialCutterBit( void )                                                             
  

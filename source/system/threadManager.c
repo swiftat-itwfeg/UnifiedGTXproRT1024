@@ -118,32 +118,27 @@ void systemStartup( void )
     PrinterStyle printerStyle = RT_PRINTER_UNKNOWN;
  
     
-    if(printheadType == ROHM_80MM_650_OHM)
-    {
+    if( printheadType == ROHM_80MM_650_OHM ) {
         PRINTF("80MM printhead detected\r\n");
-        //set global printer task env_ here
+        /* set global printer task env_ here */
         printerStyle = RT_PRINTER_SERVICE_SCALE_80MM;
       
-        //put the stepper current limit GPIO toggle here?
-        GPIO_WritePinOutput( GPIO3, 5U, true ); //stepper current limit set A
-        GPIO_WritePinOutput( GPIO3, 7U, true ); //stepper current limti set B
+        /* stepper current limit gpio */
+        GPIO_WritePinOutput( GPIO3, 5U, true ); /* stepper current limit set A */
+        GPIO_WritePinOutput( GPIO3, 7U, true ); /* stepper current limti set B */
       
-    }
-    else if(printheadType == ROHM_72MM_800_OHM)
-    {
+    } else if( printheadType == ROHM_72MM_800_OHM ) {
         PRINTF("72MM printhead detected\r\n");
-        //set global printer task env_ here 
+        /* set global printer task env_ here */
         printerStyle = RT_PRINTER_SERVICE_SCALE_72MM;
       
-        //put the stepper current limit GPIO toggle here?
-        GPIO_WritePinOutput( GPIO3, 5U, false ); //stepper current limit set A
-        GPIO_WritePinOutput( GPIO3, 7U, false ); //stepper current limit set B
-      
+        /* stepper current limit gpio */
+        GPIO_WritePinOutput( GPIO3, 5U, false ); /* stepper current limit set A */
+        GPIO_WritePinOutput( GPIO3, 7U, false ); /* stepper current limti set B */      
     }
 
+    PRINTF( "spawning global tasks\r\n" );   
     
-    
-    PRINTF( "spawning global tasks\r\n" );    
     /* make sure we have our message queues */
     if( ( getUsbInPrQueueHandle() != NULL ) && ( getUsbInWrQueueHandle() != NULL ) && 
         ( getUsbOutPrQueueHandle() != NULL ) && ( getUsbOutWrQueueHandle() != NULL ) &&
@@ -152,55 +147,29 @@ void systemStartup( void )
                               getUsbInPrQueueHandle(), getUsbInWrQueueHandle(),
                               getUsbOutPrQueueHandle(), getUsbOutWrQueueHandle() ) == pdTRUE ) {                                                           
             if( createUsbTask( (QueueHandle_t)getUsbInPrQueueHandle(), 
-                               (QueueHandle_t)getUsbInWrQueueHandle()) == pdTRUE ) {
-                 
-                
-                                 
-                /* TO DO 80MM: get head type before creating the global printer task */  
-                if( createGlobalPrinterTask(/* RT_PRINTER_SERVICE_SCALE_80MM */ printerStyle, (QueueHandle_t)getPrinterQueueHandle() ) == pdTRUE ) {                   
+                               (QueueHandle_t)getUsbInWrQueueHandle()) == pdTRUE ) {                                                                
+                if( createGlobalPrinterTask( printerStyle, (QueueHandle_t)getPrinterQueueHandle() ) == pdTRUE ) {                   
                
-                /* check if we are streaming stock out of 
-                the front of the printer or if we need to take up paper */
-                /* outOfMediaFilter() may not have had time to fill its buffer yet, so lets do our own filtering here
-                   since systemStartup() only runs once */
-                
-                 
-                /* sample the shoot through sensor 100 times, if 90% of the samples are less than 
-                OUT_OF_MEDIA_THRESHOLD, OUT_OF_MEDIA is set*/
                 bool OutOfMedia = checkForOutOfMedia();
                   
-                setLowLabelPeelingMinFromHost(0);
-                setLowLabelPeelingMaxFromHost(0);
-                setLowLabelStreamingMinFromHost(0);
-                setLowLabelStreamingMaxFromHost(0);
-                
-                
+                setLowLabelPeelingMinFromHost( 0 );
+                setLowLabelPeelingMaxFromHost( 0 );
+                setLowLabelStreamingMinFromHost( 0 );
+                setLowLabelStreamingMaxFromHost( 0 );
+                                
                 resetLabelLowVars();
                
-                if( adcManager.value[CHANNEL_HEAD_STATE] >= NO_CASSET_THRESHOLD || OutOfMedia) 
-                {
+                if( adcManager.value[CHANNEL_HEAD_STATE] >= NO_CASSET_THRESHOLD || OutOfMedia) {
                     PRINTF("\r\nhead is up or out of stock - no check for paper\r\n"); 
-                } 
-                else
-                {
-                    checkForPaper(((float)config_.takeup_sensor_max_tension_counts * 0.90), 820);
+                } else {
+                    checkForPaper( ( (float)config_.takeup_sensor_max_tension_counts * 0.90 ), 820 );
                 }
                 
                 
-                //PRINTF("backing paper only counts - %d\r\n", config_.backingPaper);
-                //PRINTF("backing paper and label counts - %d\r\n", config_.backingAndlabel);
-                                 
                /* if( createGlobalPrinterTask( RT_PRINTER_SERVICE_SCALE_72MM, (QueueHandle_t)getPrinterQueueHandle() ) == pdTRUE ) {  */               
                     if( createAveryWeigherTask( RT_WEIGHER_CS5530_30LBS, (QueueHandle_t)getWeigherQueueHandle() ) == pdTRUE ) {
                       
-                        createIdleTask();
-                        /* This is for debug only. Has to run after Weigher Task is created so
-                        value max configuration is valid */
-                        if(isValueMaxOn() == false) {
-                           reconfigureAccelPinsForDebug();
-                           PRINTF("\r\n\r\n ValueMax disabled. RECONFIGURING VM PINS FOR DEBUG\r\n\r\n");
-                        }
-                        
+                        createIdleTask();                        
                         /* start created threads */
                         startSystemThreads(); 
                              
@@ -422,38 +391,6 @@ void startUnitTest( void )
 }
 #endif
 
-
-#if 0 /* TO DO: might not be needed */
-/******************************************************************************/
-/*!   \fn static void initializeMemoryPool( void )
-
-      \brief
-        This function intializes heap space for kernel objects.
-
-      \author
-          Aaron Swift
-*******************************************************************************/
-static void initializeMemoryPool( void )
-{
-    /* define the heap reagion with a depth of 2 sections of 40k bytes in the top of the
-       upper section of the SRAM just below the stack. Linker file was modified
-       increase the heap size to 60K.  */
-    const HeapRegion_t xHeapRegions[] =
-    {
-        { ( uint8_t * ) 0x2001bbffUL, 0xa000 },
-        { ( uint8_t * ) 0x20025bffUL, 0x5000 },
-        { NULL, 0 }
-    };
-    vPortDefineHeapRegions( xHeapRegions );
-    totalHeap_ = xPortGetFreeHeapSize();
-    if( totalHeap_ == 0 ) {
-        PRINTF("initializeMemoryPool(): Failed to create Heap space!\r\n" );
-    }
-    else {
-        PRINTF("initializeMemoryPool(): Heap size: %d\r\n", totalHeap_ );
-    } 
-}
-#endif 
 
 /******************************************************************************/
 /*!   \fn static void startSystemThreads( void )
