@@ -53,6 +53,7 @@ extern unsigned short indx_;
 extern void disableWeighInterrupts( void );
 extern void enableWeighInterrupts( void );
 
+
 BaseType_t createDotWearTask( void ){
     BaseType_t result;
     
@@ -237,7 +238,7 @@ static void dotWearTask( void *pvParameters )
                 if( testPrint_ ) {
                     
                     unsigned long gotIt = 0;
-                    BaseType_t result = xTaskNotifyWait(0, 0xffffffff,&gotIt, pdMS_TO_TICKS(10000));
+                    BaseType_t result = xTaskNotifyWait( 0, 0xffffffff, (uint32_t *)&gotIt, pdMS_TO_TICKS(10000) );
                     if ((gotIt & DOT_SAMPLE) == DOT_SAMPLE){
                         delay_uS(300); // added in to keep our measurements in the dot wear bubble
                         if(!firstSample ){
@@ -258,18 +259,12 @@ static void dotWearTask( void *pvParameters )
                         /* re-enable weigher interrupts to external ADC */
                         enableWeighInterrupts();
                         testPrint_ = false;
-                        startTest_ = false;
-                        
-                        /* removed -- ATS
-                        for(int i =0; i < MAX_DOT_HEAD_SIZE; i++){
-                            DotWearResults[i][runCounter] = calculateDotResistance(headVoltage, getADCHeadWearDot(i));
-                        }
-                        */
+                        startTest_ = false;                        
                         
                         if(runCounter >= (DOT_RUN_COUNT - 1)){
                             PrDotStatus stat;
                             stat.msgType = PR_DOT_STATUS;
-                            stat.source = RT_GLOBAL_SCALE_GOOD;
+                            stat.source = GLOBAL_SCALE_HB_GT;
                             stat.destination = 0;
                             stat.head_status = getHeadWearStatus(getHeadStyleSize());
                             sendPrHeadDotStatus( stat );                       
@@ -288,7 +283,7 @@ static void dotWearTask( void *pvParameters )
 
                         PrDotStatus stat;
                         stat.msgType = PR_DOT_STATUS;
-                        stat.source = RT_GLOBAL_SCALE_GOOD;
+                        stat.source = GLOBAL_SCALE_HB_GT;
                         stat.destination = 0;
                         stat.head_status = DOT_FAILED;
                         sendPrHeadDotStatus( stat );
@@ -319,8 +314,9 @@ static void dotWearTask( void *pvParameters )
 bool showHeadDotStatistics( void )
 {
     bool done = false;
+#if 0    
     float resolution = 0.0008057;
-#if 0
+
     PRINTF( "*********************** HT Plus Dot Measurement ***********************\r\n"  );
     PRINTF( "dot position:dot Sample 1:dot Sample 2:dot Sample 3:dot average reading:dot average voltage\r\n");
     for( int i = 0; i < HEAD_DOTS_72MM + 5; i++ ) {
@@ -339,50 +335,6 @@ bool showHeadDotStatistics( void )
 #endif    
     return done;
 }
-
-/******************************************************************************/
-/*!     \fn unsigned char getHeadWearDot( int x )
-
-        \brief
-        This function returns unsigned char value at location x in the
-        head dot wear buffer.
-
-        \author
-        Aaron Swift
-*******************************************************************************/
-unsigned short getADCHeadWearDot( int x )
-{
-#if 0    
-    return (( (adcManager.results[x].sample1) + (adcManager.results[x].sample2) +
-	     (adcManager.results[x].sample3)) / 3);
-#endif
-}
-
-/******************************************************************************/
-/*!     \fn unsigned char getHeadWearDot( int x )
-
-        \brief
-        This function returns the average value for the dot at the index X.
-
-        \author
-        Aaron Swift
-*******************************************************************************/
-/*
-unsigned short getHeadWearDot( int x )
-{
-    unsigned long accumulator = 0;
-    
-    for(int i = 0; i < DOT_RUN_COUNT; i++){
-        accumulator += (DotWearResults[x][i]);
-    }
-    //remove largest and smallest reading
-    accumulator -= max( (unsigned short *)&( DotWearResults[x] ), DOT_RUN_COUNT );
-    accumulator -= min( (unsigned short *)&( DotWearResults[x] ), DOT_RUN_COUNT );
-    return (unsigned short)( accumulator / ( DOT_RUN_COUNT - 2 ) );
-    
-    return 0;
-}
-*/
 
 /******************************************************************************/
 /*!    \fn unsigned short max( unsigned short *list, int size ) 

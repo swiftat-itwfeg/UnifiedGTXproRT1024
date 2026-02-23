@@ -648,11 +648,12 @@ uint32_t LPUART_GetEnabledInterrupts(LPUART_Type *base);
  * @param base LPUART peripheral base address.
  * @return LPUART data register addresses which are used both by the transmitter and receiver.
  */
+#pragma diag_suppress=Pa039
 static inline uint32_t LPUART_GetDataRegisterAddress(LPUART_Type *base)
 {
     return (uint32_t) & (base->DATA);
 }
-
+#pragma diag_default=Pa039
 /*!
  * @brief Enables or disables the LPUART transmitter DMA request.
  *

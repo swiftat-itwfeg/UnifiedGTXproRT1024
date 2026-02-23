@@ -110,15 +110,13 @@ AT_NONCACHEABLE_SECTION_INIT(static unsigned short maxTension) = 0;
 AT_NONCACHEABLE_SECTION_INIT(static unsigned short minTension) = 0;
 AT_NONCACHEABLE_SECTION_INIT(static unsigned short emergencyBrakeTorqueLimit) = 0;  /* we never want the takeup torque to exceed this value. */
 
-static bool debugOnce_ = true;
-
 /* TMR2 Clock source divider for Ipg clock source */
 #define TMR2_CLOCK_SOURCE_DIVIDER (128U)
 /* The frequency of the source clock after divided. */
 #define TMR2_SOURCE_CLOCK (CLOCK_GetFreq(kCLOCK_IpgClk) / TMR2_CLOCK_SOURCE_DIVIDER)
 
-/* uSec between each of the TMR2 interrupt handler calls that make up a full TU motor step */
-static uint8_t timeBetweenStepperIntr = 20; 
+/* uSec between each of the TMR2 interrupt handler calls that make up a full TU motor step 
+static uint8_t timeBetweenStepperIntr = 20; */
 
 /* uSec between each TU motor step */
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t TUSpeed) = 0; 
@@ -134,8 +132,8 @@ AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsToTake) = 0;
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsTaken) = 0; 
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsTakenTPHIntr) = 0; 
 
-/* how many TU sensor ADC counts to tighten to */
-static uint16_t torqueThreshold = 0; 
+/* how many TU sensor ADC counts to tighten to 
+static uint16_t torqueThreshold = 0; */
 
 /* function pointer declaration, used in takeupIntrHandler() */
 uint8_t (*tmr2Intr) (void); 
@@ -211,7 +209,7 @@ bool TPHIntrDone = false;
 static uint16_t TPHStepsThisPrint = 0;
 static uint16_t continuousDetectionSteps = 0;
 
-
+extern void setOperation( unsigned char operation, PrStatusInfo *pStatus );
 
 int calculateAverage(int array[], int length) 
 {
@@ -822,83 +820,85 @@ static uint8_t stepTUMotorIntr( void )
  
    
    /*********  Handle Transition Between TU Control States *****************/
-   switch(tuControlState) {
-    case HOLD_TIGHTEN_STEP_SPEED:
-      if (stepsTakenTPHIntr > 5) { 
-         /* staticTUMotorStepTime = 0 if first label since head up. Don't switch to static step until PID controller has run twice  */
-         if(staticTUMotorStepTime > TU_MOTOR_MIN_STEP_TIME_US && staticTUMotorStepTime < TU_MOTOR_MAX_STEP_TIME_US && tuRunningAvgNumValidReadings >= 2) {
-            tuControlState = RAMP_TO_STATIC_STEP;
-            sendStepsTakenTPHIntrToPrintf(stepsTakenTPHIntr); 
-            toggleDebugPin10uS();
-         }  
-         else {
-            tuControlState = PID_CONTROL;
-            toggleDebugPin10uS();
-         }
-      }
-         break;
-      
-    case RAMP_TO_STATIC_STEP:
-      if(TUSpeed == adjustedStaticTUMotorStepTime
-         || TUSpeed >= TU_MOTOR_MAX_STEP_TIME_US) {  /* should never be > MAX_STEP_TIME */
-         tuControlState = STATIC_STEP;  
-         
-         /* Ideally we should be at "desiredTorque" as we start static step. If we're not, set
-            adjustDesiredTorqueForAccurracy, which will be used in the tightening algorithm on 
-            the next label. Changing by half the error because we want to converge on the right
-            value without oscillating. TFinkSlowPeelToDo: Checking torque value against desired torque because we don't
-            want to adjust if we have stalled! */
-         if(getTakeUpTorque() > desiredTorque-500)
-            adjustDesiredTorqueForAccurracy += (desiredTorque - getTakeUpTorque())/2;
-         
-         toggleDebugPin10uS();
-         //queuePrintStringFromISR(SWITCHED_TO_STATIC_CONTROL);
-      }
-      break;
-      
-    case STATIC_STEP:
-      {
-         bool switchStatesDueToTorqueDrop = false;
-         /* switch to PID if we're 3/4 desired torqe and past line 700 or if we're 1/4 desired torque  anywhere in the label. This 1/4 torque is the "fast recovery fix"  */
-         if (((getTakeUpTorque() < desiredTorque-(desiredTorque/4)) && (stepsTakenTPHIntr > 700)) || getTakeUpTorque() < desiredTorque/4) {                    
-            /* Switch to PID control if we're at the end of a label OR if we're printing a long label and torque has fallen. If staticTUMotorStepTime
-            is off slightly, on long labels, torque can drop over time. OK to switch to PID, since we've already peeled. */
-            switchStatesDueToTorqueDrop = true;
-            queuePrintStringFromISR(SWITCHED_TO_PID_DUE_TO_LOW_TORQUE);
-         }
-         
-         if((getNumPrintLinesLeft() < SWITCH_TO_PID_LINES_LEFT) || switchStatesDueToTorqueDrop) {   
-            
-            tuControlState = PID_CONTROL;
-            /* PID will control to the torque value at the end of STATIC_STEP UNLESS were switching due
-               to a stall. If that's the case, we want to use 90% of the original desiredTorque and catch up as fast as we can!
-               Using 90% of original desiredTorque so we don't overshoot and stall */
-            if(switchStatesDueToTorqueDrop)
-               desiredTorque = (unsigned short)(0.9*desiredTorque); 
-            else
-               desiredTorque = calculateTUTorqueSetpoint(); /* desired torque = whatever our current torque is. To get the most accurrate "average step time" */
-            
-            toggleDebugPin10uS();
-         }
-      }
-      break;
-      
-    case PID_CONTROL:
-      if(TPHIntrDone == true && TUTorqueReading > desiredTorque-20) {         
-        static char stepTUStopSamples = 0;
-        /* sample the TUTorqueReading a number of times to make sure that we are actually tight */
-        if(stepTUStopSamples >= 5) {
-           tuControlState = NORMAL_TU_MOTOR_INTR_EXIT;
-           stepTUStopSamples = 0;
-           toggleDebugPin10uS();
-        }
-        else
-          stepTUStopSamples++; 
-      }
-      else if(stepsTaken >= stepsToTake )    
-         tuControlState = ABNORMAL_TU_MOTOR_INTR_EXIT;
-      
-      break;
+   switch(tuControlState) 
+   {
+        case HOLD_TIGHTEN_STEP_SPEED:
+          if (stepsTakenTPHIntr > 5) { 
+             /* staticTUMotorStepTime = 0 if first label since head up. Don't switch to static step until PID controller has run twice  */
+             if(staticTUMotorStepTime > TU_MOTOR_MIN_STEP_TIME_US && staticTUMotorStepTime < TU_MOTOR_MAX_STEP_TIME_US && tuRunningAvgNumValidReadings >= 2) {
+                tuControlState = RAMP_TO_STATIC_STEP;
+                sendStepsTakenTPHIntrToPrintf(stepsTakenTPHIntr); 
+                toggleDebugPin10uS();
+             }  
+             else {
+                tuControlState = PID_CONTROL;
+                toggleDebugPin10uS();
+             }
+          }
+          break;
+          
+        case RAMP_TO_STATIC_STEP:
+          if(TUSpeed == adjustedStaticTUMotorStepTime
+             || TUSpeed >= TU_MOTOR_MAX_STEP_TIME_US) {  /* should never be > MAX_STEP_TIME */
+             tuControlState = STATIC_STEP;  
+             
+             /* Ideally we should be at "desiredTorque" as we start static step. If we're not, set
+                adjustDesiredTorqueForAccurracy, which will be used in the tightening algorithm on 
+                the next label. Changing by half the error because we want to converge on the right
+                value without oscillating. TFinkSlowPeelToDo: Checking torque value against desired torque because we don't
+                want to adjust if we have stalled! */
+             if(getTakeUpTorque() > desiredTorque-500)
+                adjustDesiredTorqueForAccurracy += (desiredTorque - getTakeUpTorque())/2;
+             
+             toggleDebugPin10uS();
+             //queuePrintStringFromISR(SWITCHED_TO_STATIC_CONTROL);
+          }
+          break;
+          
+        case STATIC_STEP:
+          {
+             bool switchStatesDueToTorqueDrop = false;
+             /* switch to PID if we're 3/4 desired torqe and past line 700 or if we're 1/4 desired torque  anywhere in the label. This 1/4 torque is the "fast recovery fix"  */
+             if (((getTakeUpTorque() < desiredTorque-(desiredTorque/4)) && (stepsTakenTPHIntr > 700)) || getTakeUpTorque() < desiredTorque/4) {                    
+                /* Switch to PID control if we're at the end of a label OR if we're printing a long label and torque has fallen. If staticTUMotorStepTime
+                is off slightly, on long labels, torque can drop over time. OK to switch to PID, since we've already peeled. */
+                switchStatesDueToTorqueDrop = true;
+                queuePrintStringFromISR(SWITCHED_TO_PID_DUE_TO_LOW_TORQUE);
+             }
+             
+             if((getNumPrintLinesLeft() < SWITCH_TO_PID_LINES_LEFT) || switchStatesDueToTorqueDrop) {   
+                
+                tuControlState = PID_CONTROL;
+                /* PID will control to the torque value at the end of STATIC_STEP UNLESS were switching due
+                   to a stall. If that's the case, we want to use 90% of the original desiredTorque and catch up as fast as we can!
+                   Using 90% of original desiredTorque so we don't overshoot and stall */
+                if(switchStatesDueToTorqueDrop)
+                   desiredTorque = (unsigned short)(0.9*desiredTorque); 
+                else
+                   desiredTorque = calculateTUTorqueSetpoint(); /* desired torque = whatever our current torque is. To get the most accurrate "average step time" */
+                
+                toggleDebugPin10uS();
+             }
+          }
+          break;
+          
+        case PID_CONTROL:
+          if(TPHIntrDone == true && TUTorqueReading > desiredTorque-20) {         
+            static char stepTUStopSamples = 0;
+            /* sample the TUTorqueReading a number of times to make sure that we are actually tight */
+            if(stepTUStopSamples >= 5) {
+                tuControlState = NORMAL_TU_MOTOR_INTR_EXIT;
+                stepTUStopSamples = 0;
+                toggleDebugPin10uS();
+            } else {
+                stepTUStopSamples++; 
+            }
+          } else if(stepsTaken >= stepsToTake ) 
+              tuControlState = ABNORMAL_TU_MOTOR_INTR_EXIT;          
+          break;
+          
+        default:
+         PRINTF("unknown state: %d\r\n", tuControlState );
    }
     
     /*********  ALL Control States *****************/
@@ -1008,22 +1008,7 @@ void peelLogEngine(unsigned short TUTorq)
    /* Torque is higher than it should be */
    if(TUTorq > emergencyBrakeTorqueLimit - 20)
       numHighTorqReadings++;
-  
-   /** Definitions:
-     Fail to Peel typically occurs when:
-        *label completely wraps around, in which case JAMMED_LABEL is set 
-        *The label sticks to the label shelf. This causes the torque to go high, which then causes the motor to stall
-     Motor Stall 
-        *happens for unknown reason when the torque is within the expected range.
-        *Sometimes the takeup motor restarts and successfully peels and expels the label. This is a Motor Stall Recovery.
-        *Sometimes the label sticks after a motor stall (usually when the stall happens around the peel time). This
-         usually causes the torque to exceed normal limits 
-        *Sometimes the torque doesn't exceed normal limits, because the TU Motor PID controller slows the takeup to the minimum step 
-         time. This sometimes happens during a "bubble out".  
-     Motor Stall Recovery
-       *See Motor Stall
-   **/
-
+ 
   switch(peelLogState)
   {
    case START_OF_LABEL:
@@ -1610,7 +1595,7 @@ static uint8_t sizeLabelIntr( void )
         
         if(shootCounts[totalStepsTaken] > (config_.backingAndlabel * 1.08))  
         {
-            shootCounts[totalStepsTaken] = (config_.backingAndlabel * 1.08);
+            shootCounts[totalStepsTaken] = (short)(config_.backingAndlabel * 1.08);
         }
     }
     
@@ -1645,11 +1630,11 @@ static uint8_t sizeLabelIntr( void )
         if(largeGapFlag == true || largeGapFlagPersist == true)
         {
             //largeGapFlag = true;
-            find_lowest_points(shootCounts, totalStepsTaken, result, LARGE_GAP_DIP_THRESHOLD, 5);
+            find_lowest_points(shootCounts, totalStepsTaken, (int)result, LARGE_GAP_DIP_THRESHOLD, 5);
         }
         else
         {
-            find_lowest_points(shootCounts, totalStepsTaken, result, SMALL_GAP_DIP_THRESHOLD, 5);
+            find_lowest_points(shootCounts, totalStepsTaken, (int)result, SMALL_GAP_DIP_THRESHOLD, 5);
         }
         
         if(numDips >= 1)
@@ -1874,10 +1859,7 @@ static uint8_t tightenStockIntr( void )
              TUSpeed = maxDecelTUSpeed;
           
           targetSpeed = TUSpeed;
-       }            
-       
-       if(getTakeUpTorque() > 800)   //don't start recording until tension rising
-          vScopeRecordTakeUp(); 
+       }                   
     }
     
 	
@@ -2010,7 +1992,7 @@ static uint8_t tightenStockTUCalIsr( void )
 }
 /******************************************************************************/
 /*!   \fn 
-        static void tightenStockMaxTUCalIsr( void )
+        static uint8_t tightenStockMaxTUCalIsr( void )
       \brief  
         Function steps TU motor until a motor stall is detected or max steps are
 		reached.
@@ -2021,19 +2003,14 @@ static uint8_t tightenStockTUCalIsr( void )
 static uint8_t tightenStockMaxTUCalIsr( void )
 {
 	uint16_t index;
-	uint16_t max_index;
-	uint16_t max_index2;
 	uint16_t current_peak;
 	uint16_t current_peak2;
 	unsigned short max_tension;
 	//static bool risingTensionDetected	= false;
 	
 	/* ping motor enable pin */
-#if 1
 	powerOnMotorsDuringCal();
-#else	
-    powerOnMotors();
-#endif
+
 
 	/*step */  
 	GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, true );
@@ -2071,7 +2048,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 			if(tMotor.TUCalArray[index] >= current_peak)
 			{
 				current_peak = tMotor.TUCalArray[index];
-				max_index = index;
 			}
 		}
 
@@ -2082,7 +2058,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 			if(tMotor.TUCalArray[index] >= current_peak2)
 			{
 				current_peak2 = tMotor.TUCalArray[index];
-				max_index2 = index;
 			}	   
 		}
 		
@@ -2103,6 +2078,7 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 	
 	
     QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);    
+    return 0;
 }
 
 
@@ -3317,7 +3293,7 @@ void backwindStock( uint16_t steps, uint16_t speedInUs )
 {         
     PRINTF("backwindStock() - steps = %d\r\n", steps);
     
-    if(steps < 0 || steps > 1000 || steps == 0)
+    if( steps > 1000 || steps == 0)
     {
         steps = 1;
     }

@@ -125,46 +125,8 @@ unsigned short getProductId( void )
     /** TFink As of 7/16/25 all PCBAs are set to 0xF = G_SSRT_PRODUCT_GOOD_ID. The 
         "model scheme" is still being determined and may have to be reworked from
          what is shown below. */
-    switch( model )
-    {   
-        case RT_GLOBAL_SCALE_GOOD: {
-            id = G_SSRT_PRODUCT_GOOD_ID;
-            break;
-        }
-        case RT_GLOBAL_SCALE_BETTER: {
-            id = G_SSRT_PRODUCT_BETTER_ID;
-            break;          
-        }
-        case RT_GLOBAL_SCALE_BEST: {
-            id = G_SSRT_PRODUCT_BEST_ID;
-            break;          
-        }
-        case RT_GLOBAL_FSS: {
-            id = G_FSSRT_PRODUCT_ID;
-            break;
-        }
-        case RT_GLOBAL_SCALE_PRINTER_ONLY: {
-            id = G_SSRT_PRINTER_ONLY_PRODUCT_ID;
-            break;
-        }
-        case RT_GLOBAL_PREPACK_PRINTER: {
-            id = G_PPRT_PRINTER_PRODUCT_ID;
-            break;
-        }
-        case RT_GLOBAL_SCALE_WEIGHER_ONLY: {
-            id = G_SSRT_WEIGHER_ONLY_PRODUCT_ID;
-            break;
-        }
-        case RT_GLOBAL_PREPACK_WEIGHER: {
-            id = G_PPRT_WEIGHER_PRODUCT_ID; 
-            break;
-        }
-        default: {
-        }
-    }    
-    
-    PRINTF("getProductId() - %x\r\n", id);
-    
+
+    id = G_SSRT_PRODUCT_GOOD_ID;    
     return id;
 }
 

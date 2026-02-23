@@ -890,8 +890,6 @@ void outOfMediaFilter(void)   //TFinkMediaFilter
       initialized = true;
    }
    
-   char prevConsecutiveOutOfMediaSamples = consecutiveOutOfMediaSamples;
-   
    if(copyOfBackingPaper != config_.backingPaper)   /* Handle Media Sensor calibration */
       initialized = false;
     
@@ -914,7 +912,6 @@ void outOfMediaFilter(void)   //TFinkMediaFilter
    //PRINTF("OutOfMediaThreshold: %d           current val: %d\r\n", OutOfMediaThreshold, adcManager.value[CHANNEL_SHOOT]);
 }
 
-//TFinkMediaFilter
 bool getOutOfMedia(void)
 {
    return outOfMedia;
@@ -947,7 +944,7 @@ void setTakeupFiltering( void )
 void clrTakeupFiltering( void )
 {
     adcManager.avgTakeup = false; 
-    memset( (void *)&adcManager.tkFilter[0], 0, TK_MAX_SAMPLES);
+    memset( (void *)&adcManager.tkFilter[0], 0, TK_MAX_SAMPLES );
 }
 
 /******************************************************************************/
@@ -1020,7 +1017,7 @@ void readADChannels( void )
         
         if(( currentStatus.mask.user == 1 ) && ( getGapCalStatus() == false ) && outOfMedia == false)
         {
-            checkForPaper(((float)config_.takeup_sensor_max_tension_counts * 0.90), 820);
+            checkForPaper( (uint16_t)((float)config_.takeup_sensor_max_tension_counts * 0.90), 820);
             
             setHalfStepMode(_MAIN_STEPPER);
             setHalfStepMode(_TAKEUP_STEPPER);
@@ -1049,12 +1046,9 @@ void readADChannels( void )
                     __NOP();
                 }
 
-                ICMessages msg1;
-                ICMessages msg2;
-                
+                ICMessages msg1;                
                 msg1.generic.msgType = _I_CUTTER_CUT_CMD;
-                msg2.generic.msgType = _I_CUTTER_HOME_CMD;
-                
+                                
                 handleInternalMessage(&msg1);
             }
         }
@@ -1287,7 +1281,7 @@ bool readHeadUpSensor( PrStatusInfo *pStatus )
     static unsigned char cnt_ = 0;
     
     /* if not a freestanding scale */
-    if( getMyModel() != RT_GLOBAL_FSS ) 
+    if( getMyModel() == GLOBAL_SCALE_HB_GT ) 
     { 
         if(TUCalHeadUpFlag == false)
         {
@@ -1530,7 +1524,7 @@ void getCurrentSensors( PrSensors *pSensors )
     pSensors->label_low_average                 = 0;
     
     /* freestanding scale  */
-    if( getMyModel() != RT_GLOBAL_FSS ) {
+    if( getMyModel() == GLOBAL_SCALE_HB_GT ) {
         if( !headSensors.labelTaken ) {
             pSensors->label_reading             = (int)255;
         } else {
@@ -1547,7 +1541,7 @@ void getCurrentSensors( PrSensors *pSensors )
     pSensors->label_threshold                   = 0;
     
     /* freestanding scale  has no sensor for width*/
-    if( getMyModel() != RT_GLOBAL_FSS ) {    
+    if( getMyModel() == GLOBAL_SCALE_HB_GT ) {    
         pSensors->label_width_reading           = adcManager.value[CHANNEL_HEAD_STATE];
     } else {
         pSensors->label_width_reading           = 60; /* wide width stock only */

@@ -93,7 +93,8 @@ typedef enum
     DC_50_PRECENT =                     0x7f,
     DC_75_PRECENT =                     0xbf,
     DC_90_PRECENT =                     0xe6,
-    DC_97_PERCENT =                     0xFc,
+    DC_97_PERCENT =                     0xfc,
+    DC_99_PERCENT =                     0xfe,
     DC_100_PERCENT =                    0xff    
 }PWMDutyCycle;
 /************************************************/
@@ -232,7 +233,6 @@ typedef enum
 
 /************** public prototypes ***************/
 bool initLp5521( void );
-uint8_t readRegister( char slaveAdd, char reg );
 void osc32InterruptHandler( void );
 bool setGapCurrent( unsigned char value );
 bool setLowStockCurrent( unsigned char value );
@@ -240,8 +240,7 @@ bool setLowStockDutyCycle( unsigned char value );
 void shutdownGapSensor( void );
 bool setPaperTakeupCurrent( unsigned char value );
 bool gapSensorCal( GAPSteps step, unsigned char *pBias );
-bool TUSensorCal( GAPSteps step, unsigned char *pBias );
-void testlabelTaken( void );
+bool takeupSensorCal( GAPSteps step, unsigned char *pBias );
 bool getGapCalStatus( void );
 void setGapCalStatus( bool status );
 bool getTUCalStatus( void );

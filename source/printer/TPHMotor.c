@@ -27,7 +27,7 @@ static uint16_t tensionModifier = 0;
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t lastTUStepsDuringSize) = 0;
 
 AT_NONCACHEABLE_SECTION_INIT(static bool measureOnce_) = false;
-static bool firstTakeupMeasure_ = false;
+
 
 extern Pr_Config config_;
 extern PrStatusInfo currentStatus;

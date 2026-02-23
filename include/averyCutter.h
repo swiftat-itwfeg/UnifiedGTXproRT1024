@@ -156,8 +156,6 @@ typedef struct
 {
     unsigned char       index;
 }ACRVersion;
-#pragma pack( push,1 )
-#pragma pack( pop )
 
 typedef union
 {
@@ -169,6 +167,14 @@ typedef union
     ACReadProfile       profile;    
     ACRVersion          readVersion;
 }AMsgBody;
+
+typedef struct
+{
+    ACHeader    header;
+    AMsgBody    body;    
+}ACutterMsgs;
+#pragma pack( push,1 )
+#pragma pack( pop )
 
 /* message sizes in ascii form */
 #define PAPER_CUT_MSG_SIZE              0x35313030          /* 15 */
@@ -212,11 +218,6 @@ typedef enum
     FULL_PLATTEN_
 }AC_PLATTEN;
 
-typedef struct
-{
-    ACHeader    header;
-    AMsgBody    body;    
-}ACutterMsgs;
 
 /* cutter thread states */
 typedef enum

@@ -38,7 +38,7 @@ static SemaphoreHandle_t        pCutSemaphore   = NULL;
 static QueueSetHandle_t         pQueueSet_      = NULL;
 static QueueHandle_t            pCRMsgQHandle_  = NULL;
 static QueueHandle_t            pIMsgQHandle_   = NULL;
-static TimerHandle_t            pWTimer_        = NULL;
+
 
 /* label and sensor timers */
 static TimerHandle_t            pTTakeLabel_     = NULL;
@@ -249,13 +249,9 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
     }
     
     /* cutter is only installed on better and best models */
-    if( ( getMyModel() == RT_GLOBAL_SCALE_BETTER ) || 
-        ( getMyModel() == RT_GLOBAL_SCALE_BEST ) || 
-          ( getMyModel() == RT_GLOBAL_FSS ) ) {
-        cutterInstalled_ = true;           //TFinkCutter (need to be sure cutterInstalled is true                
+    if( getMyModel() == GLOBAL_SCALE_HB_GT ) { 
+       cutterInstalled_ = true;           
     }
-    
-    //cutterInstalled_ = true;
     
     if( cutterInstalled_ ) {
         /* get my internal message queue */
@@ -489,7 +485,6 @@ static void handlePrinterMsg( PrMessage *pMsg )
 {
     static unsigned int rePostCntr_ = 0;    
     static GAPSteps step_ = _INIT;
-    static TUSteps TUstep_ = _INIT_TU_CAL;
         
     unsigned long headSize = 0;
     unsigned long buffSize = 0;
@@ -908,12 +903,6 @@ static void handlePrinterMsg( PrMessage *pMsg )
                     rePostCntr_ = 0;
                 }
                 /* */
-                //PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND command.identifier %d\r\n", pMsg->command.identifier );
-                //PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND command.msgType %d\r\n", pMsg->command.msgType );
-                //PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND command.data_item %d\r\n", pMsg->command.data_item );
-                //PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND command.options %d\r\n", pMsg->command.options );
-                //PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND command.value %d\r\n", pMsg->command.value );                 
-
                 if(pMsg->command.options == PrExpelToTearBar)
                 {
                     pMsg->command.identifier = 3;
@@ -959,15 +948,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                             
                             if(getLabelPauseBackwindPending() == true)
                             {
-                                if(getLargeGapFlag() == true)
-                                {
-                                    calcSteps = 160 + getIndirectData(4);
-                                }
-                                else
-                                {
-                                    calcSteps = 160 + getIndirectData(4);
-                                }
-
+                                calcSteps = 160 + getIndirectData( (CMD_DATA_IDS)4 );
                                 setLabelPauseBackwindPending(false);
                             }
                             
@@ -1004,7 +985,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                             
                             double result = find_percentage_of_average(shoots, getShootIndex(), desiredPercentage);
                             
-                            find_lowest_points_lowest(shoots, getShootIndex(), result);
+                            find_lowest_points_lowest(shoots, getShootIndex(), (int)result);
                             
                             TPHStepsPastGapPeeling = ( getTPHStepsThisPrint() - getPrintDip() );
                             
@@ -1092,7 +1073,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                     
                     if(getWaitForLabelTaken() == true)
                     { 
-                        uint16_t expelSteps = getIndirectData(4);
+                        uint16_t expelSteps = getIndirectData( (CMD_DATA_IDS)4 );
                         
                         setStreamingExpelMod(expelSteps);
                     }
@@ -1243,10 +1224,11 @@ static void handlePrinterMsg( PrMessage *pMsg )
         case PR_REQ_CUTTER_STATUS:
         {
             PRINTF("handlePrinterMsg(): Processing message: PR_REQ_CUTTER_STATUS \r\n");
+            #if 0   /* TO DO: finish integration to averyCutter. This should be a message sent to the cutter task */
             PrCutterStatus msg;
             
             msg.msgType = PR_CUTTER_STATUS;
-            #if 0   /* TO DO: finish integration to averyCutter. This should be a message sent to the cutter task */
+            
             getCutterStatus(&msg);
             sendPrCutterStatus( &msg );
             #endif
@@ -2112,9 +2094,9 @@ void resetPrinter( void )
     /* clear label image buffer */
     clearLabelImageBuffer();
 	
-	/* Free up Cal buffers incase we just completed calibration */
-	freePrinterCalBuffers();
-    
+    /* free up Cal buffers incase we just completed calibration */
+    freePrinterCalBuffers();
+  
     /* set the idle operation. */
     if( currentStatus.state != ENGINE_IDLE )  //Fixes print multiple. Carlos fix.  Prevents a sendPrStatus
        setOperation( IDLE_DIRECTIVE, &currentStatus ); 

@@ -60,8 +60,8 @@ bool initLp5521( void )
     GPIO_PinInit( LP5521_EN_GPIO, LP5521_EN_PIN, &config );
     GPIO_WritePinOutput(LP5521_EN_GPIO, LP5521_EN_PIN, true);
     initEnablePin_ = true;
-    
-    LP5521delay();    
+    /* TO DO: is this really needed? 
+    LP5521delay();    */
     
     result = configure();
     
@@ -216,8 +216,8 @@ static bool decreaseLowStockCurrent( void )
 bool setLowStockCurrent( unsigned char value )
 {
     bool result = false;
-    if( value <= (unsigned char)CC_TWENTY_FIVE_POINT_FIVE ) {
-        lp5521Cfg.blueCurrentReg = value;
+    if( value <= (unsigned char)CC_TWENTY_FIVE_POINT_ZERO ) {
+        lp5521Cfg.blueCurrentReg = (CCSettings)value;
         if( writeRegister( _LP5521_LOW_STOCK_CUR_REG, value ) ) {  
             result = true;
         } else {
@@ -267,7 +267,7 @@ bool setGapCurrent( unsigned char value )
 bool setLowStockDutyCycle( unsigned char value )
 {
     bool result = false;
-    if( value <= (unsigned char)DC_100_PERCENT ) {
+    if( value <= (unsigned char)DC_99_PERCENT ) {
         if( writeRegister( _LP5521_LOW_STOCK_PWM_REG, value ) ) {  
             result = true;
         } else {
@@ -401,7 +401,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
         case _CALBACKING: {
                 if( pBacking && pLabel && pDeflection ) {
                   
-                checkForPaper(((float)config_.takeup_sensor_max_tension_counts * 0.80), 820);
+                checkForPaper( (uint16_t)((float)config_.takeup_sensor_max_tension_counts * 0.80), 820);
                   
                 PRINTF("gapSensorCal(): _CALBACKING start\r\n");
                 /* pause the sensors thread from doing conversions */
@@ -458,7 +458,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
         case _CALLABEL: {
             if( pBacking && pLabel && pDeflection ) {
               
-                checkForPaper(((float)config_.takeup_sensor_max_tension_counts * 0.90), 820);
+                checkForPaper( (uint16_t)((float)config_.takeup_sensor_max_tension_counts * 0.90), 820);
               
                 /* set gap bias current to min */
                 lp5521Cfg.redCurrentReg = CC_Zero; 
@@ -556,7 +556,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
                 
                 /* reset our pointer */
                 pDeflection = pDeflectionS;                
-                *pBias = ((float)*pBias); 
+                *pBias = *pBias; 
 
 
                 PRINTF("drive current set to: %d\r\n", *pBias);                
@@ -629,8 +629,10 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
     return result;
 }
 
+#if 0
+extern void setConfigTakeupSensorValue(unsigned char val, unsigned short max, unsigned short min );
 /******************************************************************************/
-/*!   \fn bool TUSensorCal( GAPSteps step, unsigned char *pBias )
+/*!   \fn bool takeupSensorCal( GAPSteps step, unsigned char *pBias )
 
       \brief
 
@@ -638,7 +640,7 @@ bool gapSensorCal( GAPSteps step, unsigned char *pBias )
       \author
        Chris King
 *******************************************************************************/
-bool TUSensorCal( GAPSteps step, unsigned char *pBias )
+bool takeupSensorCal( GAPSteps step, unsigned char *pBias )
 {
     bool result = false;
     static unsigned short *pBacking = NULL, *pLabel = NULL, *pDeflection = NULL;
@@ -729,7 +731,6 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
                 TUVal = getTakeUpTorque();
                 y[TUIndex] = TUVal;
               
-                //PRINTF("TUVal2 = %d     current2 = %d\r\n", TUVal, TUCurrent);
                 TUCurrent++;
                 TUIndex++;
                 
@@ -828,23 +829,7 @@ bool TUSensorCal( GAPSteps step, unsigned char *pBias )
     
     return result;
 }
-
-void testlabelTaken( void )
-{
-    float takenVoltage = 0.0;
-   
-    for( int i = (int)CC_ONE_POINT_ZERO;  i < (int)CC_TWENTY_FIVE_POINT_FIVE; i++ ) {
-        
-        setMediaCurrent( i );    
-        delay_uS( FIVE_MILISECONDS );
-        delay_uS( FIVE_MILISECONDS ); //for test only
-        
-        unsigned long cnts = getLabelTaken();
-        takenVoltage =  (float)( (float)cnts * AD_RESOLUTION );
-        PRINTF("testlabelTaken(): takenVoltage: %2.3fV\r\n", takenVoltage );  
-    }
-    
-}
+#endif
 
 /******************************************************************************/
 /*!   \fn static bool configure( void )
@@ -860,8 +845,8 @@ static bool configure( void )
 {
     bool result = false;
     
-    if( getMyModel() == RT_GLOBAL_SCALE_GOOD ) {
-        /* setup for freestanding scale */
+    if( getMyModel() == GLOBAL_SCALE_HB_GT ) {
+        /* setup for hobart scale */
         configureHobart( &lp5521Cfg );
     } else {
         /* setup for avery configuration */ 
@@ -1040,71 +1025,14 @@ static bool writeRegister( unsigned char reg, unsigned char data )
     return x;
 }
 
-/******************************************************************************/
-/*!   \fn uint8_t readRegister( char slaveAdd, char reg )
-
-      \brief
-        This function reads data from the lp5521 register selected by the 
-        variable reg and returns the result of the i2c read.
-     
-      \author
-          Chris King
-*******************************************************************************/
-uint8_t readRegister( char slaveAdd, char reg )
-{
-    uint8_t g_master_rxBuff[1];
-    g_master_rxBuff[0] = 0;
-
-    status_t reVal        = kStatus_Fail;
-    size_t txCount        = 0xFFU;
-    
-    
-    if( kStatus_Success == LPI2C_MasterStart( (LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Write ) ) {
-        /* check master tx FIFO empty or not */
-        LPI2C_MasterGetFifoCounts( (LPI2C_Type *)LPI2C1_BASE, NULL, &txCount );
-        while( txCount ) {
-            LPI2C_MasterGetFifoCounts((LPI2C_Type *)LPI2C1_BASE, NULL, &txCount);
-        }
-        /* check communicate with slave successful or not */
-        if( LPI2C_MasterGetStatusFlags( (LPI2C_Type *)LPI2C1_BASE) & kLPI2C_MasterNackDetectFlag ) {
-            return -1;
-        }
-
-        reVal = LPI2C_MasterSend( (LPI2C_Type *)LPI2C1_BASE, (void *)&reg, 1 );
-        if( reVal != kStatus_Success ) {
-            if( reVal == kStatus_LPI2C_Nak ) {
-                LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
-            }
-            return -1;
-        }
-
-        reVal = LPI2C_MasterRepeatedStart( (LPI2C_Type *)LPI2C1_BASE, slaveAdd, kLPI2C_Read );
-        if( reVal != kStatus_Success ) {
-            return -1;
-        }
-
-        reVal = LPI2C_MasterReceive( (LPI2C_Type *)LPI2C1_BASE, g_master_rxBuff, 1 );
-        if( reVal != kStatus_Success ) {
-            if( reVal == kStatus_LPI2C_Nak ) {
-                LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
-            }
-            return -1;
-        }
-
-        reVal = LPI2C_MasterStop( (LPI2C_Type *)LPI2C1_BASE );
-        if( reVal != kStatus_Success ) {
-            return -1;
-        }
-    }
-    return g_master_rxBuff[0];
-}
-
+#if 0
 static void LP5521delay() 
 {
     for( uint32_t i = 0U; i < 1000000; i++ ) {
         __NOP();
     }
 }
+#endif
 
 bool getGapCalStatus( void )
 {

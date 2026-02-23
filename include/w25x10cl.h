@@ -179,7 +179,6 @@ static void handleSectorErase( SERIAL_FLASH_CNTRL *pSerialFlash );
 static void handleBulkErase( SERIAL_FLASH_CNTRL *pSerialFlash );
 static void waitForCompletion( SERIAL_FLASH_CNTRL *pSerialFlash );
 static void handleReleasePowerDwn( SERIAL_FLASH_CNTRL *pSerialFlash );
-static int isFlashBusy( SERIAL_FLASH_CNTRL *pSerialFlash );
 /* primitives */
 static void intializeFlashInterface( void );
 static void writeFlashByte( void );

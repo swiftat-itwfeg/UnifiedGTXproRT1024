@@ -323,5 +323,4 @@ short getOpData( unsigned char type, short data );
 AT_QUICKACCESS_SECTION_CODE( int getIndirectData( CMD_DATA_IDS id ));
 void setIndirectData( CMD_DATA_IDS id, int val );
 void updateRam( IndirectDataItem *pRam );
-
 #endif

@@ -191,7 +191,6 @@ typedef struct hist_adj_level_struct
 #define DOT_RESISTANCE_BAD_HIGH                    ((DOT_RESISTANCE_EXPECTED) + (DOT_RESISTANCE_EXPECTED_MODIFIER_BAD))
 #define DOT_RESISTANCE_BAD_LOW                     ((DOT_RESISTANCE_EXPECTED) - (DOT_RESISTANCE_EXPECTED_MODIFIER_BAD))
 
-
 typedef enum
 {
     DOT_WEAR_INIT,
@@ -238,7 +237,7 @@ typedef struct
     uint8_t                     rxData[DATA_LENGTH_IN_BYTES];
     uint8_t                     dotRunCount;
 } DotCheckerStatus;
- 
+
 typedef enum
 {
     DOT_GOOD,

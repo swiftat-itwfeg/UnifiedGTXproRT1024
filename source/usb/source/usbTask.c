@@ -19,6 +19,7 @@
 #include "board.h"
 #include "usb_phy.h"
 
+
 static TaskHandle_t     pUsbHandle_             = NULL;
 static QueueHandle_t    pMsgInPrQHandle_        = NULL;
 static QueueHandle_t    pMsgInWrQHandle_        = NULL;
@@ -68,6 +69,10 @@ usb_device_class_config_list_struct_t usbMgrConfigList = {
     USB_DeviceCallback,            /* Device callback pointer */
     2,                             /* Class count */
 };
+
+extern void postRequestStatus( void );
+extern void resetPrinter( void );
+extern void USB_DeviceEhciIsrFunction(void *deviceHandle);
 
 /******************************************************************************/
 /*!   \fn BaseType_t createUsbTask( QueueHandle_t prSendQueue, QueueHandle_t wrSendQueue )
@@ -190,7 +195,6 @@ void usbTask( void *parameter )
     usb_status_t status                         = kStatus_USB_Error;
     static uint32_t prMsgSize = 0, wrMsgSize = 0, prMsgCnt = 0, wrMsgCnt = 0;
     static bool prHdr = true, wrHdr = true; 
-    static uint8_t prevMsgType_ = 0;   
     QueueSetMemberHandle_t setHandle = NULL;
     
     

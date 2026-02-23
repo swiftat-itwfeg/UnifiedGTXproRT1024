@@ -684,6 +684,7 @@ static inline void LPSPI_DisableDMA(LPSPI_Type *base, uint32_t mask)
  * @param base LPSPI peripheral address.
  * @return The LPSPI Transmit Data Register address.
  */
+#pragma diag_suppress=Pa039
 static inline uint32_t LPSPI_GetTxRegisterAddress(LPSPI_Type *base)
 {
     return (uint32_t) & (base->TDR);
@@ -703,6 +704,7 @@ static inline uint32_t LPSPI_GetRxRegisterAddress(LPSPI_Type *base)
 {
     return (uint32_t) & (base->RDR);
 }
+#pragma diag_default=Pa039
 
 /*!
  *@}

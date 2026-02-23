@@ -18,43 +18,17 @@ void jumpToOperation( PrStatusInfo *pStatus, unsigned char index );
 static const IdleOperation      idle_                   = { IDLE_DIRECTIVE };
 static const PrintOperation     printLabel_             = { PRINT_DIRECTIVE, INDIRECT_DATA, PRINT_DATA, HEAD_FIRST };
 static const PrintOperation     printDotWear            = { HEAD_TEST_DIRECTIVE, INDIRECT_DATA, PRINT_DATA, HEAD_FIRST };
-static const StepUntilOperation syncLabel_              = { STEP_UNTIL_DIRECTIVE, DIRECT_DATA, 2030, BITS_EQUAL,
-                                                            MOTOR_FORWARD | SYNCHRONIZED, MOTOR_FORWARD | SYNCHRONIZED };
-static const StepUntilOperation findLabel_              = { STEP_UNTIL_DIRECTIVE, DIRECT_DATA, 3000, BITS_EQUAL, LABEL_TAKEN, 0 };
 static const StepOperation      advanceLabel_           = { STEP_DIRECTIVE, INDIRECT_DATA, ADVANCE_DATA };
 static const StepOperation      advanceVirtualLabel_    = { STEP_DIRECTIVE, DIRECT_DATA, 290 };
-static const StepOperation      advanceShootVirtualLabel_ = { STEP_DIRECTIVE, DIRECT_DATA, 160 };
 static const StepOperation      retractVirtualLabel_    = { STEP_DIRECTIVE, DIRECT_DATA, -260 };
-static const StepOperation      retractShootVirtualLabel_ = { STEP_DIRECTIVE, DIRECT_DATA, -203 };
 static const StepOperation      advanceVirtLabel_       = { STEP_DIRECTIVE, DIRECT_DATA, 75 };
-static const StepOperation      ejectShootLabel_        = { STEP_DIRECTIVE, DIRECT_DATA, 460 }; /*609 */
-static const StepOperation      pSyncShoot_             = { STEP_DIRECTIVE, DIRECT_DATA, 75 };  /* 25 good for die cut labels */ /* 51 */
-static const StepOperation      tighten_                = { STEP_TAKEUP_TIGHTEN, DIRECT_DATA, 3000 }; /* tighten 3" or torque limit */
-
 static const StepOperation      cleanEject_     = { STEP_DIRECTIVE, DIRECT_DATA, 406 };         /* 2" forward */
 static const StepOperation      cleanExpel_     = { STEP_DIRECTIVE, DIRECT_DATA, 3045 };        /* 15" forward */
 static const StepOperation      retractLabel_   = { STEP_DIRECTIVE, INDIRECT_DATA, RETRACT_DATA };
 static const WaitUntilOperation takeLabel_      = { WAIT_UNTIL_DIRECTIVE, BITS_EQUAL, LABEL_TAKEN, LABEL_TAKEN };
-static const WaitUntilOperation takeLabelSzing_ = { WAIT_UNTIL_SIZING,BITS_EQUAL, LABEL_TAKEN, LABEL_TAKEN };
-static const WaitOperation      waitSize        = { WAIT_DIRECTIVE, DIRECT_DATA, 150 };
-static const WaitOperation      waitCut_        = { WAIT_DIRECTIVE, DIRECT_DATA, 300 };                         /* sof-5061 */
+
 static const WaitOperation      waitClean_      = { WAIT_DIRECTIVE, DIRECT_DATA, 600 };
-static const TestOperation      checkStock_     = { TEST_DIRECTIVE, BITS_NOT_EQUAL, OUT_OF_MEDIA,   
-                                                    OUT_OF_MEDIA, 0, 0, CONTINUE_EXECUTION,
-                                                    CONTINUE_EXECUTION }; /* ABORT_EXECUTION */
 
-static const StepOperation      testForCont_    = { TEST_FOR_CONTINUOUS, INDIRECT_DATA, EJECT_DATA };
-static const StepOperation      testForSync_    = { TEST_FOR_SYNC, DIRECT_DATA, 100 }; 
-static const StepOperation      testForLabel_   = { TEST_FOR_LABEL, DIRECT_DATA, 150 };
-static const StepOperation      cleanBackup_    = { STEP_DIRECTIVE, DIRECT_DATA, -406 };      /* 2" backward */         
-
-static const TestOperation      missingLabelTest_ = { TEST_DIRECTIVE, BITS_EQUAL, LABEL_TAKEN, LABEL_TAKEN,
-                                                      MISSING_LABEL, 0, CONTINUE_EXECUTION, CONTINUE_EXECUTION };
-static const TestOperation      jammedLabelTest_  = { TEST_DIRECTIVE, BITS_EQUAL, MOTOR_FORWARD | SYNC_BAR | SYNC_BAR_EDGE,
-                                                     MOTOR_FORWARD | SYNC_BAR | SYNC_BAR_EDGE, 0, JAMMED_LABEL,
-                                                     CONTINUE_EXECUTION, CONTINUE_EXECUTION };  /* ABORT_EXECUTION */
-static const CounterOperation   resetCounter_   = { COUNTER_DIRECTIVE, RESET_COUNTER };
-static const CounterOperation   enableCounter_  = { COUNTER_DIRECTIVE, ENABLE_COUNTER };
 static const CounterOperation   disableCounter_ = { COUNTER_DIRECTIVE, DISABLE_COUNTER };
 static const StatusOperation    setTake_        = { STATUS_DIRECTIVE, SET_BITS, TAKE_LABEL };
 static const StatusOperation    clearTake_      = { STATUS_DIRECTIVE, CLEAR_BITS, TAKE_LABEL };
@@ -65,8 +39,38 @@ static const StepUntilOperation findShootEdge_  = { STEP_EDGE_DIRECTIVE, DIRECT_
 
 static const StepUntilOperation paperTakeup_    = { STEP_TAKEUP_DIRECTIVE, DIRECT_DATA, 2436, BITS_EQUAL,                
                                                     MOTOR_FORWARD | SYNCHRONIZED, MOTOR_FORWARD | SYNCHRONIZED };    
+static const StepOperation      cleanBackup_    = { STEP_DIRECTIVE, DIRECT_DATA, -406 };      /* 2" backward */         
+
+
+#if 0 /* no longer used */
+static const StepUntilOperation syncLabel_              = { STEP_UNTIL_DIRECTIVE, DIRECT_DATA, 2030, BITS_EQUAL,
+                                                            MOTOR_FORWARD | SYNCHRONIZED, MOTOR_FORWARD | SYNCHRONIZED };
+static const StepOperation      advanceShootVirtualLabel_ = { STEP_DIRECTIVE, DIRECT_DATA, 160 };
+static const StepOperation      retractShootVirtualLabel_ = { STEP_DIRECTIVE, DIRECT_DATA, -203 };
+static const WaitOperation      waitCut_        = { WAIT_DIRECTIVE, DIRECT_DATA, 300 };                         /* sof-5061 */
+static const CounterOperation   resetCounter_   = { COUNTER_DIRECTIVE, RESET_COUNTER };
+static const CounterOperation   enableCounter_  = { COUNTER_DIRECTIVE, ENABLE_COUNTER };
 static const StepUntilOperation glDetection_    = { DETECTION_STEP_UNTIL, DIRECT_DATA, 2030, BITS_EQUAL,
                                                     MOTOR_FORWARD | SYNCHRONIZED, MOTOR_FORWARD | SYNCHRONIZED };
+static const StepOperation      ejectShootLabel_        = { STEP_DIRECTIVE, DIRECT_DATA, 460 }; /*609 */
+static const StepOperation      pSyncShoot_             = { STEP_DIRECTIVE, DIRECT_DATA, 75 };  /* 25 good for die cut labels */ /* 51 */
+static const StepOperation      tighten_                = { STEP_TAKEUP_TIGHTEN, DIRECT_DATA, 3000 }; /* tighten 3" or torque limit */
+static const StepOperation      testForCont_    = { TEST_FOR_CONTINUOUS, INDIRECT_DATA, EJECT_DATA };
+static const StepOperation      testForSync_    = { TEST_FOR_SYNC, DIRECT_DATA, 100 }; 
+static const StepOperation      testForLabel_   = { TEST_FOR_LABEL, DIRECT_DATA, 150 };
+static const WaitUntilOperation takeLabelSzing_ = { WAIT_UNTIL_SIZING,BITS_EQUAL, LABEL_TAKEN, LABEL_TAKEN };
+static const WaitOperation      waitSize        = { WAIT_DIRECTIVE, DIRECT_DATA, 150 };
+static const StepUntilOperation findLabel_              = { STEP_UNTIL_DIRECTIVE, DIRECT_DATA, 3000, BITS_EQUAL, LABEL_TAKEN, 0 };
+
+static const TestOperation      missingLabelTest_ = { TEST_DIRECTIVE, BITS_EQUAL, LABEL_TAKEN, LABEL_TAKEN,
+                                                      MISSING_LABEL, 0, CONTINUE_EXECUTION, CONTINUE_EXECUTION };
+static const TestOperation      jammedLabelTest_  = { TEST_DIRECTIVE, BITS_EQUAL, MOTOR_FORWARD | SYNC_BAR | SYNC_BAR_EDGE,
+                                                     MOTOR_FORWARD | SYNC_BAR | SYNC_BAR_EDGE, 0, JAMMED_LABEL,
+                                                     CONTINUE_EXECUTION, CONTINUE_EXECUTION };  /* ABORT_EXECUTION */
+static const TestOperation      checkStock_     = { TEST_DIRECTIVE, BITS_NOT_EQUAL, OUT_OF_MEDIA,   
+                                                    OUT_OF_MEDIA, 0, 0, CONTINUE_EXECUTION,
+                                                    CONTINUE_EXECUTION }; /* ABORT_EXECUTION */
+#endif
 
 
 #if CUTTER_LIFE_TEST
@@ -168,13 +172,13 @@ static CmdOp *gFind[3]        = { (CmdOp *)&ejectShootLabel_, (CmdOp *)&idle_, 0
 static CmdOp *gFind[3]        = { (CmdOp *)&backupShoot_, (CmdOp *)&idle_, 0 };
 
 static CmdOp *ssbackup[3]     = { (CmdOp *)&backup_, (CmdOp *)&idle_, 0 };
-static CmdOp *fsbackup[3]     = { (CmdOp *)&backupShoot_, (CmdOp *)&idle_, 0 };
+//static CmdOp *fsbackup[3]     = { (CmdOp *)&backupShoot_, (CmdOp *)&idle_, 0 };
 static CmdOp *gAdvance[3]     = { (CmdOp *)&advanceLabel_, (CmdOp *)&idle_, 0 };
 static CmdOp *gEject[3]       = {(CmdOp *)&ejectLabel_ ,(CmdOp *)&idle_, 0 };           
 static CmdOp *gSync[2]        = { (CmdOp *)&idle_, 0 };           
 
 static CmdOp *ssCutRetract[4] = { (CmdOp *)&cutLabel_, (CmdOp *)&retractLabel_, (CmdOp *)&idle_, 0 };
-static CmdOp *fsCutRetract[5] = { (CmdOp *)&cutLabel_, (CmdOp *)&waitCut_, (CmdOp *)&retractLabel_, (CmdOp *)&idle_, 0 };
+//static CmdOp *fsCutRetract[5] = { (CmdOp *)&cutLabel_, (CmdOp *)&waitCut_, (CmdOp *)&retractLabel_, (CmdOp *)&idle_, 0 };
 static CmdOp *gHeadTest[3]    = { (CmdOp *)&printDotWear, (CmdOp *)&idle_, 0 };
 static CmdOp *testGap[3]      = { (CmdOp *)&findShootGap_, (CmdOp *)&idle_, 0 };
 static CmdOp *testEdge[3]     = { (CmdOp *)&findShootEdge_, (CmdOp *)&idle_, 0 };
@@ -185,9 +189,9 @@ static CmdOp *ssCutRetractVirt[9] = { (CmdOp *)&advanceVirtualLabel_, (CmdOp *)&
                                       (CmdOp *)&advanceVirtLabel_,    (CmdOp *)&setTake_,  (CmdOp *)&takeLabel_, 
                                       (CmdOp *)&clearTake_,           (CmdOp *)&idle_,         0 };
 
-static CmdOp *fsCutRetractVirt[9] = { (CmdOp *)&advanceShootVirtualLabel_, (CmdOp *)&cutLabel_, (CmdOp *)&retractShootVirtualLabel_, 
-                                      (CmdOp *)&advanceVirtLabel_,    (CmdOp *)&setTake_,  (CmdOp *)&takeLabel_, 
-                                      (CmdOp *)&clearTake_,           (CmdOp *)&idle_,         0 };
+//static CmdOp *fsCutRetractVirt[9] = { (CmdOp *)&advanceShootVirtualLabel_, (CmdOp *)&cutLabel_, (CmdOp *)&retractShootVirtualLabel_, 
+//                                      (CmdOp *)&advanceVirtLabel_,    (CmdOp *)&setTake_,  (CmdOp *)&takeLabel_, 
+//                                      (CmdOp *)&clearTake_,           (CmdOp *)&idle_,         0 };
 
 static CmdOp *gPaperTakeup[3]   = { (CmdOp *)&paperTakeup_, (CmdOp *)&idle_, 0 };
 
@@ -258,34 +262,16 @@ void copyTable( CmdOp *table, CmdOp **operations )
 void setTableDefaultCmds( void )
 {
     copyTable( &(cmdTable[1].oper[0]), findNoLabel );    
-     /* if not a freestanding scale */
-    if( getMyModel() != RT_GLOBAL_FSS ) {
-        copyTable( &(cmdTable[2].oper[0]), ssbackup );
-    } else {
-        copyTable( &(cmdTable[2].oper[0]), fsbackup );
-    }    
-    
+    copyTable( &(cmdTable[2].oper[0]), ssbackup );    
     copyTable( &(cmdTable[3].oper[0]), gAdvance );    
     copyTable( &(cmdTable[4].oper[0]), gPrint ); 
     copyTable( &(cmdTable[5].oper[0]), gEject ); 
     copyTable( &(cmdTable[6].oper[0]), gSync ); 
     copyTable( &(cmdTable[7].oper[0]), gFind );     
-    copyTable( &(cmdTable[8].oper[0]), gSizing ); 
-    
-    if( getMyModel() != RT_GLOBAL_FSS ) {      
-        copyTable( &(cmdTable[9].oper[0]), ssCutRetract );
-    } else {
-        copyTable( &(cmdTable[9].oper[0]), fsCutRetract );
-    }
-    
-    copyTable( &(cmdTable[10].oper[0]), gHeadTest );
-    
-     /* if not a freestanding scale */
-    if( getMyModel() != RT_GLOBAL_FSS ) {      
-        copyTable( &(cmdTable[11].oper[0]),ssCutRetractVirt);
-    } else {
-        copyTable( &(cmdTable[11].oper[0]),fsCutRetractVirt);
-    }    
+    copyTable( &(cmdTable[8].oper[0]), gSizing );     
+    copyTable( &(cmdTable[9].oper[0]), ssCutRetract );    
+    copyTable( &(cmdTable[10].oper[0]), gHeadTest );    
+    copyTable( &(cmdTable[11].oper[0]),ssCutRetractVirt);
 }
 
 void setTableTestCmds( TestTables test )

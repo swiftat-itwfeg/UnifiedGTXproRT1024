@@ -3577,9 +3577,6 @@
             <name>$PROJ_DIR$\include\cat3Audit.h</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\source\printer\commandTable.c</name>
-        </file>
-        <file>
             <name>$PROJ_DIR$\include\commandTable.h</name>
         </file>
         <file>
@@ -3589,7 +3586,7 @@
             <name>$PROJ_DIR$\include\developmentSettings.h</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\..\..\..\..\XOneDTUnifiedRT1024\XoneDTUnifiedRT1024\include\deviceProperties.h</name>
+            <name>$PROJ_DIR$\include\deviceProperties.h</name>
         </file>
         <file>
             <name>$PROJ_DIR$\include\dotWearTask.h</name>
@@ -3670,9 +3667,6 @@
             <name>$PROJ_DIR$\include\translator.h</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\include\unitTest.h</name>
-        </file>
-        <file>
             <name>$PROJ_DIR$\include\usbTask.h</name>
         </file>
         <file>
@@ -3741,13 +3735,13 @@
                 <name>$PROJ_DIR$\source\printer\averyCutter.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\source\printer\commandTable.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\source\printer\dotWearTask.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\source\printer\drawingPrimitives.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\source\printer\dvr8818.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\source\printer\globalPrinterTask.c</name>
@@ -3774,6 +3768,9 @@
                 <name>$PROJ_DIR$\source\system\developmentTools.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\source\printer\dvr8818.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\source\system\idleTask.c</name>
             </file>
             <file>
@@ -3796,9 +3793,6 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\source\system\translator.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\source\system\unitTests.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\source\system\vendor.c</name>

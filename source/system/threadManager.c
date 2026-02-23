@@ -48,7 +48,7 @@ static bool suspend_                    = false;
 
 volatile unsigned long  statCntr        = 0;
 
-static PeripheralModel  model_          = RT_UNKNOWN;
+static PeripheralModel  model_          = GLOBAL_SCALE_UNKNOWN;
 
 static int              totalHeap_      = 0;
 
@@ -162,7 +162,7 @@ void systemStartup( void )
                 if( adcManager.value[CHANNEL_HEAD_STATE] >= NO_CASSET_THRESHOLD || OutOfMedia) {
                     PRINTF("\r\nhead is up or out of stock - no check for paper\r\n"); 
                 } else {
-                    checkForPaper( ( (float)config_.takeup_sensor_max_tension_counts * 0.90 ), 820 );
+                    checkForPaper( (uint16_t)( (float)config_.takeup_sensor_max_tension_counts * 0.90 ), 820 );
                 }
                 
                 
@@ -309,10 +309,9 @@ static void handleManagerMsg(ManagerMsg * msg)
                         tm_createSensorTask();
                         PRINTF("handleManagerMsg(): %s Task Created\r\n",
                         pcTaskGetName( managedTaskHandles_[msg->task]));
-                    }else if(msg->task == T_DOT_WEAR){
-                        /* only allow dotwear if best model */
-                        #if 1 //As of 7/2025, dont have a "BEST" model (in PCBA resistor config)
-                        if( model_ == RT_GLOBAL_SCALE_BEST) {
+                    }else if(msg->task == T_DOT_WEAR){                        
+                        #if 1 
+                        if( model_ == GLOBAL_SCALE_HB_GT) {
                           tm_createDotWearTask();
                           PRINTF("handleManagerMsg(): %s Task Created\r\n",
                           pcTaskGetName( managedTaskHandles_[msg->task]));
@@ -466,10 +465,10 @@ unsigned short getSwitch2_ID_Pins(void)
 *******************************************************************************/
 static PeripheralModel getPeripheralModel( void )
 {
-   /** TFink As of 7/16/25 all PCBAs are set to 0xF == G_SSRT_PRODUCT_GOOD_ID == RT_GLOBAL_SCALE_GOOD The 
+   /** TFink As of 7/16/25 all PCBAs are set to 0xF == G_SSRT_PRODUCT_GOOD_ID == GLOBAL_SCALE_HB_GT The 
    "model scheme" is still being determined and may have to be reworked from what is shown below. */   
    
-    PeripheralModel model = RT_UNKNOWN;
+    PeripheralModel model = GLOBAL_SCALE_UNKNOWN;
     unsigned char modelPins = 0;
     /* read input pins to determine model type */
     if( GPIO_ReadPinInput( MODEL_TYPE_A_GPIO, MODEL_TYPE_A_PIN ) ) {
@@ -487,16 +486,16 @@ static PeripheralModel getPeripheralModel( void )
       
     
     if( modelPins == 15 ) {
-       model = RT_GLOBAL_SCALE_GOOD;
-       PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_GOOD\r\n");
+       model = GLOBAL_SCALE_HB_GT;
+       PRINTF("getPeripheralModel(): GLOBAL_SCALE_HB_GT\r\n");
     } else {
-       model = RT_UNKNOWN;
+       model = GLOBAL_SCALE_UNKNOWN;
        PRINTF("\r\n\r\n\r\n\r\n*******************************************\r\n");
-       PRINTF("getPeripheralModel(): RT_UNKNOWN!!!\r\n");
+       PRINTF("getPeripheralModel(): GLOBAL_SCALE_UNKNOWN!!!\r\n");
        PRINTF("*******************************************\r\n\r\n\r\n\r\n");
     }
     
-    /** TFink As of 7/16/25 all PCBAs are set to 0xF == G_SSRT_PRODUCT_GOOD_ID == RT_GLOBAL_SCALE_GOOD The 
+    /** TFink As of 7/16/25 all PCBAs are set to 0xF == G_SSRT_PRODUCT_GOOD_ID == GLOBAL_SCALE_HB_GT The 
         "model scheme" is still being determined and may have to be reworked from
          what is shown below. */    
 #if 0     
@@ -522,8 +521,8 @@ static PeripheralModel getPeripheralModel( void )
         model = RT_GLOBAL_PREPACK_WEIGHER; 
         PRINTF("getPeripheralModel(): RT_GLOBAL_PREPACK_WEIGHER\r\n");
     } else if( modelPins < 8 ) {
-        model = RT_UNKNOWN;
-        PRINTF("getPeripheralModel(): RT_UNKNOWN\r\n");
+        model = GLOBAL_SCALE_UNKNOWN;
+        PRINTF("getPeripheralModel(): GLOBAL_SCALE_UNKNOWN\r\n");
     }
 #endif 
     

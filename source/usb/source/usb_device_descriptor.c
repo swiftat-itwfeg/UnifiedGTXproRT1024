@@ -244,8 +244,8 @@ usb_status_t configureUsbDescriptors( DEVICE_PROPERTIES_t *pProp )
         g_UsbDeviceConfigurationDescriptor[21] = USB_ENDPOINT_INTERRUPT;
         g_UsbDeviceConfigurationDescriptor[22] = USB_SHORT_GET_LOW(HS_PRINTER_INTERRUPT_IN_PACKET_SIZE), USB_SHORT_GET_HIGH(HS_PRINTER_INTERRUPT_IN_PACKET_SIZE);
         g_UsbDeviceConfigurationDescriptor[23] = HS_PRINTER_INTERRUPT_IN_INTERVAL;
-        g_UsbDeviceConfigurationDescriptor[24] = USB_DESCRIPTOR_LENGTH_ENDPOINT
-        g_UsbDeviceConfigurationDescriptor[25] = USB_DESCRIPTOR_TYPE_ENDPOINT
+        g_UsbDeviceConfigurationDescriptor[24] = USB_DESCRIPTOR_LENGTH_ENDPOINT;
+        g_UsbDeviceConfigurationDescriptor[25] = USB_DESCRIPTOR_TYPE_ENDPOINT;
         g_UsbDeviceConfigurationDescriptor[26] = USB_PRINTER_INTERRUPT_ENDPOINT_OUT | (USB_OUT << USB_DESCRIPTOR_ENDPOINT_ADDRESS_DIRECTION_SHIFT);
         g_UsbDeviceConfigurationDescriptor[27] = USB_ENDPOINT_INTERRUPT;
         g_UsbDeviceConfigurationDescriptor[28] = USB_SHORT_GET_LOW(FS_PRINTER_INTERRUPT_OUT_PACKET_SIZE), USB_SHORT_GET_HIGH(FS_PRINTER_INTERRUPT_OUT_PACKET_SIZE);
@@ -710,9 +710,11 @@ usb_status_t configureUsbDescriptors( DEVICE_PROPERTIES_t *pProp )
         g_UsbDeviceString2[48] = ')';
         g_UsbDeviceString2[49] = 0x00U;
 
+        status = kStatus_USB_Success;
     } else {
         PRINTF("device class error: %d\r\n", pProp->class );
     }
+    return status;
 }
 
 

@@ -724,17 +724,10 @@ static void averyCutterTask( void *pvParameters )
                     } else {
                         PRINTF("AC_PROCESS_CUT_RESPONSE_ averyCutterTask(): Cutter failed to cut!\r\n" );
                         
-                        ICMessages msg1;
                         ICMessages msg2;
-        
-                        
-                        msg1.generic.msgType = _I_CUTTER_CUT_CMD;
                         msg2.generic.msgType = _I_CUTTER_HOME_CMD;
 
-
                         handleInternalMessage(&msg2);
-                        
-                        //sendACReset( &cutterMgr_ );
                     }
                 }
                 break;
@@ -770,11 +763,8 @@ static void averyCutterTask( void *pvParameters )
                             cutterHome = true;
                         } else {
                             vTaskDelay( pdMS_TO_TICKS(300) );
-                            /* tell the printer that we are ready to process cmds */
-                            ICutterGeneric imsg;
-                            imsg.msgType = _I_CUTTER_READY_FOR_CMD;
-                            actState_ =  AC_WAIT_FOR_COMMAND_;
                             
+                            actState_ =  AC_WAIT_FOR_COMMAND_;                            
                             cutterHome = true;
                             
                             PRINTF("AC_PROCESS_HOME_RESPONSE_ wait for command\r\n");
@@ -788,6 +778,9 @@ static void averyCutterTask( void *pvParameters )
                 /* sleep for a second */
                 vTaskDelay( deepSleep );
                 break;
+            }
+            default: {
+                PRINTF("unknown command %d\r\n", actState_ );
             }
             
         }
@@ -903,6 +896,7 @@ static void stuffTxBuffer( unsigned char *pMsg, unsigned char size )
     }
 }
 
+#pragma diag_suppress=Pe1422,Pa039
 /******************************************************************************/
 /*!   \fn static void buildCutterMsg( ACCCMDS cmd, ACutterMsgs *pMsg, 
                                       unsigned short arg1, unsigned short arg2 )
@@ -1021,6 +1015,7 @@ static void buildCutterMsg( ACCCMDS cmd, ACutterMsgs *pMsg, unsigned short arg1,
         }
     }
 }
+#pragma diag_default=Pe1422,Pa039
 
 /******************************************************************************/
 /*!   \fn static void prepTransmitBfr( unsigned char *pBfr, unsigned char length )
@@ -1189,6 +1184,7 @@ static void handleCutterMessage( CutterMgr *pMgr, unsigned char *pBfr )
     memset( &uartRxBfr[0], 0xff, MAX_MESSGAE_SIZE );   
 }
 
+#pragma diag_suppress=Pe1422
 /******************************************************************************/
 /*!   \fn static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
                                      
@@ -1197,7 +1193,7 @@ static void handleCutterMessage( CutterMgr *pMgr, unsigned char *pBfr )
                
       \author
           Aaron Swift
-*******************************************************************************/                
+*******************************************************************************/   
 static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
 {   
     bool valid = false;
@@ -1234,6 +1230,7 @@ static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
     }
     return valid;
 }
+#pragma diag_default=Pe1422
 
 /******************************************************************************/
 /*!   \fn static void parseHeaderStatus( CutterMgr *pMgr, ACHeader *pHeader )
@@ -1537,7 +1534,6 @@ void uart1Callback( LPUART_Type *base, lpuart_handle_t *pHandle,
 static unsigned short calcCrc16( unsigned char *pBlob, unsigned short length )
 {
     unsigned short checkSum = 0;
-    unsigned char index = 0;
     while( length-- ) {              
         /* reverse order checksum */
         checkSum = ( checkSum >> 8 )^crc16[ (unsigned char)( checkSum^ *pBlob++ ) ];    

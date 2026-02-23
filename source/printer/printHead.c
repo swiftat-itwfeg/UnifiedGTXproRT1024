@@ -12,7 +12,6 @@ HeadStyle headStyle;
 static PrinterEnv env_;
 extern FilterData    headTempData;
 extern bool paused_;
-static unsigned short prevContrast_ = 0;
 extern Pr_Config config_;
 extern PrStatusInfo currentStatus;
 extern PrStatusInfo prevStatus;
@@ -609,7 +608,7 @@ void setHeadTimings( void )
         pEngine->histAdj[0].compType = FIRST_LEVEL_HIST;        
         pEngine->histAdj[0].time = rohm80mmHistory[ pEngine->contrast ];
         pEngine->histAdj[1].compType = CURRENT_LINE;    
-        pEngine->histAdj[1].time = currentLineTimeTemperatureAdjusted; 
+        pEngine->histAdj[1].time = (unsigned short)currentLineTimeTemperatureAdjusted; 
         pEngine->pwmStartTime = rohm80mmPwmStart[ pEngine->contrast ];
         pEngine->pwmDutyCycle = ( rohm80mmPwmDuty[ pEngine->contrast ]);
     //}             
@@ -636,8 +635,6 @@ void updatePrintTimings( void )
         return;
     }
 
-    prevContrast_ = pEngine->contrast;
-    
     for( int i = 0; i < MAX_TABLE_ENTRIES; i++ ) 
     { 
         history1Line[i] = rohm80mmHistory[ pEngine->contrast ];

@@ -44,6 +44,13 @@ typedef struct
     unsigned char       versionEng;
 }DEVICE_PROPERTIES_t;
 
+typedef enum
+{
+    UNKNOWN_MFG,
+    HOBART_MFG,
+    AVERY_MFG
+}DEVICEMFG_t;
+
 /* different scale models this firmware supports */ 
 typedef enum
 {

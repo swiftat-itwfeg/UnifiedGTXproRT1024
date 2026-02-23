@@ -2740,7 +2740,6 @@ void sendDotWear(int size)
             PRINTF("dotChecker body\r\n");
             BaseType_t result = xQueueSendFromISR(pQUSBSendPrHandle_, (void *)&dotMessage, 0);
             
-            //BaseType_t result = xQueueSendFromISR(pQUSBSendPrHandle_, (void *)&body[0], 0);
             if (result != pdPASS)
             {
                 PRINTF("sendDotWear(): USB tx message queue is full!\r\n");
@@ -3331,7 +3330,7 @@ static void t_handlePrWriteConfig( unsigned char *pFrame )
     /* skip the message type byte */
     pFrame++;
 
-    prConfig.disposition                        = nCharToShort( pFrame );
+    prConfig.disposition                        = (CFGType)nCharToShort( pFrame );
     pFrame += sizeof(unsigned long);
     
     prConfig.config.instance                    = (StationID)*pFrame;
@@ -4185,7 +4184,7 @@ static void t_handlePrSetTime( unsigned char *pFrame )
     /* skip the message type byte*/
     pFrame++;
 
-    prMsg.timer = *pFrame;
+    prMsg.timer = (SysTimerType)*pFrame;
     /* typedef are sent as long */
     pFrame += 4;
     prMsg.milliseconds = nCharToLong( pFrame );
@@ -4299,7 +4298,7 @@ static void t_handlePrStopTime( unsigned char *pFrame )
 
     /* skip the message type byte*/
     pFrame++; 
-    prMsg.timer = *pFrame;
+    prMsg.timer = (SysTimerType)*pFrame;
     
     if( pPQHandle_ ) {      
         /* add message to the printer queue */
@@ -5681,7 +5680,6 @@ void sendWgFactoryDlftsComplete( bool status )
     }
 
     unsigned char body[ 2 ]; 
-    unsigned int index = 0;
     
     body[0] = WG_FACTORY_DEFAULTS_CMPLT;
     body[1] = status;

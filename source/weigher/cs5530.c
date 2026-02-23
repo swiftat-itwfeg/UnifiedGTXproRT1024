@@ -652,55 +652,13 @@ static bool cs5530ConvConfig( CS5530Mgr *pMgr )
 
 static void handleTransfer( CS5530Mgr *pMgr )
 {
-    switch( pMgr->currentCmd )
-    {
-        case _Write_Offset_Reg: {
-            
-            break;
-        }
-        case _Read_Offset_Reg: {
-            
-            break;
-        }
-        case _Write_Gain_Reg: {
-            
-            break;
-        }
-        case _Read_Gain_Reg: {
-            
-            break;
-        }
-        case _Write_Cfg_Reg: {
-            
-            break;
-        }
-        case _Read_Cfg_Reg: {
-            
-            break;
-        }
-        case _Perform_Single_Conv: {
-            
-            break;
-        }
-        case _Perform_Mult_Conv: {
-            
-            break;
-        }
-        case _Perform_Offset_Cal: {
-            
-            break;
-        }
-        case _Perform_Gain_Cal: {
-            
-            break;
-        }
-        case _Sync_Interface: {
-            /* clear both transmit and recieve buffers */
-            memset( &pMgr->txBfr[0], 0, MAX_CS5530_PAYLOAD );
-            memset( &pMgr->rxBfr[0], 0, MAX_CS5530_PAYLOAD );
-            pMgr->currentCmd = _CS5530_No_Command;
-            break;
-        }
+    if( pMgr->currentCmd == _Sync_Interface ) {
+        /* clear both transmit and recieve buffers */
+        memset( &pMgr->txBfr[0], 0, MAX_CS5530_PAYLOAD );
+        memset( &pMgr->rxBfr[0], 0, MAX_CS5530_PAYLOAD );
+        pMgr->currentCmd = _CS5530_No_Command;
+    } else {
+      PRINTF("handleTransfer(): unknown command: %d\r\n", pMgr->currentCmd);
     }
 }
 
@@ -770,7 +728,7 @@ static bool writeCS5530( unsigned char *pTxData, unsigned char *pRxData, unsigne
     masterXfer.txData = (unsigned char *)pTxData;
     masterXfer.rxData = pRxData;
     masterXfer.dataSize = size; 
-    masterXfer.configFlags = kLPSPI_Pcs0 | kLPSPI_MasterPcsContinuous;
+    masterXfer.configFlags = (kLPSPI_Pcs0 | kLPSPI_MasterPcsContinuous);
    
     status = LPSPI_MasterTransferBlocking( LPSPI2, &masterXfer );
     if( status != kStatus_Success ) {

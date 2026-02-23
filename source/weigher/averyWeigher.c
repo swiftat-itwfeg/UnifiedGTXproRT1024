@@ -791,7 +791,7 @@ static void handleWeigherMsg( WgMessage *pMsg )
             msg.zeroedCalibratedCounts  = (long)labs( weight_ );
             msg.rawCounts               = (unsigned long)currentWeigher_.rawCounts;
             
-            if( getMyModel() == RT_GLOBAL_SCALE_BEST ) {
+            if( getMyModel() == GLOBAL_SCALE_HB_GT ) {
                ValueMax *pVM = getPtrToValueMax();
                
                msg.acclAvgXCounts          = pVM->accel_x_avg_raw_reading;
@@ -1123,7 +1123,7 @@ static void handleWeigherMsg( WgMessage *pMsg )
             WgSysInfo info;
             info.msgType = WG_SYS_INFO;
             info.pid = getProductId();
-            info.valueMaxEnabled = (getMyModel() == RT_GLOBAL_SCALE_BEST);
+            info.valueMaxEnabled = (getMyModel() == GLOBAL_SCALE_HB_GT);
             
             sendWgSysInfo( &info );   
             break;

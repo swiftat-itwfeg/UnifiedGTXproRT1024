@@ -4,6 +4,7 @@
 #include "queue.h"
 #include "timers.h"
 #include <stdbool.h>
+#include "deviceProperties.h"
 
 /* add define to turn on thread statistics
 #define STATISTICS_ENABLE
@@ -24,7 +25,7 @@ typedef enum
     F_BOARDTESTTHREAD
 }F_Threads;  
 
-      
+#if 0      
 typedef enum
 {
     RT_UNKNOWN,
@@ -37,6 +38,7 @@ typedef enum
     RT_GLOBAL_SCALE_WEIGHER_ONLY,
     RT_GLOBAL_PREPACK_WEIGHER,
 }PeripheralModel;
+#endif
 
 typedef enum{
   SUSPEND,

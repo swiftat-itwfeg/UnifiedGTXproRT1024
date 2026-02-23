@@ -26,6 +26,8 @@ processor_version: 0.0.0
 #include "fsl_gpio.h"     
 #include "pin_mux.h"
 
+extern void XBARA_SetSignalsConnection(XBARA_Type *base, xbar_input_signal_t input, xbar_output_signal_t output);
+
 /* FUNCTION ************************************************************************************************************
  * 
  * Function Name : BOARD_InitBootPins
@@ -585,6 +587,46 @@ void BOARD_InitPins(void) {
 }
 
 
+/*! ****************************************************************************   
+      \fn configurePinAD_B1_15AsSPI3MISO(void)
+ 
+      \brief
+        configure pin AD_B1_15 for SPI3 MISO function. This pin has to be 
+        dynamically switched from SPI configuration to an Input to accomodate 
+        weigher accelerometer serial EEP write and erase cycles.
+
+      \author
+          Tom Fink
+*******************************************************************************/ 
+void configurePinAD_B1_15AsSPI3MISO(void)
+{   //GPIO_EMC_35
+    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0U);    
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0x10B0U ); 
+}
+
+/*! ****************************************************************************   
+      \fn 
+ 
+      \brief
+        Configure pin AD_B1_15 as a GP Input. This pin has to be 
+        dynamically switched from SPI configuration to an Input to accomodate 
+        weigher accelerometer serial EEP write and erase cycles.
+
+      \author
+          Tom Fink
+*******************************************************************************/ 
+void configurePinAD_B1_15AsGPIO(void)
+{
+    gpio_pin_config_t inCfg;
+    
+    inCfg.direction             = kGPIO_DigitalInput;    
+    inCfg.interruptMode         = kGPIO_NoIntmode;
+   
+    /* weigher accelerometer group1 pin31 configured as gpio out */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0U );                                    
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0x0190B0U );
+    GPIO_PinInit( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, &inCfg );
+}
 
 
 

@@ -449,7 +449,7 @@ bool erasePage( uint32_t address, FLASH_SECTORS sector )
 {
     bool status = false;
     /*do not allow users to erase block or (sector) 3 information */ 
-    if( ( address >= SECTOR0_BASE_ADDR  ) ) /* && ( address < SECTOR3_BASE_ADDR ) ) */
+    if( ( address < SECTOR3_BASE_ADDR )  ) /* && ( address < SECTOR3_BASE_ADDR ) ) */
     {  
         /*is the sector locked ?*/
         isSectorLocked( &serialFlash, sector );    
@@ -1579,34 +1579,6 @@ static void waitForCompletion( SERIAL_FLASH_CNTRL *pSerialFlash )
         } 
     } while( pSerialFlash->flashBusy );
 }
-
-/*! **************************************************************************** 
-      \fn int isFlashBusy(SERIAL_FLASH_CNTRL *pSerialFlash)                                                                
- 
-      \brief
-        private: This function reads the serial flash status register and 
-                 sets or clear the flashBusy flag within the serial flash 
-                 control structure. 
-         
-      \param pSerialFlash pointer to the serial flash control instance          
-      \return pSerialFlash->error;
-
-      \author
-          Aaron Swift
-*******************************************************************************/ 
-static int isFlashBusy(SERIAL_FLASH_CNTRL *pSerialFlash)
-{    
-    /*read the serial flash status register */
-    setupTransfer(FLASH_READ_STATUS_REG, pSerialFlash, NULL, NULL, 0);
-    if(pSerialFlash->error == 0)
-    {
-        processCommand(pSerialFlash);
-//        if(pSerialFlash->error == 0)
-//            pSerialFlash->flashBusy = (bool)pSerialFlash->statusRegister & FLASH_STATUS_MASK;
-    }
-    return pSerialFlash->error;
-}
-
 
 /*! ****************************************************************************   
       \fn writeFlashByte(SERIAL_FLASH_CNTRL *pSerialFlash)                                                                

@@ -122,6 +122,7 @@ void sendPrHeadDotStatus( PrDotStatus stat );
 void sendPrGapCalStatus( PrGapCalStatus *pPrGapCalStatus );
 void sendPrPeelLog(PrPeelLog *pPrPeelLog);
 void sendPrTUCalStatus( PrGapCalStatus *pPrGapCalStatus );
+void sendPrTUCalStatusFromISR( PrGapCalStatus *pPrGapCalStatus );
 void sendDotWear( int size );
 void sendLowLabelMinMax( short minPeeling, short maxPeeling, short minStreaming, short maxStreaming );
 void sendTakeLabelError( bool error );

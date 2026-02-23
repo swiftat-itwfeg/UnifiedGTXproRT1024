@@ -330,7 +330,7 @@ bool setSerialPrDfltConfiguration( Pr_Config *pPrConfig )
     }
 
     
-    pPrConfig->instance			        = 0;
+    pPrConfig->instance			        = (StationID)0;
     pPrConfig->label_width                      = UFW_LABEL_STOCK;   /* service scale stock */
     pPrConfig->contrast_adjustment              = 3;
     pPrConfig->peel_position                    = 75;  

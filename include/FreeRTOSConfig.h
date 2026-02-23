@@ -99,7 +99,7 @@
 
 //TFinkToDo debug message added to configASSERT
 /* Define to trap errors during development. */
-#define configASSERT(x) if(( x) == 0) {printConfigAssertDebugMessage(); taskDISABLE_INTERRUPTS(); for (;;);}
+#define configASSERT(x) if(( x) == 0) { taskDISABLE_INTERRUPTS(); for (;;);}
 
 /* Optional functions - most linkers will remove unused functions anyway. */
 #define INCLUDE_vTaskPrioritySet                1

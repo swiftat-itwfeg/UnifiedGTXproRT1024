@@ -1069,6 +1069,7 @@ static inline uint32_t CLOCK_GetDiv(clock_div_t divider)
  * @param name  Which clock to enable, see \ref clock_ip_name_t.
  * @param value Clock gate value to set, see \ref clock_gate_value_t.
  */
+#pragma diag_suppress=Pa039
 static inline void CLOCK_ControlGate(clock_ip_name_t name, clock_gate_value_t value)
 {
     uint32_t index = ((uint32_t)name) >> 8U;
@@ -1080,7 +1081,7 @@ static inline void CLOCK_ControlGate(clock_ip_name_t name, clock_gate_value_t va
     reg = (volatile uint32_t *)((uint32_t)((volatile uint32_t *)&CCM->CCGR0) + sizeof(volatile uint32_t *) * index);
     SDK_ATOMIC_LOCAL_CLEAR_AND_SET(reg, (3UL << shift), (((uint32_t)value) << shift));
 }
-
+#pragma diag_default=Pa039
 /*!
  * @brief Enable the clock for specific IP.
  *
