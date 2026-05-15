@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2022 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_LPUART_EDMA_H_
-#define _FSL_LPUART_EDMA_H_
+#ifndef FSL_LPUART_EDMA_H_
+#define FSL_LPUART_EDMA_H_
 
 #include "fsl_lpuart.h"
 #include "fsl_edma.h"
@@ -21,10 +21,10 @@
  ******************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
+/*! @{ */
 /*! @brief LPUART EDMA driver version. */
-#define FSL_LPUART_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 5, 0))
-/*@}*/
+#define FSL_LPUART_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 6, 0))
+/*! @} */
 
 /* Forward declaration of the handle typedef. */
 typedef struct _lpuart_edma_handle lpuart_edma_handle_t;
@@ -69,6 +69,9 @@ extern "C" {
 
 /*!
  * @brief Initializes the LPUART handle which is used in transactional functions.
+ *
+ * @note This function disables all LPUART interrupts.
+ *
  * @param base LPUART peripheral base address.
  * @param handle Pointer to lpuart_edma_handle_t structure.
  * @param callback Callback function.
@@ -167,13 +170,15 @@ status_t LPUART_TransferGetReceiveCountEDMA(LPUART_Type *base, lpuart_edma_handl
  *
  * This function handles the LPUART tx complete IRQ request and invoke user callback.
  * It is not set to static so that it can be used in user application.
+ * @note This function is used as default IRQ handler by double weak mechanism.
+ * If user's specific IRQ handler is implemented, make sure this function is invoked in the handler.
  *
  * @param base LPUART peripheral base address.
  * @param lpuartEdmaHandle LPUART handle pointer.
  */
 void LPUART_TransferEdmaHandleIRQ(LPUART_Type *base, void *lpuartEdmaHandle);
 
-/*@}*/
+/*! @} */
 
 #if defined(__cplusplus)
 }
@@ -181,4 +186,4 @@ void LPUART_TransferEdmaHandleIRQ(LPUART_Type *base, void *lpuartEdmaHandle);
 
 /*! @}*/
 
-#endif /* _FSL_LPUART_EDMA_H_ */
+#endif /* FSL_LPUART_EDMA_H_ */

@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2017 NXP
+ * Copyright 2016-2021, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_SAI_EDMA_H_
-#define _FSL_SAI_EDMA_H_
+#ifndef FSL_SAI_EDMA_H_
+#define FSL_SAI_EDMA_H_
 
 #include "fsl_edma.h"
 #include "fsl_sai.h"
@@ -22,14 +22,41 @@
  ******************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
-#define FSL_SAI_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 4, 0)) /*!< Version 2.4.0 */
-/*@}*/
+/*! @{ */
+#define FSL_SAI_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 7, 3)) /*!< Version 2.7.3 */
+/*! @} */
+
+/*! @brief the SAI enable position When calling SAI_TransferReceiveEDMA */
+#ifndef MCUX_SDK_SAI_EDMA_RX_ENABLE_INTERNAL
+#define MCUX_SDK_SAI_EDMA_RX_ENABLE_INTERNAL 1U
+#endif
+
+/*! @brief the SAI enable position When calling SAI_TransferSendEDMA */
+#ifndef MCUX_SDK_SAI_EDMA_TX_ENABLE_INTERNAL
+#define MCUX_SDK_SAI_EDMA_TX_ENABLE_INTERNAL 1U
+#endif
 
 typedef struct sai_edma_handle sai_edma_handle_t;
 
 /*! @brief SAI eDMA transfer callback function for finish and error */
 typedef void (*sai_edma_callback_t)(I2S_Type *base, sai_edma_handle_t *handle, status_t status, void *userData);
+
+/*!@brief sai interleave type */
+typedef enum _sai_edma_interleave
+{
+    kSAI_EDMAInterleavePerChannelSample =
+        0U, /*!< SAI data interleave per channel sample
+             * ---------------------------------------------------------------------------------------------------
+             * |LEFT CHANNEL | RIGHT CHANNEL | LEFT CHANNEL | RIGHT CHANNEL | LEFT CHANNEL | RIGHT CHANNEL | ....|
+             * ---------------------------------------------------------------------------------------------------
+             */
+    kSAI_EDMAInterleavePerChannelBlock =
+        1U, /*!< SAI data interleave per channel block
+             * --------------------------------------------------------------------------------------------------------
+             * |LEFT CHANNEL | LEFT CHANNEL | LEFT CHANNEL | ... | RIGHT CHANNEL | RIGHT CHANNEL | RIGHT CHANNEL | ...|
+             * --------------------------------------------------------------------------------------------------------
+             */
+} sai_edma_interleave_t;
 
 /*! @brief SAI DMA transfer handle, users should not touch the content of the handle.*/
 struct sai_edma_handle
@@ -37,6 +64,8 @@ struct sai_edma_handle
     edma_handle_t *dmaHandle;     /*!< DMA handler for SAI send */
     uint8_t nbytes;               /*!< eDMA minor byte transfer count initially configured. */
     uint8_t bytesPerFrame;        /*!< Bytes in a frame */
+    uint8_t channelMask;          /*!< Enabled channel mask value, reference _sai_channel_mask */
+    uint8_t channelNums;          /*!< total enabled channel nums */
     uint8_t channel;              /*!< Which data channel */
     uint8_t count;                /*!< The transfer data count in a DMA request */
     uint32_t state;               /*!< Internal state for SAI eDMA transfer */
@@ -45,6 +74,7 @@ struct sai_edma_handle
     uint8_t tcd[(SAI_XFER_QUEUE_SIZE + 1U) * sizeof(edma_tcd_t)]; /*!< TCD pool for eDMA transfer. */
     sai_transfer_t saiQueue[SAI_XFER_QUEUE_SIZE];                 /*!< Transfer queue storing queued transfer. */
     size_t transferSize[SAI_XFER_QUEUE_SIZE];                     /*!< Data bytes need to transfer */
+    sai_edma_interleave_t interleaveType;                         /*!< Transfer interleave type */
     volatile uint8_t queueUser;                                   /*!< Index for user to queue transfer. */
     volatile uint8_t queueDriver; /*!< Index for driver to get the transfer data and size */
 };
@@ -69,7 +99,6 @@ extern "C" {
  *
  * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
- * @param base SAI peripheral base address.
  * @param callback Pointer to user callback function.
  * @param userData User parameter passed to the callback function.
  * @param txDmaHandle eDMA handle pointer, this handle shall be static allocated by users.
@@ -88,7 +117,6 @@ void SAI_TransferTxCreateHandleEDMA(I2S_Type *base,
  *
  * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
- * @param base SAI peripheral base address.
  * @param callback Pointer to user callback function.
  * @param userData User parameter passed to the callback function.
  * @param rxDmaHandle eDMA handle pointer, this handle shall be static allocated by users.
@@ -100,54 +128,32 @@ void SAI_TransferRxCreateHandleEDMA(I2S_Type *base,
                                     edma_handle_t *rxDmaHandle);
 
 /*!
- * @brief Configures the SAI Tx audio format.
+ * @brief Initializes the SAI interleave type.
  *
- * @deprecated Do not use this function.  It has been superceded by @ref SAI_TransferTxSetConfigEDMA
+ * This function initializes the SAI DMA handle member interleaveType, it shall be called only when application would
+ * like to use type kSAI_EDMAInterleavePerChannelBlock, since the default interleaveType is
+ * kSAI_EDMAInterleavePerChannelSample always
  *
- * The audio format can be changed at run-time. This function configures the sample rate and audio data
- * format to be transferred. This function also sets the eDMA parameter according to formatting requirements.
- *
- * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
- * @param format Pointer to SAI audio data format structure.
- * @param mclkSourceClockHz SAI master clock source frequency in Hz.
- * @param bclkSourceClockHz SAI bit clock source frequency in Hz. If bit clock source is master
- * clock, this value should equals to masterClockHz in format.
- * @retval kStatus_Success Audio format set successfully.
- * @retval kStatus_InvalidArgument The input argument is invalid.
+ * @param interleaveType Multi channel interleave type.
  */
-void SAI_TransferTxSetFormatEDMA(I2S_Type *base,
-                                 sai_edma_handle_t *handle,
-                                 sai_transfer_format_t *format,
-                                 uint32_t mclkSourceClockHz,
-                                 uint32_t bclkSourceClockHz);
-
-/*!
- * @brief Configures the SAI Rx audio format.
- *
- * @deprecated Do not use this function.  It has been superceded by @ref SAI_TransferRxSetConfigEDMA
- *
- * The audio format can be changed at run-time. This function configures the sample rate and audio data
- * format to be transferred. This function also sets the eDMA parameter according to formatting requirements.
- *
- * @param base SAI base pointer.
- * @param handle SAI eDMA handle pointer.
- * @param format Pointer to SAI audio data format structure.
- * @param mclkSourceClockHz SAI master clock source frequency in Hz.
- * @param bclkSourceClockHz SAI bit clock source frequency in Hz. If a bit clock source is the master
- * clock, this value should equal to masterClockHz in format.
- * @retval kStatus_Success Audio format set successfully.
- * @retval kStatus_InvalidArgument The input argument is invalid.
- */
-void SAI_TransferRxSetFormatEDMA(I2S_Type *base,
-                                 sai_edma_handle_t *handle,
-                                 sai_transfer_format_t *format,
-                                 uint32_t mclkSourceClockHz,
-                                 uint32_t bclkSourceClockHz);
+void SAI_TransferSetInterleaveType(sai_edma_handle_t *handle, sai_edma_interleave_t interleaveType);
 
 /*!
  * @brief Configures the SAI Tx.
  *
+ * @note SAI eDMA supports data transfer in a multiple SAI channels if the FIFO Combine feature is supported.
+ * To activate the multi-channel transfer enable SAI channels by filling the channelMask
+ * of sai_transceiver_t with the corresponding values of _sai_channel_mask enum, enable the FIFO Combine
+ * mode by assigning kSAI_FifoCombineModeEnabledOnWrite to the fifoCombine member of sai_fifo_combine_t
+ * which is a member of sai_transceiver_t.
+ * This is an example of multi-channel data transfer configuration step.
+ *  @code
+ *   sai_transceiver_t config;
+ *   SAI_GetClassicI2SConfig(&config, kSAI_WordWidth16bits, kSAI_Stereo, kSAI_Channel0Mask|kSAI_Channel1Mask);
+ *   config.fifo.fifoCombine = kSAI_FifoCombineModeEnabledOnWrite;
+ *   SAI_TransferTxSetConfigEDMA(I2S0, &edmaHandle, &config);
+ *  @endcode
  *
  * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
@@ -158,7 +164,18 @@ void SAI_TransferTxSetConfigEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_
 /*!
  * @brief Configures the SAI Rx.
  *
- *
+ * @note SAI eDMA supports data transfer in a multiple SAI channels if the FIFO Combine feature is supported.
+ * To activate the multi-channel transfer enable SAI channels by filling the channelMask
+ * of sai_transceiver_t with the corresponding values of _sai_channel_mask enum, enable the FIFO Combine
+ * mode by assigning kSAI_FifoCombineModeEnabledOnRead to the fifoCombine member of sai_fifo_combine_t
+ * which is a member of sai_transceiver_t.
+ * This is an example of multi-channel data transfer configuration step.
+ *  @code
+ *   sai_transceiver_t config;
+ *   SAI_GetClassicI2SConfig(&config, kSAI_WordWidth16bits, kSAI_Stereo, kSAI_Channel0Mask|kSAI_Channel1Mask);
+ *   config.fifo.fifoCombine = kSAI_FifoCombineModeEnabledOnRead;
+ *   SAI_TransferRxSetConfigEDMA(I2S0, &edmaHandle, &config);
+ *  @endcode
  * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
  * @param saiConfig sai configurations.
@@ -170,6 +187,12 @@ void SAI_TransferRxSetConfigEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_
  *
  * @note This interface returns immediately after the transfer initiates. Call
  * SAI_GetTransferStatus to poll the transfer status and check whether the SAI transfer is finished.
+ *
+ * This function support multi channel transfer,
+ * 1. for the sai IP support fifo combine mode, application should enable the fifo combine mode, no limitation
+ *    on channel numbers
+ * 2. for the sai IP not support fifo combine mode, sai edma provide another solution which using
+ *    EDMA modulo feature, but support 2 or 4 channels only.
  *
  * @param base SAI base pointer.
  * @param handle SAI eDMA handle pointer.
@@ -186,6 +209,12 @@ status_t SAI_TransferSendEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_tra
  * @note This interface returns immediately after the transfer initiates. Call
  * the SAI_GetReceiveRemainingBytes to poll the transfer status and check whether the SAI transfer is finished.
  *
+ * This function support multi channel transfer,
+ * 1. for the sai IP support fifo combine mode, application should enable the fifo combine mode, no limitation
+ *    on channel numbers
+ * 2. for the sai IP not support fifo combine mode, sai edma provide another solution which using
+ *    EDMA modulo feature, but support 2 or 4 channels only.
+ *
  * @param base SAI base pointer
  * @param handle SAI eDMA handle pointer.
  * @param xfer Pointer to DMA transfer structure.
@@ -194,6 +223,50 @@ status_t SAI_TransferSendEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_tra
  * @retval kStatus_RxBusy SAI is busy receiving data.
  */
 status_t SAI_TransferReceiveEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_transfer_t *xfer);
+
+/*!
+ * @brief Performs a non-blocking SAI loop transfer using eDMA.
+ *
+ * @note This function support loop transfer only,such as A->B->...->A, application must be aware of
+ * that the more counts of the loop transfer, then more tcd memory required, as the function use the tcd pool in
+ * sai_edma_handle_t, so application could redefine the SAI_XFER_QUEUE_SIZE to determine the proper TCD pool size.
+ * This function support one sai channel only.
+ *
+ * Once the loop transfer start, application can use function SAI_TransferAbortSendEDMA to stop the loop transfer.
+ *
+ * @param base SAI base pointer.
+ * @param handle SAI eDMA handle pointer.
+ * @param xfer Pointer to the DMA transfer structure, should be a array with elements counts >=1(loopTransferCount).
+ * @param loopTransferCount the counts of xfer array.
+ * @retval kStatus_Success Start a SAI eDMA send successfully.
+ * @retval kStatus_InvalidArgument The input argument is invalid.
+ */
+status_t SAI_TransferSendLoopEDMA(I2S_Type *base,
+                                  sai_edma_handle_t *handle,
+                                  sai_transfer_t *xfer,
+                                  uint32_t loopTransferCount);
+
+/*!
+ * @brief Performs a non-blocking SAI loop transfer using eDMA.
+ *
+ * @note This function support loop transfer only,such as A->B->...->A, application must be aware of
+ * that the more counts of the loop transfer, then more tcd memory required, as the function use the tcd pool in
+ * sai_edma_handle_t, so application could redefine the SAI_XFER_QUEUE_SIZE to determine the proper TCD pool size.
+ * This function support one sai channel only.
+ *
+ * Once the loop transfer start, application can use function SAI_TransferAbortReceiveEDMA to stop the loop transfer.
+ *
+ * @param base SAI base pointer.
+ * @param handle SAI eDMA handle pointer.
+ * @param xfer Pointer to the DMA transfer structure, should be a array with elements counts >=1(loopTransferCount).
+ * @param loopTransferCount the counts of xfer array.
+ * @retval kStatus_Success Start a SAI eDMA receive successfully.
+ * @retval kStatus_InvalidArgument The input argument is invalid.
+ */
+status_t SAI_TransferReceiveLoopEDMA(I2S_Type *base,
+                                     sai_edma_handle_t *handle,
+                                     sai_transfer_t *xfer,
+                                     uint32_t loopTransferCount);
 
 /*!
  * @brief Terminate all SAI send.

@@ -6,11 +6,12 @@
 #include "threadManager.h"
 #include "queueManager.h"
 #include "systemTimer.h"
-#include "AveryPrinter.h"
+//#include "AveryPrinter.h"
 #include "translator.h"
 #include "printHead.h"
 #include "commandTable.h"
 #include "printEngine.h"
+#include "hobartPrinterMessages.h"
 #include "sensors.h"
 #include "averyCutter.h"
 #include "vendor.h"
@@ -53,7 +54,6 @@ extern unsigned short indx_;
 extern void disableWeighInterrupts( void );
 extern void enableWeighInterrupts( void );
 
-
 BaseType_t createDotWearTask( void ){
     BaseType_t result;
     
@@ -71,11 +71,8 @@ void cleanupDotWearTask( void ){
     /* reset line timer interrupt level for normal print operation */
     setLineTimerIntLevel( 2 );
     
-    /* turn the fan back on TO DO:??
-    GPIO_WritePinOutput(FAN_OFF_GPIOx, FAN_OFF_PINx, true); */
-    
     /* set a/d module back to auto mode */
-    setADCMode(AD_AUTO);
+    setADCMode( AD_AUTO );
     
     startTest_ = false;
     testPrint_ = false;
@@ -83,12 +80,6 @@ void cleanupDotWearTask( void ){
     
     setEngineContrast( config_.contrast_adjustment );
     setHeadTimings();
-
-#if DOT_WEAR_LOOP
-    PrMessage prMsg;
-    prMsg.generic.function_code = PR_REQ_DOT_STATUS;
-    BaseType_t result = xQueueSendToBack( pMsgQHandle_, (void *)&prMsg, 0 );
-#endif
 }
 
 /******************************************************************************/
@@ -112,32 +103,14 @@ static void dotWearTask( void *pvParameters )
         switch(prMsg.generic.msgType) 
         {
             case PR_REQ_DOT_WEAR:       {
-                sendDotWear( getHeadStyleSize() );
+                sendPrHeadDotStatus( getHeadStyleSize() );
                 break;
             }
             case PR_REQ_DOT_STATUS: {
 
-            #if 0 /* TO DO: port */
-            /* make sure cassette is engaged before starting test, 
-               else 24v PH will be off. */  
-            PrSensors sensors;
-            readHeadUpSensor( &sensors );
-           
-            
-            if( ( sensors.headup_reading & HEAD_UP ) == HEAD_UP ) {
-                PrDotStatus stat;
-                stat.msgType	        = PR_DOT_STATUS;
-                stat.source 		= RT_GLOBAL_SCALE;
-                stat.destination 	= 0;
-                stat.head_status 	= DOT_WEAR_ABORTED_CASSETTE_OPEN;
-                
-                sendPrHeadDotStatus( stat );
-                cleanupDotWearTask();
-                break;
-            }	  
-            #endif  
+  
             /* wait for the engine to become idle before starting test */
-            while( getPrintEngine()->currentCmd.generic.directive != IDLE_DIRECTIVE ){
+            while( getPrintEngine(_HOBART_PRINTER)->currentCmd.generic.directive != IDLE_DIRECTIVE ){
                 taskYIELD();
             }
 
@@ -240,7 +213,7 @@ static void dotWearTask( void *pvParameters )
                     unsigned long gotIt = 0;
                     BaseType_t result = xTaskNotifyWait( 0, 0xffffffff, (uint32_t *)&gotIt, pdMS_TO_TICKS(10000) );
                     if ((gotIt & DOT_SAMPLE) == DOT_SAMPLE){
-                        delay_uS(300); // added in to keep our measurements in the dot wear bubble
+                        delay_uS(300);          /* added in to keep our measurements in the dot wear bubble */
                         if(!firstSample ){
                             
                             /* added i/o for time stamp debug
@@ -261,32 +234,38 @@ static void dotWearTask( void *pvParameters )
                         testPrint_ = false;
                         startTest_ = false;                        
                         
+                        #if 0   /* chris has done his own thing */
                         if(runCounter >= (DOT_RUN_COUNT - 1)){
-                            PrDotStatus stat;
-                            stat.msgType = PR_DOT_STATUS;
-                            stat.source = GLOBAL_SCALE_HB_GT;
+                            PrDotStatusMessage stat;
+                            stat.msgType = PR_DOT_STATUS;                            
+                            stat.source = getDeviceSubClass();
                             stat.destination = 0;
-                            stat.head_status = getHeadWearStatus(getHeadStyleSize());
+                            stat.head_status = getHeadWearStatus( getHeadStyleSize() );
                             sendPrHeadDotStatus( stat );                       
                             showHeadDotStatistics();
-                            PRINTF("ANY DOTS BAD? %d\r\n", getHeadWearStatus(getHeadStyleSize()));
+                            
+                            PRINTF("ANY DOTS BAD? %d\r\n", getHeadWearStatus( getHeadStyleSize() ) );
                            
                             cleanupDotWearTask();
-                            wearDone = true;
+                            wearDone = true;                           
                         }
+                        #endif                        
+                        
                         indx_ = 0;
                         runCounter++;
                         firstSample=true;                        
                     }
                     if(result != pdTRUE){
+                        #if 0   /* chris has done his own thing */
                         PRINTF("DOT WEAR FAILED: Task Timed Out\r\n");
 
-                        PrDotStatus stat;
+                        PrDotStatusMessage stat;
                         stat.msgType = PR_DOT_STATUS;
-                        stat.source = GLOBAL_SCALE_HB_GT;
+                        stat.source = getDeviceSubClass();
                         stat.destination = 0;
                         stat.head_status = DOT_FAILED;
                         sendPrHeadDotStatus( stat );
+                        #endif
                         cleanupDotWearTask();
                         wearDone = true;
                     }
@@ -314,9 +293,8 @@ static void dotWearTask( void *pvParameters )
 bool showHeadDotStatistics( void )
 {
     bool done = false;
-#if 0    
     float resolution = 0.0008057;
-
+#if 0
     PRINTF( "*********************** HT Plus Dot Measurement ***********************\r\n"  );
     PRINTF( "dot position:dot Sample 1:dot Sample 2:dot Sample 3:dot average reading:dot average voltage\r\n");
     for( int i = 0; i < HEAD_DOTS_72MM + 5; i++ ) {
@@ -335,6 +313,32 @@ bool showHeadDotStatistics( void )
 #endif    
     return done;
 }
+
+/******************************************************************************/
+/*!     \fn unsigned char getHeadWearDot( int x )
+
+        \brief
+        This function returns the average value for the dot at the index X.
+
+        \author
+        Aaron Swift
+*******************************************************************************/
+/*
+unsigned short getHeadWearDot( int x )
+{
+    unsigned long accumulator = 0;
+    
+    for(int i = 0; i < DOT_RUN_COUNT; i++){
+        accumulator += (DotWearResults[x][i]);
+    }
+    //remove largest and smallest reading
+    accumulator -= max( (unsigned short *)&( DotWearResults[x] ), DOT_RUN_COUNT );
+    accumulator -= min( (unsigned short *)&( DotWearResults[x] ), DOT_RUN_COUNT );
+    return (unsigned short)( accumulator / ( DOT_RUN_COUNT - 2 ) );
+    
+    return 0;
+}
+*/
 
 /******************************************************************************/
 /*!    \fn unsigned short max( unsigned short *list, int size ) 
@@ -400,7 +404,7 @@ headDotStatus getHeadWearDotStatus( int x )
 */
 
 /******************************************************************************/
-/*!     \fn unsigned char getHeadWearDotStatus( int x )
+/*!     \fn HeadStatus_t getHeadWearDotStatus( int x )
 
         \brief
         This function checks the head for bad or marginal dots and returns true
@@ -410,32 +414,29 @@ headDotStatus getHeadWearDotStatus( int x )
         Aaron Swift
 *******************************************************************************/
 
-HeadStatus getHeadWearStatus( int size ){
+HeadStatus_t getHeadWearStatus( int size ){
     bool bad = false;
     bool good = false;
-    // run through the dots to see if they are good or bad
+    
+    /* run through the dots to see if they are good or bad */
     for(int i = 0; i < size; i++){
-	if(getHeadWearDotStatus(i) == DOT_GOOD){
+	if( getHeadWearDotStatus( i ) == DOT_GOOD ) {
 	    good = true;
-	}else if(getHeadWearDotStatus(i) != DOT_GOOD){
+	} else if( getHeadWearDotStatus( i ) != DOT_GOOD ) {
             bad = true;
         }
-        // we can stop because we know we have a mixture of dots
-        if(good && bad){
+        /* we can stop because we know we have a mixture of dots */
+        if( good && bad ) {
             break;
         }
     }
-    //The loop is done how did we do 
-    if(good && bad)
-    {
+    
+    /* the loop is done how did we do */
+    if( good && bad ) {
         return DOTS_MIXED;
-    }
-    else if(good && !bad)
-    {
+    } else if( good && !bad ) {
         return ALL_DOTS_GOOD;
-    }
-    else
-    {
+    } else {
         return ALL_DOTS_BAD;      
     }
 }
@@ -452,81 +453,6 @@ HeadStatus getHeadWearStatus( int size ){
 TaskHandle_t getDotWearHandle(){
     return pHandle_;
 }
-
-#if 0 /* remove when finished porting */
-/******************************************************************************/
-/*!   \fn void sendDotWear( PrDotWear *pDot )
-
-      \brief
-        handles converting dot wear message into can frames and 
-        adding to flexcan transmit queue for sending. The head dot information
-        is sent in two transfers (service scale) of frames 0x175 - 0x191.
-        Each transfer contains half of the print head dots.
-      \author
-          Aaron Swift
-*******************************************************************************/                          
-void sendDotWear( int size )
-{
-    flexcan_frame_t  frame_;
-    BaseType_t result;
-#if 1
-    /* first frame include head size and sequence number */
-    frame_.id = FLEXCAN_ID_STD( CANID_PR_DOT_WEAR );
-    frame_.length = 8;
-    frame_.dataByte0 = getHeadWearDotStatus(0);
-    frame_.dataByte4 = getHeadWearDot(0);
-    frame_.dataByte1 = getHeadWearDotStatus(1);
-    frame_.dataByte5 = getHeadWearDot(1);
-    frame_.dataByte2 = getHeadWearDotStatus(2);
-    frame_.dataByte6 = getHeadWearDot(2);
-    frame_.dataByte3 = getHeadWearDotStatus(3);
-    frame_.dataByte7 = getHeadWearDot(3);
-    frame_.format = kFLEXCAN_FrameFormatStandard;
-
-    result = xQueueSend( getFlexCanTxQueueHandle(), (void *)&frame_, 0 );
-    if( result != pdPASS ) {
-        PRINTF("sendDotWear(): USB tx message queue is full!\r\n");
-    }
-    ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
-#endif
-    int x = 0;
-    int i = 4;
-    int id_offset = 1;
-    /* send the remaining first half of the print head dots */
-    for( x = 0; x <= (size / 4); x++) {
-
-        frame_.id = FLEXCAN_ID_STD( CANID_PR_DOT_WEAR + id_offset );
-        frame_.length = 8;
-        frame_.dataByte0 = getHeadWearDotStatus(i);
-        frame_.dataByte4 = getHeadWearDot(i++);
-        frame_.dataByte1 = getHeadWearDotStatus(i);
-        frame_.dataByte5 = getHeadWearDot(i++);
-        frame_.dataByte2 = getHeadWearDotStatus(i);
-        frame_.dataByte6 = getHeadWearDot(i++);
-        frame_.dataByte3 = getHeadWearDotStatus(i);
-        frame_.dataByte7 = getHeadWearDot(i++);
-        frame_.format = kFLEXCAN_FrameFormatStandard;
-
-        BaseType_t result = xQueueSend( getFlexCanTxQueueHandle(), (void *)&frame_, 0 );
-        if( result != pdPASS ) {
-            PRINTF("sendDotWear(): USB tx message queue is full!\r\n");
-        }else{
-          //PRINTF("sendDotWear(): Sending canID: 0x%x\r\n",CANID_PR_DOT_WEAR + id_offset);
-        }
-        // remove once time slicing. We need to give the flexcan task some time to empty the message queue
-        ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
-        if( x % 10){
-          taskYIELD();
-        }
-        if ((CANID_PR_DOT_WEAR + id_offset) == CANID_PR_DOT_WEAR_LAST){
-          id_offset = 1;
-        }else{
-          id_offset++;
-        }
-    }
-
-}
-#endif
 
 /******************************************************************************/
 /*!   \fn void assignDotWearMsgQueue( QueueHandle_t pQHandle )                                                           

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2017, 2020-2021 NXP
+ * Copyright 2016-2017, 2020-2023, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -27,7 +27,12 @@
 #elif (defined(KV56F24_SERIES) || defined(KV58F24_SERIES) || defined(KL28Z7_SERIES) || defined(KL81Z7_SERIES) || \
        defined(KL82Z7_SERIES) || defined(K32L2A41A_SERIES))
 #define TRNG_USER_CONFIG_DEFAULT_OSC_DIV kTRNG_RingOscDiv4
-#elif defined(K81F25615_SERIES)
+#elif (                                                                                                               \
+    defined(K81F25615_SERIES) || defined(K32L3A60_cm4_SERIES) || defined(K32L3A60_cm0plus_SERIES) ||                  \
+    defined(MCXN546_cm33_core0_SERIES) || defined(MCXN546_cm33_core1_SERIES) || defined(MCXN547_cm33_core0_SERIES) || \
+    defined(MCXN547_cm33_core1_SERIES) || defined(MCXN945_cm33_core0_SERIES) || defined(MCXN945_cm33_core1_SERIES) || \
+    defined(MCXN946_cm33_core0_SERIES) || defined(MCXN946_cm33_core1_SERIES) || defined(MCXN947_cm33_core0_SERIES) || \
+    defined(MCXN947_cm33_core1_SERIES) || defined(MCXN948_cm33_core0_SERIES) || defined(MCXN948_cm33_core1_SERIES))
 #define TRNG_USER_CONFIG_DEFAULT_OSC_DIV kTRNG_RingOscDiv2
 #else
 /* Default value for the TRNG user configuration structure can be optionally
@@ -40,35 +45,168 @@
 #endif
 #endif
 
+#if (defined(MIMXRT595S_cm33_SERIES) || defined(MIMXRT595S_dsp_SERIES) || \
+     defined(MIMXRT533S_SERIES)      || defined(MIMXRT555S_SERIES)     || \
+     defined(MIMXRT685S_cm33_SERIES) || defined(MIMXRT685S_dsp_SERIES) || \
+     defined(MIMXRT633S_SERIES))
+
+/* Use software health tests for these devices */
+#define TRNG_SW_HEALTH_TESTS
+
+/* Constants used by the SW health tests */
+#define TRNG_RCT_THRESHOLD   (37u)
+#define TRNG_APT_THRESHOLD   (664u)  /* This is the threshold for testing 1024 bits */
+#define TRNG_APT_WINDOW_SIZE (1024u) /* Window size set to 1024 bit */
+
+#endif /* MIMXRT5xx*_SERIES || MIMXRT6xx*_SERIES */
+
+#if (defined(RW610_SERIES) || defined(RW612_SERIES))
+
+/* RW610 specific settings for the TRNG */
+#define TRNG_USER_CONFIG_DEFAULT_LOCK             0
+#define TRNG_USER_CONFIG_DEFAULT_ENTROPY_DELAY    20000
+#define TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE      1024
+#define TRNG_USER_CONFIG_DEFAULT_SPARSE_BIT_LIMIT 0 // unused!
+#define TRNG_USER_CONFIG_DEFAULT_RETRY_COUNT      1
+#define TRNG_USER_CONFIG_DEFAULT_RUN_MAX_LIMIT    32
+
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM     596
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM - 169)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM     187
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM - 112)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM     105
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM - 77)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM     97
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM - 64)
+// The following ones are unused, RW61x RNG does not support those.
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MINIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MINIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM 0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MINIMUM 0
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM       0
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MINIMUM       0
+
+#define TRNG_USER_CONFIG_DEFAULT_OSCILLATOR_MODE  kTRNG_DualOscillatorMode
+#define TRNG_USER_CONFIG_DEFAULT_OSC2_DIV         kTRNG_RingOscDiv0
+
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM_VALUE 20008
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM_VALUE 31952
+
+#elif (defined(CPU_MIMXRT798SGAWAR_cm33_core0) || defined(CPU_MIMXRT798SGFOA_cm33_core0))
+
+/* RT700 specific settings for the TRNG */
+#define TRNG_USER_CONFIG_DEFAULT_LOCK             0
+#define TRNG_USER_CONFIG_DEFAULT_ENTROPY_DELAY    8192
+#define TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE      1024
+#define TRNG_USER_CONFIG_DEFAULT_SPARSE_BIT_LIMIT 0
+#define TRNG_USER_CONFIG_DEFAULT_RETRY_COUNT      1
+#define TRNG_USER_CONFIG_DEFAULT_RUN_MAX_LIMIT    32
+
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM     596
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM - 169)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM     187
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM - 112)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM     105
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM - 77)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM     97
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM - 64)
+// The following ones are unused, RW61x RNG does not support those.
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MINIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MINIMUM     0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM 0
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MINIMUM 0
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM       0
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MINIMUM       0
+
+#define TRNG_USER_CONFIG_DEFAULT_OSCILLATOR_MODE  kTRNG_DualOscillatorMode
+#define TRNG_USER_CONFIG_DEFAULT_OSC2_DIV         kTRNG_RingOscDiv0
+
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM_VALUE 8000
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM_VALUE 15000
+
+#elif (defined(MCXW236_SERIES))
+/* MCXW23 specific settings for the TRNG */
+#define TRNG_USER_CONFIG_DEFAULT_LOCK                1
+#define TRNG_USER_CONFIG_DEFAULT_ENTROPY_DELAY       0x00C8
+#define TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE         0x0200
+#define TRNG_USER_CONFIG_DEFAULT_SPARSE_BIT_LIMIT    0x3FF
+#define TRNG_USER_CONFIG_DEFAULT_RETRY_COUNT         4
+#define TRNG_USER_CONFIG_DEFAULT_RUN_MAX_LIMIT       0xFF
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM     0xFFFF
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM - 0xFFFE)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM     0x7FFE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM - 0x7FFF)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM     0x3FFE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM - 0x3FFF)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM     0x1FFE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM - 0x1FFF)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM     0x0FFE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM - 0x0FFF)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM     0x07FE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM - 0x07FF)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM 0x07FE
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MINIMUM (TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM - 0x07FE)
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM       0x7530
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MINIMUM       (TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM - 0xFFFF)
+
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM_VALUE 0x3E8
+#define FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM 1
+#define FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM_VALUE 0x10000
+
+#define TRNG_ENT_COUNT TRNG_ENTA_ENT_COUNT
+
+#else
+
+#ifndef TRNG_ENT_COUNT
+#define TRNG_ENT_COUNT TRNG_ENTA_ENT_COUNT
+#endif
+
 #define TRNG_USER_CONFIG_DEFAULT_LOCK             0
 #define TRNG_USER_CONFIG_DEFAULT_ENTROPY_DELAY    3200
-#define TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE      2500
+#define TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE      512
 #define TRNG_USER_CONFIG_DEFAULT_SPARSE_BIT_LIMIT 63
 #define TRNG_USER_CONFIG_DEFAULT_RETRY_COUNT      1
-#define TRNG_USER_CONFIG_DEFAULT_RUN_MAX_LIMIT    34
+#define TRNG_USER_CONFIG_DEFAULT_RUN_MAX_LIMIT    32
 
-#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM     1384
-#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM - 268)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM     405
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM - 178)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM     220
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM - 122)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM     125
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM - 88)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM     75
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM - 64)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM     47
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM - 46)
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM 47
-#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MINIMUM (TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM - 46)
-#define TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM       26912
-#define TRNG_USER_CONFIG_DEFAULT_POKER_MINIMUM       (TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM - 2467)
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM     317
+#define TRNG_USER_CONFIG_DEFAULT_MONOBIT_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_MONOBIT_MAXIMUM - 122)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM     107
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT1_MAXIMUM - 80)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM     62
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT2_MAXIMUM - 55)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM     39
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT3_MAXIMUM - 39)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM     26
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT4_MAXIMUM - 26)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM     18
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MINIMUM     (TRNG_USER_CONFIG_DEFAULT_RUNBIT5_MAXIMUM - 18)
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM 17
+#define TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MINIMUM (TRNG_USER_CONFIG_DEFAULT_RUNBIT6PLUS_MAXIMUM - 17)
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM       1600
+#define TRNG_USER_CONFIG_DEFAULT_POKER_MINIMUM       (TRNG_USER_CONFIG_DEFAULT_POKER_MAXIMUM - 570)
+
+// Only applicable for TRNG implementations that have two oscillators.
+#if defined(FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS) && (FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS > 0)
+#define TRNG_USER_CONFIG_DEFAULT_OSCILLATOR_MODE  kTRNG_SingleOscillatorModeOsc1
+#define TRNG_USER_CONFIG_DEFAULT_OSC2_DIV         kTRNG_RingOscDiv4
+#endif
+
+#endif
 
 #if defined(FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM) && \
     (FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM > 0)
 #define TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM (FSL_FEATURE_TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM_VALUE)
 #else
-#define TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM 25600
+#define TRNG_USER_CONFIG_DEFAULT_FREQUENCY_MAXIMUM 30000
 #endif
 
 #if defined(FSL_FEATURE_TRNG_FORCE_USER_CONFIG_DEFAULT_FREQUENCY_MINIMUM) && \
@@ -385,6 +523,7 @@ typedef enum _trng_statistical_check
  * TRNG_SCR4L - RNG Statistical Check Run Length 4 Limit Register
  ******************************************************************************/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L)
 /*!
  * @brief TRNG_SCR4L - RNG Statistical Check Run Length 4 Limit Register (RW)
  *
@@ -447,11 +586,13 @@ typedef enum _trng_statistical_check
 /*! @brief Set the RUN4_RNG field to a new value. */
 #define TRNG_WR_SCR4L_RUN4_RNG(base, value) (TRNG_RMW_SCR4L(base, TRNG_SCR4L_RUN4_RNG_MASK, TRNG_SCR4L_RUN4_RNG(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L */
 
 /*******************************************************************************
  * TRNG_SCR5L - RNG Statistical Check Run Length 5 Limit Register
  ******************************************************************************/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L)
 /*!
  * @brief TRNG_SCR5L - RNG Statistical Check Run Length 5 Limit Register (RW)
  *
@@ -514,11 +655,13 @@ typedef enum _trng_statistical_check
 /*! @brief Set the RUN5_RNG field to a new value. */
 #define TRNG_WR_SCR5L_RUN5_RNG(base, value) (TRNG_RMW_SCR5L(base, TRNG_SCR5L_RUN5_RNG_MASK, TRNG_SCR5L_RUN5_RNG(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L */
 
 /*******************************************************************************
  * TRNG_SCR6PL - RNG Statistical Check Run Length 6+ Limit Register
  ******************************************************************************/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L)
 /*!
  * @brief TRNG_SCR6PL - RNG Statistical Check Run Length 6+ Limit Register (RW)
  *
@@ -585,11 +728,13 @@ typedef enum _trng_statistical_check
 #define TRNG_WR_SCR6PL_RUN6P_RNG(base, value) \
     (TRNG_RMW_SCR6PL(base, TRNG_SCR6PL_RUN6P_RNG_MASK, TRNG_SCR6PL_RUN6P_RNG(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L */
 
 /*******************************************************************************
  * TRNG_PKRMAX - RNG Poker Maximum Limit Register
  ******************************************************************************/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX) && FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX)
 /*!
  * @brief TRNG_PKRMAX - RNG Poker Maximum Limit Register (RW)
  *
@@ -635,6 +780,7 @@ typedef enum _trng_statistical_check
 #define TRNG_WR_PKRMAX_PKR_MAX(base, value) \
     (TRNG_RMW_PKRMAX(base, TRNG_PKRMAX_PKR_MAX_MASK, TRNG_PKRMAX_PKR_MAX(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX */
 
 /*******************************************************************************
  * TRNG_PKRRNG - RNG Poker Range Register
@@ -846,6 +992,7 @@ typedef enum _trng_statistical_check
     (TRNG_RMW_MCTL(base, (TRNG_MCTL_OSC_DIV_MASK | TRNG_MCTL_ERR_MASK), TRNG_MCTL_OSC_DIV(value)))
 /*@}*/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE) && FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE)
 /*!
  * @name Register TRNG_MCTL, field SAMP_MODE[1:0] (RW)
  *
@@ -870,6 +1017,7 @@ typedef enum _trng_statistical_check
 #define TRNG_WR_MCTL_SAMP_MODE(base, value) \
     (TRNG_RMW_MCTL(base, (TRNG_MCTL_SAMP_MODE_MASK | TRNG_MCTL_ERR_MASK), TRNG_MCTL_SAMP_MODE(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE */
 
 /*!
  * @name Register TRNG_MCTL, field PRGM[16] (RW)
@@ -920,7 +1068,7 @@ typedef enum _trng_statistical_check
 #define TRNG_WR_MCTL_TRNG_ACC(base, value) \
     (TRNG_RMW_MCTL(base, (TRNG_MCTL_TRNG_ACC_MASK | TRNG_MCTL_ERR_MASK), TRNG_MCTL_TRNG_ACC(value)))
 /*@}*/
-#endif
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_ACC */
 
 /*!
  * @name Register TRNG_MCTL, field TSTOP_OK[13] (RO)
@@ -1029,6 +1177,7 @@ typedef enum _trng_statistical_check
  * TRNG_SBLIM - RNG Sparse Bit Limit Register
  ******************************************************************************/
 
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM) && (FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM > 0))
 /*!
  * @brief TRNG_SBLIM - RNG Sparse Bit Limit Register (RW)
  *
@@ -1074,6 +1223,7 @@ typedef enum _trng_statistical_check
 /*! @brief Set the SB_LIM field to a new value. */
 #define TRNG_WR_SBLIM_SB_LIM(base, value) (TRNG_RMW_SBLIM(base, TRNG_SBLIM_SB_LIM_MASK, TRNG_SBLIM_SB_LIM(value)))
 /*@}*/
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM */
 
 /*******************************************************************************
  * TRNG_SCMISC - RNG Statistical Check Miscellaneous Register
@@ -1204,6 +1354,10 @@ static TRNG_Type *const s_trngBases[] = TRNG_BASE_PTRS;
 static const clock_ip_name_t s_trngClock[] = TRNG_CLOCKS;
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
+#if defined(FSL_FEATURE_TRNG_HAS_RSTCTL) && (FSL_FEATURE_TRNG_HAS_RSTCTL > 0)
+static const reset_ip_name_t trng_reset = TRNG_RSTS;
+#endif /* FSL_FEATURE_TRNG_HAS_RSTCTL */
+
 /*******************************************************************************
  * Prototypes
  *******************************************************************************/
@@ -1235,7 +1389,7 @@ static uint32_t trng_GetInstance(TRNG_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_trngBases); instance++)
     {
-        if (s_trngBases[instance] == base)
+        if (MSDK_REG_SECURE_ADDR(s_trngBases[instance]) == MSDK_REG_SECURE_ADDR(base))
         {
             break;
         }
@@ -1256,36 +1410,7 @@ static uint32_t trng_GetInstance(TRNG_Type *base)
  * brief Initializes the user configuration structure to default values.
  *
  * This function initializes the configuration structure to default values. The default
- * values are as follows.
- * code
- *     userConfig->lock = 0;
- *     userConfig->clockMode = kTRNG_ClockModeRingOscillator;
- *     userConfig->ringOscDiv = kTRNG_RingOscDiv0;  Or  to other kTRNG_RingOscDiv[2|8] depending on the platform.
- *     userConfig->sampleMode = kTRNG_SampleModeRaw;
- *     userConfig->entropyDelay = 3200;
- *     userConfig->sampleSize = 2500;
- *     userConfig->sparseBitLimit = TRNG_USER_CONFIG_DEFAULT_SPARSE_BIT_LIMIT;
- *     userConfig->retryCount = 63;
- *     userConfig->longRunMaxLimit = 34;
- *     userConfig->monobitLimit.maximum = 1384;
- *     userConfig->monobitLimit.minimum = 1116;
- *     userConfig->runBit1Limit.maximum = 405;
- *     userConfig->runBit1Limit.minimum = 227;
- *     userConfig->runBit2Limit.maximum = 220;
- *     userConfig->runBit2Limit.minimum = 98;
- *     userConfig->runBit3Limit.maximum = 125;
- *     userConfig->runBit3Limit.minimum = 37;
- *     userConfig->runBit4Limit.maximum = 75;
- *     userConfig->runBit4Limit.minimum = 11;
- *     userConfig->runBit5Limit.maximum = 47;
- *     userConfig->runBit5Limit.minimum = 1;
- *     userConfig->runBit6PlusLimit.maximum = 47;
- *     userConfig->runBit6PlusLimit.minimum = 1;
- *     userConfig->pokerLimit.maximum = 26912;
- *     userConfig->pokerLimit.minimum = 24445;
- *     userConfig->frequencyCountLimit.maximum = 25600;
- *     userConfig->frequencyCountLimit.minimum = 1600;
- * endcode
+ * values are platform dependent.
  *
  * param userConfig   User configuration structure.
  * return If successful, returns the kStatus_TRNG_Success. Otherwise, it returns an error.
@@ -1304,6 +1429,10 @@ status_t TRNG_GetDefaultConfig(trng_config_t *userConfig)
         userConfig->clockMode  = kTRNG_ClockModeRingOscillator;
         userConfig->ringOscDiv = TRNG_USER_CONFIG_DEFAULT_OSC_DIV;
         userConfig->sampleMode = kTRNG_SampleModeRaw;
+#if defined(FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS) && (FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS > 0)
+        userConfig->oscillatorMode = TRNG_USER_CONFIG_DEFAULT_OSCILLATOR_MODE;
+        userConfig->ringOsc2Div    = TRNG_USER_CONFIG_DEFAULT_OSC2_DIV;
+#endif /* FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS */
         /* Seed control*/
         userConfig->entropyDelay   = TRNG_USER_CONFIG_DEFAULT_ENTROPY_DELAY;
         userConfig->sampleSize     = TRNG_USER_CONFIG_DEFAULT_SAMPLE_SIZE;
@@ -1476,9 +1605,11 @@ static status_t trng_SetRunBit4Limit(TRNG_Type *base, uint32_t range, uint32_t l
     /* Check input parameters*/
     if ((range <= 0xfffu) && (limit_maximum <= 0xfffu))
     {
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L)
         /* Set  TRNG_SCR4L register */
         TRNG_WR_SCR4L_RUN4_MAX(base, limit_maximum);
         TRNG_WR_SCR4L_RUN4_RNG(base, range);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR4L */
         status = kStatus_Success;
     }
     else
@@ -1499,9 +1630,11 @@ static status_t trng_SetRunBit5Limit(TRNG_Type *base, uint32_t range, uint32_t l
     /* Check input parameters*/
     if ((range <= 0x7ffu) && (limit_maximum <= 0x7ffu))
     {
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L)
         /* Set  TRNG_SCR5L register */
         TRNG_WR_SCR5L_RUN5_MAX(base, limit_maximum);
         TRNG_WR_SCR5L_RUN5_RNG(base, range);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR5L */
         status = kStatus_Success;
     }
     else
@@ -1522,9 +1655,11 @@ static status_t trng_SetRunBit6Limit(TRNG_Type *base, uint32_t range, uint32_t l
     /* Check input parameters*/
     if ((range <= 0x7ffu) && (limit_maximum <= 0x7ffu))
     {
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L) && FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L)
         /* Set  TRNG_SCR6L register */
         TRNG_WR_SCR6PL_RUN6P_MAX(base, limit_maximum);
         TRNG_WR_SCR6PL_RUN6P_RNG(base, range);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SCR6L */
         status = kStatus_Success;
     }
     else
@@ -1545,9 +1680,11 @@ static status_t trng_SetPokerMaxLimit(TRNG_Type *base, uint32_t range, uint32_t 
     /* Check input parameters*/
     if ((range <= 0xffffu) && (limit_maximum <= 0xffffffu))
     {
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX) && FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX)
         /* Set  TRNG_PKRMAX register */
         TRNG_WR_PKRMAX_PKR_MAX(base, limit_maximum);
         TRNG_WR_PKRRNG_PKR_RNG(base, range);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_PKRMAX */
         status = kStatus_Success;
     }
     else
@@ -1593,7 +1730,7 @@ static status_t trng_SetStatisticalCheckLimit(TRNG_Type *base,
     uint32_t range;
     status_t status = kStatus_Success;
 
-    if ((NULL != limit) && (limit->maximum > limit->minimum))
+    if ((NULL != limit) && ((int32_t)limit->maximum > limit->minimum))
     {
         range = limit->maximum - limit->minimum; /* Registers use range instead of minimum value.*/
 
@@ -1715,18 +1852,28 @@ static status_t trng_ApplyUserConfig(TRNG_Type *base, const trng_config_t *userC
 
     if (kStatus_Success == status)
     {
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_FOR_CLK_MODE) && FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_FOR_CLK_MODE)
         /* Set clock mode used to operate TRNG */
         TRNG_WR_MCTL_FOR_SCLK(base, userConfig->clockMode);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_FOR_CLK_MODE */
         /* Set ring oscillator divider used by TRNG */
         TRNG_WR_MCTL_OSC_DIV(base, userConfig->ringOscDiv);
+#if defined(FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS) && (FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS > 0)
+        base->OSC2_CTL |= TRNG_OSC2_CTL_TRNG_ENT_CTL(userConfig->oscillatorMode);
+        base->OSC2_CTL |= TRNG_OSC2_CTL_OSC2_DIV(userConfig->ringOsc2Div);
+#endif /* FSL_FEATURE_TRNG_HAS_DUAL_OSCILATORS */
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE) && FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE)
         /* Set sample mode of the TRNG ring oscillator. */
         TRNG_WR_MCTL_SAMP_MODE(base, userConfig->sampleMode);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_MCTL_SAMP_MODE */
         /* Set length of each Entropy sample taken */
         TRNG_WR_SDCTL_ENT_DLY(base, userConfig->entropyDelay);
         /* Set number of entropy samples that will be taken during Entropy generation */
         TRNG_WR_SDCTL_SAMP_SIZE(base, userConfig->sampleSize);
+#if !(defined(FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM) && (FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM > 0))
         /* Set Sparse Bit Limit */
         TRNG_WR_SBLIM_SB_LIM(base, userConfig->sparseBitLimit);
+#endif /* FSL_FEATURE_TRNG_HAS_NO_TRNG_SBLIM */
         TRNG_WR_SCMISC_LRUN_MAX(base, userConfig->longRunMaxLimit);
     }
 
@@ -1777,6 +1924,13 @@ status_t TRNG_Init(TRNG_Type *base, const trng_config_t *userConfig)
     /* Check input parameters.*/
     if ((base != NULL) && (userConfig != NULL))
     {
+#if defined(FSL_FEATURE_TRNG_HAS_RSTCTL) && (FSL_FEATURE_TRNG_HAS_RSTCTL > 0)
+        /* Reset TRNG peripheral */
+#if defined(FSL_FEATURE_TRNG_HAS_CTRL_PIN) && (FSL_FEATURE_TRNG_HAS_CTRL_PIN > 0)
+        SYSCTL2->TRNG_PIN_CTRL |= SYSCTL2_TRNG_PIN_CTRL_ENABLE_MASK;
+#endif /* FSL_FEATURE_TRNG_HAS_CTRL_PIN */
+        RESET_PeripheralReset(trng_reset);
+#endif /* FSL_FEATURE_TRNG_HAS_RSTCTL */
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
         /* Enable the clock gate. */
         CLOCK_EnableClock(s_trngClock[trng_GetInstance(base)]);
@@ -1790,6 +1944,24 @@ status_t TRNG_Init(TRNG_Type *base, const trng_config_t *userConfig)
         /* Set configuration.*/
         if ((result = trng_ApplyUserConfig(base, userConfig)) == kStatus_Success)
         {
+#if defined(TRNG_SW_HEALTH_TESTS)
+            /* Turn off TRNG HW health tests */
+            base->MCTL  |= TRNG_MCTL_PRGM(1);     // Enable MCTL[PRGM] to change to Programming mode
+            base->MCTL  |= TRNG_MCTL_TRNG_ACC(1); // Enable MCTL[TRNG_ACC] access mode
+            base->FRQMIN = 0x00000000u;
+            base->FRQMAX = 0xFFFFFFFFu;
+            base->PKRMAX = 0x0000FFFEu;
+            base->PKRRNG = 0x0000FFFFu;
+            base->SCML   = 0xFFFFFFFEu;
+            base->SCR1L  = 0x7FFF7FFEu;
+            base->SCR2L  = 0x3FFF3FFEu;
+            base->SCR3L  = 0x1FFF1FFEu;
+            base->SCR4L  = 0x0FFF0FFEu;
+            base->SCR5L  = 0x07FF07FEu;
+            base->SCR6PL = 0x07FF07FEu;
+            base->SCMISC = 0x000000FFu;
+#endif /* TRNG_SW_HEALTH_TESTS */
+
             /* Start entropy generation.*/
             /* Set to Run mode.*/
             TRNG_WR_MCTL_PRGM(base, kTRNG_WorkModeRun);
@@ -1872,6 +2044,33 @@ status_t TRNG_GetRandomData(TRNG_Type *base, void *data, size_t dataSize)
 
     int index = 0;
 
+#if defined(TRNG_SW_HEALTH_TESTS)
+    /* TRNG errata: execute SW tests */
+    uint32_t RCT_cnt        = 1u; //bit-wise
+    uint32_t APT_cnt        = 0u; //fix window size of 1024 - 32 words (minimum size)
+    uint8_t tmpRCTBit       = 0u;
+    uint8_t currBit         = 0u;
+    uint32_t k              = 0u;
+    uint32_t j              = 0u;
+    uint32_t *data32_p      = (uint32_t *)data;
+    uint32_t neededDataSize = 0u;
+    uint32_t remainder      = 0u;
+    uint32_t localData      = 0u;
+    bool switchArray        = false;
+
+    /* Check if the requested data is multiple of 32 words  */
+    remainder = dataSize % 128u;
+    if(remainder == 0u)
+    {
+        neededDataSize = dataSize;
+    }
+    else
+    {
+        neededDataSize = dataSize + (128u - remainder);
+    }
+
+#endif /* TRNG_SW_HEALTH_TESTS */
+
     /* Check input parameters.*/
     if ((NULL != base) && (NULL != data) && (0U != dataSize))
     {
@@ -1882,7 +2081,7 @@ status_t TRNG_GetRandomData(TRNG_Type *base, void *data, size_t dataSize)
             /* clear errors bits */
             TRNG_WR_MCTL_ERR(base, 1);
             /* restart new entropy generation */
-            trng_ReadEntropy(base, (TRNG_ENT_COUNT - 1u));
+            (void)trng_ReadEntropy(base, (TRNG_ENT_COUNT - 1u));
         }
 
         do
@@ -1910,6 +2109,19 @@ status_t TRNG_GetRandomData(TRNG_Type *base, void *data, size_t dataSize)
 
             random_p = (uint8_t *)&random_32;
 
+#if defined(TRNG_SW_HEALTH_TESTS)
+            /* If size of original array is not multiple of 1024, need to request more data for SP800-90B software test */
+            if(((dataSize == 0u) && (neededDataSize > 0u)) || switchArray)
+            {
+                /* Do not write to the external array anymore, use local pointer */
+                switchArray = true;
+                data_p      = (uint8_t *)&localData;
+                data32_p    = (uint32_t *)&localData;
+            }
+            /* Force random size to be 32 bit request */
+            random_size = sizeof(random_32);
+
+#else
             if (dataSize < sizeof(random_32))
             {
                 random_size = dataSize;
@@ -1918,14 +2130,62 @@ status_t TRNG_GetRandomData(TRNG_Type *base, void *data, size_t dataSize)
             {
                 random_size = sizeof(random_32);
             }
+#endif /* TRNG_SW_HEALTH_TESTS */
 
             for (i = 0U; i < random_size; i++)
             {
                 *data_p++ = *random_p++;
             }
 
+#if defined(TRNG_SW_HEALTH_TESTS)
+            /* TRNG errata: execute SW tests */
+            for (k = 0u; k < 32u; k++)
+            {
+                if(switchArray)
+                {
+                    currBit = (uint8_t) ((data32_p[0] >> (31u - k)) & 0x01u);
+                }
+                else
+                {
+                    currBit = (uint8_t) ((data32_p[j] >> (31u - k)) & 0x01u);
+                }
+
+                APT_cnt += currBit;
+
+                if (currBit == tmpRCTBit) {
+                    RCT_cnt += 1u;
+                    if (RCT_cnt >= TRNG_RCT_THRESHOLD) {
+                        result = kStatus_Fail;
+                        RCT_cnt = 1u;
+                    }
+                } else {
+                    RCT_cnt = 1u;
+                    tmpRCTBit = currBit;
+                }
+            }
+            j++;
+
+            /* TRNG errata: execute SW tests */
+            if((j % 32u) == 0u)
+            {
+                /* APT window done, evaluate */
+                if ((APT_cnt >= TRNG_APT_THRESHOLD) || ((TRNG_APT_WINDOW_SIZE - APT_cnt) >= TRNG_APT_THRESHOLD))
+                {
+                    result = kStatus_Fail;
+                }
+                APT_cnt = 0u;
+            }
+
+#endif /* TRNG_SW_HEALTH_TESTS */
+
             dataSize -= random_size;
+
+#if defined(TRNG_SW_HEALTH_TESTS)
+            neededDataSize -= random_size;
+        } while (neededDataSize > 0u);
+#else
         } while (dataSize > 0u);
+#endif /* TRNG_SW_HEALTH_TESTS */
 
         /* Start a new entropy generation.
         It is done by reading of the last entropy register.*/

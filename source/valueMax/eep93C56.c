@@ -4,25 +4,31 @@
 #include "pin_mux.h"
 #include "fsl_debug_console.h"
 #include "eep93C56.h"
-#include "wgMessages.h"
+#include "hobartWeigherMessages.h"
 #include "queueManager.h"
 #include "developmentSettings.h"
 #include "sca3300Accel.h"
 
 
 /************ #defines ************************/
-#define EEP_SPI_READY_TIMEOUT 20        /* typical delay is 1 "vTaskDelay(1)" */
-#define MISO_LOW_TIMEOUT  100           /* typical delay is 0 cycles. */
-#define MISO_HIGH_TIMEOUT 20            /* typical delay is 2 cycles for write93C56Word */ 
+#define EEP_SPI_READY_TIMEOUT 20       //typical delay is 1 "vTaskDelay(1)"
+#define MISO_LOW_TIMEOUT  100      //typical delay is 0 cycles.
+#define MISO_HIGH_TIMEOUT 20       //typical delay is 2 cycles for write93C56Word , ?? for 
 
 /*********** Variables ****************************/
 static unsigned char            EEPPageBuffer[PAGE_SIZE_93C56];
 static bool                     isEEPWriteEnabled = false; //93C56 has to be enabled before it can be written or erased
 static bool                     eepSPIReady       = true;  //serial EEP and accelerometer share the SPI port. EEP CS = high, Accel CS = low. 
+
+/******** Getter/Setter Functions ***************/
+unsigned char *get93C56EEPPageBuffer( void )
+{
+   return &EEPPageBuffer[0];
+}
+
+ 
+/*************** Global Variables *****************/
 static lpspi_master_config_t    masterConfig;            //Holds the SPI Master Configuration
-
-
-unsigned char *get93C56EEPPageBuffer( void ) { return &EEPPageBuffer[0]; }
 
 /******************************************************************************/
 /*!   \fn static bool initSpi93C56EEP( void )
@@ -35,6 +41,7 @@ unsigned char *get93C56EEPPageBuffer( void ) { return &EEPPageBuffer[0]; }
       \author
           Aaron Swift
 *******************************************************************************/
+
 bool initSpi93C56EEP( void )
 {
     bool result = false;
@@ -51,9 +58,9 @@ bool initSpi93C56EEP( void )
     masterConfig.direction                     = kLPSPI_MsbFirst;
     masterConfig.pcsToSckDelayInNanoSec        = 500;             
     masterConfig.lastSckToPcsDelayInNanoSec    = 500;
-    masterConfig.betweenTransferDelayInNanoSec = 750;                  
-    masterConfig.whichPcs                      = kLPSPI_Pcs0;          
-    masterConfig.pcsActiveHighOrLow            = kLPSPI_PcsActiveLow;  
+    masterConfig.betweenTransferDelayInNanoSec = 750;                  //A little more than normal clock period to make it easy to see byte boundry on logic analyzer.
+    masterConfig.whichPcs                      = kLPSPI_Pcs0;          //We're not using automatic CS. 
+    masterConfig.pcsActiveHighOrLow            = kLPSPI_PcsActiveLow;  //We're not using automatic CS. 
     masterConfig.pinCfg                        = kLPSPI_SdiInSdoOut;
     masterConfig.dataOutConfig                 = kLpspiDataOutTristate;
 
@@ -98,15 +105,15 @@ int32_t read93C56EEPMultiByte (unsigned char addr, unsigned char *pData, unsigne
     unsigned char dataOut[2] = {_93C56_READ_CMD, addr/2};   //93C56 reads words, not bytes
     
     if(!getLockVMSPI3Flash()) {
-        PRINTF("read93C56EEPMultiByte(): failed to obtain lock!\r\n");
-        return (kStatus_Fail);
+       PRINTF("\r\n\r\n\r\n read93C56EEPMultiByte(); getLockVMSPI3Flash() Failed!\r\n\r\n\r\n");
+       return (kStatus_Fail);
     }
     
     
     if(getVmSPIConfigState() != VM_SPI_INITIALIZED_FOR_93C56) 
-        initSpi93C56EEP();
+      initSpi93C56EEP();
        
-    /** send command and address bytes **/
+    /** Send the Command and Address Bytes **/
     assertChipSelect93C56();
     setEEPSPIReadyFalse();
     
@@ -126,20 +133,21 @@ int32_t read93C56EEPMultiByte (unsigned char addr, unsigned char *pData, unsigne
       spiReadyTimeout--;
       vTaskDelay(1); 
     }
-
     if(spiReadyTimeout == 0) {
+       PRINTFThrottle(10,"read93C56Word(): spi timed out\r\n");
        readStatus = kStatus_Fail;
     }
       
-    /* 93C56 clocks data out on the rising edge, so change the phase to data
+    /** Read the words back **/
+    /* 93C56 clocks data out on the RISING edge, so change the phase to data
        is clocked into the RT1024 on the falling edge. The Read command is the 
        only command that requires this phase setting, so the phase is changed back
        to the 1st edge before exiting this function */
     changeClkPhase2ndEdge();
     
-    /* clock the data word in from the 93C56 */
+    /* Clock the data word in from the 93C56 */
     setEEPSPIReadyFalse();
-    dataOut[0] = 0x00;  
+    dataOut[0] = 0x00;  //Data clocked out is "don't care"
     dataOut[1] = 0x00; 
     masterXfer.txData = dataOut;
     masterXfer.rxData = pData;
@@ -165,14 +173,105 @@ int32_t read93C56EEPMultiByte (unsigned char addr, unsigned char *pData, unsigne
         
     negateChipSelect93C56();
     
-    /* The 93C56 clocks data in on the rising edge, so change phase back so the RT1024
-       clocks data out on the falling edge. */
+    /* The 93C56 clocks data IN on the rising edge, so change phase back so the RT1024
+       clocks data OUT on the falling edge. */
     changeClkPhase1stEdge(); 
     
     releaseLockVMSPI3Flash();
-    return( readStatus );
+    return(readStatus);
   
 }
+
+#if 0  //depracated by read93C56EEPMultiByte
+/*! ****************************************************************************   
+      \fn static unsigned short read93C56Word (unsigned char addr)
+ 
+      \brief
+        Reads one word from the 93C56 from address "addr"
+
+      \author
+          Tom Fink
+*******************************************************************************/ 
+unsigned short read93C56Word (unsigned char addr)
+{
+    lpspi_transfer_t masterXfer;
+    status_t status;
+    unsigned char dataOut[2] = {_93C56_READ_CMD, addr/2};  //93C56 reads words, not bytes
+    union charShort dataIn;
+    
+    if(!getLockVMSPI3Flash()) {
+       PRINTF("\r\n\r\n\r\n read93C56Word(); getLockVMSPI3Flash() Failed!\r\n\r\n\r\n");
+       return(0);
+    }
+      
+    if(getVmSPIConfigState() != VM_SPI_INITIALIZED_FOR_93C56) 
+      initSpi93C56EEP();
+    
+    /* Send the Command and Address Bytes */
+    assertChipSelect93C56();
+    setEEPSPIReadyFalse();
+    
+    masterXfer.txData = dataOut;
+    masterXfer.rxData = dataIn.uc;
+    masterXfer.dataSize = 2; 
+    masterXfer.configFlags = (uint32_t)kLPSPI_Pcs0 | (uint32_t)kLPSPI_MasterPcsContinuous; 
+
+    status = LPSPI_MasterTransferNonBlocking( LPSPI3, getVmSPIHandle(), &masterXfer );
+    if( status != kStatus_Success ) {
+        PRINTF("read93C56Word(): command write to 93C56 EEP failed: %d\r\n", status );
+    }  
+   
+    unsigned long spiReadyTimeout = EEP_SPI_READY_TIMEOUT; 
+    while( !getEEPSPIReady() && spiReadyTimeout) {
+      spiReadyTimeout--;
+      vTaskDelay(1); 
+    }
+    if(spiReadyTimeout == 0)
+       PRINTFThrottle(10,"read93C56Word(): spi timed out\r\n");
+    
+    /* 93C56 clocks data out on the RISING edge, so change the phase to data
+       is clocked into the RT1024 on the falling edge. The Read command is the 
+       only command that requires this phase setting, so the phase is changed back
+       to the 1st edge before exiting this function */
+    changeClkPhase2ndEdge();
+    
+    /* Clock the data word in from the 93C56 */
+    setEEPSPIReadyFalse();
+    dataOut[0] = 0x00;  //Data clocked out is "don't care"
+    dataOut[1] = 0x00; 
+    dataIn.uc[0] =  0x00;  //Set data in to a known value so we recognize if it changes
+    dataIn.uc[1] =  0x00;
+    masterXfer.txData = dataOut;
+    masterXfer.rxData = dataIn.uc;
+    masterXfer.dataSize = 2; 
+    masterXfer.configFlags = (uint32_t)kLPSPI_Pcs0 | (uint32_t)kLPSPI_MasterPcsContinuous; 
+    
+    
+    status = LPSPI_MasterTransferNonBlocking( LPSPI3, getVmSPIHandle(), &masterXfer );
+    if( status != kStatus_Success ) {
+        PRINTF("read93C56Word(): read from 93C56 EEP failed: %d\r\n", status );
+    }  
+    
+    spiReadyTimeout = EEP_SPI_READY_TIMEOUT; 
+    while( !getEEPSPIReady() && spiReadyTimeout) {
+      spiReadyTimeout--;
+      vTaskDelay(1); 
+    }
+    if(spiReadyTimeout == 0)
+       PRINTFThrottle(10,"read93C56Word(): spi timed out\r\n");
+    
+    negateChipSelect93C56();
+    
+    /* The 93C56 clocks data IN on the rising edge, so change phase back so the RT1024
+       clocks data OUT on the falling edge. */
+    changeClkPhase1stEdge();
+    
+    //PRINTF("EEP Addr %d: %x |%x, %x\r\n", addr,dataIn.us,dataIn.uc[1],dataIn.uc[0]);  
+    
+    releaseLockVMSPI3Flash();
+    return (unsigned short) dataIn.us;  
+}
+#endif
 
 
 /*! ****************************************************************************   
@@ -194,7 +293,7 @@ void enable93C56WriteAndErase (void)
     unsigned char dataIn[4];
     
     if(!getLockVMSPI3Flash()) {
-        PRINTF("enable93C56WriteAndErase(): failed to obtain lock!\r\n");
+       PRINTF("\r\n\r\n\r\n enable93C56WriteAndErase(); getLockVMSPI3Flash() Failed!\r\n\r\n\r\n");
        return;
     }
     
@@ -221,15 +320,15 @@ void enable93C56WriteAndErase (void)
     if(spiReadyTimeout == 0)
        cmdSuccess = false;
     
-    /* negate CS then implement delay so CS minimum negation time of 250nS isn't violated */
+    /* Negate CS then implement delay so CS minimum negation time of 250nS isn't violated */
     negateChipSelect93C56();
-    unsigned short delayCount = 50;   /* measured delay of about 500nS */
+    unsigned short delayCount = 50;   //Measured delay of about 500nS
     while(delayCount){delayCount--;}  
     
     if(cmdSuccess)
        isEEPWriteEnabled = true;
     else
-       PRINTF("enable93C56WriteAndErase (): command failed\r\n");
+       PRINTFThrottle(10,"enable93C56WriteAndErase (): command failed\r\n");
     
     releaseLockVMSPI3Flash();
 }
@@ -252,12 +351,12 @@ void disable93C56WriteAndErase (void)
     unsigned char dataIn[4];
     
     if(!getLockVMSPI3Flash()) {
-        PRINTF("disable93C56WriteAndErase(): failed to obtain lock!\r\n");
-        return;
+       PRINTF("\r\n\r\n\r\n disable93C56WriteAndErase(); getLockVMSPI3Flash() Failed!\r\n\r\n\r\n");
+       return;
     }
     
     if(getVmSPIConfigState() != VM_SPI_INITIALIZED_FOR_93C56) 
-        initSpi93C56EEP();
+      initSpi93C56EEP();
     
     assertChipSelect93C56();
     setEEPSPIReadyFalse();
@@ -271,13 +370,13 @@ void disable93C56WriteAndErase (void)
       
     unsigned long spiReadyTimeout = EEP_SPI_READY_TIMEOUT; 
     while( !getEEPSPIReady() && spiReadyTimeout) {
-        spiReadyTimeout--;
-        vTaskDelay(1); 
+      spiReadyTimeout--;
+      vTaskDelay(1); 
     }
     
-    /* negate CS then implement delay so CS minimum negation time of 250nS isn't violated */
+    /* Negate CS then implement delay so CS minimum negation time of 250nS isn't violated */
     negateChipSelect93C56();
-    unsigned short delayCount = 50;   /* measured delay of about 500nS */
+    unsigned short delayCount = 50;   //Measured delay of about 500nS
     while(delayCount){delayCount--;}  
 
     releaseLockVMSPI3Flash();    
@@ -317,8 +416,8 @@ int write93C56MultiWord  (unsigned char addr, unsigned char *pData, unsigned cha
       addr +=2;  
    }
      
-   /* 99.999% of the time we will not be writting to the EEP. since EEP shares a chip select with
-      the SCA3300 accelerometer, play it safe and disable EEP write */
+   /* 99.999% of the time we will not be writting to the EEP. Since EEP shares a Chip Select with
+      the SCA3300 accelerometer, play it safe and disable EEP Write */
    disable93C56WriteAndErase();  
       
    return(writeStatus);
@@ -348,16 +447,16 @@ static bool write93C56Word (unsigned char addr, unsigned short data)
     unsigned char dataIn[4];
     
     if(!getLockVMSPI3Flash()) {
-        PRINTF("write93C56Word(): failed to obtain lock!\r\n");
-        return(false);
+       PRINTF("\r\n\r\n\r\n write93C56Word(); getLockVMSPI3Flash() Failed!\r\n\r\n\r\n");
+       return(false);
     }                
 
    
     if(getVmSPIConfigState() != VM_SPI_INITIALIZED_FOR_93C56) 
-        initSpi93C56EEP();
+      initSpi93C56EEP();
     
     if(!isEEPWriteEnabled)
-        enable93C56WriteAndErase();  //93C56 has to be enabled before data can be written to it.
+       enable93C56WriteAndErase();  //93C56 has to be enabled before data can be written to it.
     
     dataToWrite.us = data;
     dataOut[0] = _93C56_WRITE_CMD;
@@ -379,23 +478,22 @@ static bool write93C56Word (unsigned char addr, unsigned short data)
      
     unsigned long spiReadyTimeout = EEP_SPI_READY_TIMEOUT; 
     while( !getEEPSPIReady() && spiReadyTimeout) {
-        spiReadyTimeout--;
-        vTaskDelay(1); 
+      spiReadyTimeout--;
+      vTaskDelay(1); 
     }
     
     if(spiReadyTimeout == 0)
         cmdSuccess = false; 
       
-    /* the SPI write is done, so now Use the MISO pin as ready/busy input to determine
+    /* The SPI write is done, so now Use the MISO pin as Ready/Busy input to determine
        when EEP is done with the write cycle */
     configurePinAD_B1_15AsGPIO();  
     
     negateChipSelect93C56();
-    
-    /* hold CS negated for at least 250nS */
+    //Hold CS negated for at least 250nS
     unsigned short delayCount = 50;
-    while(delayCount){ delayCount--; }   
-    assertChipSelect93C56(); 
+    while(delayCount){delayCount--;}   
+    assertChipSelect93C56(); //measured 500nS negative pulse with delay count set to 50. TFink 2/23/24
           
     /* Look for EEP MISO pin to go low indicating the  EEP is busy executing the command */
     unsigned long misoLowTimeout = MISO_LOW_TIMEOUT;  
@@ -418,6 +516,9 @@ static bool write93C56Word (unsigned char addr, unsigned short data)
           
     /* Cycle has finished executing */
     negateChipSelect93C56();
+
+    /* Switch pin AD_B1_15 back to MISO function for next SPI command */
+    configurePinAD_B1_15AsSPI3MISO();  
        
     if(!cmdSuccess)
       PRINTF("\r\nwrite93C56Word() command failed!\r\n\r\n"); 
@@ -506,10 +607,17 @@ bool writeAll93C56 (void)
           
     /* Cycle has finished executing */
     negateChipSelect93C56();
+
+    /* Switch pin AD_B1_15 back to MISO function for next SPI command */
+    configurePinAD_B1_15AsSPI3MISO();  
     
     if(!cmdSuccess)
       PRINTF("\r\nwriteAll93C56() command failed!!\r\n\r\n"); 
     
+    //debug only
+    //PRINTF("%d while loop cycles for EEP Write Command to finish\r\n", EEP_SPI_READY_TIMEOUT-spiReadyTimeout);
+    //PRINTF("%d while loop cycles for EEP MISO pin to go low\r\n", MISO_LOW_TIMEOUT-misoLowTimeout);
+    //PRINTF("%d while loop cycles from MISO low to MISO high\r\n\r\n\r\n", MISO_HIGH_TIMEOUT-misoHighTimeout);
     
     return(cmdSuccess);
 }

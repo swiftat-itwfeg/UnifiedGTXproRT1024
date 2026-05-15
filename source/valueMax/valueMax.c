@@ -7,7 +7,7 @@
 #include "fsl_debug_console.h"
 #include "fsl_common.h"
 #include "eep93C56.h"
-#include "averyWeigher.h"
+#include "hobartWeigherTask.h"
 #include "queueManager.h"
 #include "translator.h"
 #include "developmentSettings.h"

@@ -1,13 +1,12 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021 NXP
- * All rights reserved.
+ * Copyright 2016-2021, 2024-2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#ifndef _FSL_ADC_ETC_H_
-#define _FSL_ADC_ETC_H_
+#ifndef FSL_ADC_ETC_H_
+#define FSL_ADC_ETC_H_
 
 #include "fsl_common.h"
 
@@ -20,25 +19,9 @@
  * Definitions
  ******************************************************************************/
 /*! @brief ADC_ETC driver version */
-#define FSL_ADC_ETC_DRIVER_VERSION (MAKE_VERSION(2, 2, 0)) /*!< Version 2.2.0. */
+#define FSL_ADC_ETC_DRIVER_VERSION (MAKE_VERSION(2, 3, 2)) /*!< Version 2.3.2. */
 /*! @brief The mask of status flags cleared by writing 1. */
 #define ADC_ETC_DMA_CTRL_TRGn_REQ_MASK 0xFF0000U
-
-#if defined(FSL_FEATURE_ADC_ETC_HAS_TRIGm_CHAIN_a_b_IEn_EN) && FSL_FEATURE_ADC_ETC_HAS_TRIGm_CHAIN_a_b_IEn_EN
-#if defined(ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE2_MASK)
-#define ADC_ETC_DONE2_ERR_IRQ_TRIG0_DONE2_MASK ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE2_MASK
-#define DONE2_ERR_IRQ                          DONE2_3_ERR_IRQ
-#endif /* ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE2_MASK */
-
-#if defined(ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE3_MASK)
-#define ADC_ETC_DONE2_ERR_IRQ_TRIG0_DONE3_MASK ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE3_MASK
-#endif /* ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_DONE3_MASK */
-
-#if defined(ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_ERR_MASK)
-#define ADC_ETC_DONE2_ERR_IRQ_TRIG0_ERR_MASK ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_ERR_MASK
-#endif /* ADC_ETC_DONE2_3_ERR_IRQ_TRIG0_ERR_MASK */
-
-#endif /* FSL_FEATURE_ADC_ETC_HAS_TRIGm_CHAIN_a_b_IEn_EN */
 
 /*!
  * @brief ADC_ETC customized status flags mask.
@@ -146,7 +129,6 @@ typedef struct _adc_etc_config
 /*!
  * @brief ADC_ETC trigger chain configuration.
  */
-#pragma pack( 1 )
 typedef struct _adc_etc_trigger_chain_config
 {
     bool enableB2BMode;           /* Enable ADC_ETC BackToBack mode. when not enabled B2B mode,
@@ -162,7 +144,6 @@ typedef struct _adc_etc_trigger_chain_config
 /*!
  * @brief ADC_ETC trigger configuration.
  */
-
 typedef struct _adc_etc_trigger_config
 {
     bool enableSyncMode; /* Enable the sync Mode, In SyncMode ADC1 and ADC2 are controlled by the same trigger source.
@@ -173,8 +154,7 @@ typedef struct _adc_etc_trigger_config
     uint32_t sampleIntervalDelay; /* Set sampling interval delay. */
     uint32_t initialDelay;        /* Set trigger initial delay. */
 } adc_etc_trigger_config_t;
-#pragma pack( push,1 )
-#pragma pack( pop )
+
 /*******************************************************************************
  * API
  ******************************************************************************/
@@ -349,6 +329,30 @@ static inline void ADC_ETC_DoSoftwareTrigger(ADC_ETC_Type *base, uint32_t trigge
 }
 
 /*!
+ * @brief Do software trigger corresponding to each XBAR trigger sources.
+ *
+ * @note This function provides a workaround implementation for ERR052412
+ *  by using blocking way to implement SW trigger.
+ *
+ * @param base ADC_ETC peripheral base address.
+ * @param triggerGroup Trigger group index. Available number is 0~7.
+ */
+static inline void ADC_ETC_DoSoftwareTriggerBlocking(ADC_ETC_Type *base, uint32_t triggerGroup) 
+{
+    assert(triggerGroup < ADC_ETC_TRIGn_CTRL_COUNT);
+
+     /* ERR052412 ADC_ETC: TRIGx_CTRL[SW_TRIG] is previously high and software writes another
+      * 1 to TRIGx_CTRL[SW_TRIG], which possibly get The ADC_ETC TRIGx_CTRL[SW_TRIG] register
+      * bit to be stuck high.
+      */
+    while ((base->TRIG[triggerGroup].TRIGn_CTRL & ADC_ETC_TRIGn_CTRL_SW_TRIG_MASK) != 0U) 
+    {
+    }
+
+    base->TRIG[triggerGroup].TRIGn_CTRL |= ADC_ETC_TRIGn_CTRL_SW_TRIG_MASK;
+}
+
+/*!
  * @brief Get ADC conversion result from external XBAR sources.
  * For example, if triggerGroup is set to 0U and chainGroup is set to 1U, which means the API would
  * return Trigger0 source's chain1 conversion result.
@@ -360,12 +364,12 @@ static inline void ADC_ETC_DoSoftwareTrigger(ADC_ETC_Type *base, uint32_t trigge
  */
 uint32_t ADC_ETC_GetADCConversionValue(ADC_ETC_Type *base, uint32_t triggerGroup, uint32_t chainGroup);
 
-/* @} */
+/*! @} */
 
 #if defined(__cplusplus)
 }
 #endif
 
-/* @} */
+/*! @} */
 
-#endif /* _FSL_ADC_ETC_H_ */
+#endif /* FSL_ADC_ETC_H_ */

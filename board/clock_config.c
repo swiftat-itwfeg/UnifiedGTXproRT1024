@@ -156,6 +156,7 @@ const clock_enet_pll_config_t enetPllConfig_BOARD_BootClockRUN =
         .loopDivider = 1,                         /* Set frequency of ethernet reference clock to 50 MHz */
         .src = 0,                                 /* Bypass clock source, 0 - OSC 24M, 1 - CLK1_P and CLK1_N */
     };
+
 /*******************************************************************************
  * Code for BOARD_BootClockRUN configuration
  ******************************************************************************/
@@ -320,6 +321,7 @@ void BOARD_BootClockRUN(void)
     CLOCK_SetDiv(kCLOCK_Spdif0Div, 7);
     /* Set Spdif clock source. */
     CLOCK_SetMux(kCLOCK_SpdifMux, 3);
+   
     /* Disable Flexio1 clock gate. */
     CLOCK_DisableClock(kCLOCK_Flexio1);
     /* Set FLEXIO1_CLK_PRED. */
@@ -328,6 +330,7 @@ void BOARD_BootClockRUN(void)
     CLOCK_SetDiv(kCLOCK_Flexio1Div, 7);
     /* Set Flexio1 clock source. */
     CLOCK_SetMux(kCLOCK_Flexio1Mux, 3);
+    
     /* Set Pll3 sw clock source. */
     CLOCK_SetMux(kCLOCK_Pll3SwMux, 0);
     /* In SDK projects, SDRAM (configured by SEMC) will be initialized in either debug script or dcd.

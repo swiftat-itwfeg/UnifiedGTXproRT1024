@@ -9,7 +9,6 @@
 #include "fsl_clock.h"
 #include "fsl_gpt.h"
 #include "fsl_pwm.h"
-#include "fsl_pit.h"
 #include "pin_mux.h"
 #include "sensors.h"
 #include "label.h"
@@ -23,9 +22,10 @@
 #include "drawingPrimitives.h"
 #include "threadManager.h"
 #include "queueManager.h"
-#include "prMessages.h"
+#include "hobartPrinterMessages.h"
+#include "hobartPrinterTask.h"
 #include "semphr.h"
-#include "averyPrinter.h"
+#include "averyPrinterTask.h"
 #include "dotWearTask.h"
 #include "commandTable.h"
 #include "averyCutter.h"
@@ -34,16 +34,36 @@
 #include "lp5521.h"
 #include "translator.h"
 #include "TPHMotor.h"
-#include "globalPrinterTask.h"
-#include "virtualScope.h"
-//
-//#include "fsl_adc_etc.h"
+#include "lp5521.h"
+#include "fsl_pit.h"
+#include "dotWearTask.h"
+#include "fsl_adc_etc.h"
+#include "idleTask.h"
 
-extern const unsigned short rohm80mmSLTTimes[10]; 
-extern const unsigned short rohm80mmHistory[8];
-extern const unsigned short rohm80mmCurrentLine[8];
-extern const unsigned short rohm80mmPwmStart[8];
-extern const unsigned short rohm80mmPwmDuty[8];
+bool cutterJiggling = false;
+bool cutterJiggleEnabled = false;
+ICutterGeneric cSMsg;
+ICutterGeneric cCMsg;
+bool cutMsgSent = false;
+uint16_t cutMsgSentCounter = 0;
+
+uint16_t LABEL_TAKEN_THRESHOLD_LABEL = 150;            
+uint16_t LABEL_TAKEN_THRESHOLD_NO_LABEL = 149; 
+
+bool cutterSizingDoneFlag = true;
+bool cutterStatusChecked = false;
+bool skipLabelTaken_ = false;
+uint16_t cutterStatusCheckedCounter = 0;
+bool cutterStatusPollingActive = true;
+uint16_t idleOpCycleCounter = 0;
+uint16_t idleCutCount1 = 0;
+uint16_t idleCutCount2 = 0;
+
+extern const unsigned short printHeadSLTTimes[10]; 
+extern const unsigned short printHeadHistory[8];
+extern const unsigned short printHeadCurrentLine[8];
+extern const unsigned short printHeadPwmStart[8];
+extern const unsigned short printHeadPwmDuty[8];
 
 AT_NONCACHEABLE_SECTION_INIT(int tempAtStart) = 0;
 
@@ -57,13 +77,14 @@ AT_NONCACHEABLE_SECTION_INIT(uint16_t streamingLeadInMod) = 0;
 AT_NONCACHEABLE_SECTION_INIT(uint16_t streamingExpelMod) = 0;
 
 bool canceledSizingFlag = false;
-bool OutOfMedia = false;  //TFinkMediaFilter
+bool OutOfMedia = false;
 
 bool TUSlip = false;
 AT_NONCACHEABLE_SECTION_INIT(bool printingStatus) = false;
 bool sizingStatus = false;
 
-AT_QUICKACCESS_SECTION_DATA(PrintEngine engine);
+AT_QUICKACCESS_SECTION_DATA( PrintEngine engine );
+AT_QUICKACCESS_SECTION_DATA( AvPrEngine_t avPrEngine );
 AT_NONCACHEABLE_SECTION_INIT(bool historyEnabled_) = true;
 
 AT_QUICKACCESS_SECTION_DATA(short* shootCounts);
@@ -79,7 +100,6 @@ AT_NONCACHEABLE_SECTION_INIT(bool expelDone) = false;
 
 static bool stepCounterEnabled_         = false;
 static bool skipMissingLabel_           = false;
-static bool skipLabelTaken_             = false;
 static bool backwindAfterSizing         = false;
 static bool backwindAfterSizingDone     = false;
 
@@ -100,12 +120,11 @@ AT_NONCACHEABLE_SECTION_INIT( static short prevVertOffset_ )           = 0;
 
 /* command queue */
 AT_NONCACHEABLE_SECTION_INIT( static QueueHandle_t pCmdQHandler_ )     = NULL;
+AT_NONCACHEABLE_SECTION_INIT(bool continuousStock_) = false;
+AT_NONCACHEABLE_SECTION_INIT(bool mainMotorStopped_ ) = false;
 
 /* line timer interrupt level for print operation and dotwear */
 static unsigned int interruptLevel_ = 1; 
-
-AT_NONCACHEABLE_SECTION_INIT(bool continuousStock_) = false;
-AT_NONCACHEABLE_SECTION_INIT(bool mainMotorStopped_ ) = false;
 
 #if 1   /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
 void LPSPI_MasterUserCallback( LPSPI_Type *base, lpspi_master_edma_handle_t *handle, status_t status, void *userData );
@@ -134,7 +153,6 @@ extern void clearTriggerMotorStop( void );
 extern void sendPrStatus( PrStatusInfo *pStatus, bool interrupt );
 extern bool startLabelTakenTimer( void );
 
-AT_NONCACHEABLE_SECTION_INIT(static uint16_t tModifier) = 0;
 
 extern Pr_Config config_;
 extern SemaphoreHandle_t pCutDoneSemaphore;
@@ -143,13 +161,11 @@ extern volatile ADCManager adcManager;
 int labelAlignment;
 bool sizingLabels = false;
 
+AT_NONCACHEABLE_SECTION_INIT(static uint16_t tModifier) = 0;
 AT_NONCACHEABLE_SECTION_INIT(uint16_t leadInStepTarget) = 0;
 AT_NONCACHEABLE_SECTION_INIT(uint16_t expelStepTarget) = 0;
-
 AT_NONCACHEABLE_SECTION_INIT(uint16_t streamingLabelBackwind) = 0;
-
 AT_NONCACHEABLE_SECTION_INIT(int shootIndex) = 0;
-
 AT_NONCACHEABLE_SECTION_INIT(bool paused_) = false;
 
 unsigned short getNumPrintLinesLeft(void)
@@ -159,30 +175,26 @@ unsigned short getNumPrintLinesLeft(void)
 
 void delay( unsigned long time );
 extern void testPrintHeadTransfer( void );
+extern SemaphoreHandle_t getCutSemaphore( void );
 
 AT_NONCACHEABLE_SECTION_INIT(uint16_t TPHStepsPastGapThisPrint) = 0;
 char sizingState = 0;
 
-static unsigned char pattern1[( 80 * 2 )] = {0};
-
-AT_QUICKACCESS_SECTION_DATA(DotCheckerStatus dotChecker);
-
-uint32_t dotCheckerCalibratedAverage = 0;
-
 PrHeadCalResponse response;
 
+AT_QUICKACCESS_SECTION_DATA( static unsigned char pattern1[( 80 * 2 )] ) = {0};
+AT_QUICKACCESS_SECTION_DATA(DotCheckerStatus dotChecker);
+AT_QUICKACCESS_SECTION_DATA(uint32_t dotCheckerCalibratedAverage) = 0;
 AT_QUICKACCESS_SECTION_DATA(LowLabelStatus lowLabelStatus);
-
-
 AT_QUICKACCESS_SECTION_DATA(short lowLabelPeelingMaxFromHost);
 AT_QUICKACCESS_SECTION_DATA(short lowLabelPeelingMinFromHost);
 AT_QUICKACCESS_SECTION_DATA(short lowLabelStreamingMaxFromHost);
 AT_QUICKACCESS_SECTION_DATA(short lowLabelStreamingMinFromHost);
 
-extern SemaphoreHandle_t getCutSemaphore( void );
+PrintEngineType_t engType = _UNKNOWN_ENGINE;
 /******************************************************************************/
-/*!   \fn void initializePrintEngine( unsigned int contrast, unsigned int mediaCount, 
-                                      QueueHandle_t pHandle )
+/*!   \fn void initializePrintEngine( PrintEngineType_t type, unsigned int contrast, 
+                                      unsigned int mediaCount, QueueHandle_t pHandle )
 
       \brief
         This function initializes the print engine.
@@ -191,99 +203,115 @@ extern SemaphoreHandle_t getCutSemaphore( void );
       \author
           Aaron Swift
 *******************************************************************************/
-void initializePrintEngine( unsigned int contrast, unsigned int mediaCount, 
+void initializePrintEngine( PrintEngineType_t type, unsigned int contrast, unsigned int mediaCount, 
                             QueueHandle_t pHandle )
 {
-    if( pHandle != NULL ) {
-        /* sizing debug - freestanding scale 
-        pTakeup = pvPortMalloc( 1000 ); */
- 
-        /* assign our command queue */
-        pCmdQHandler_ = pHandle;
-        /* get the head temperature index */
-        unsigned char tempIndex = getPrintheadTemperatureInCelsius();
 
-        pCutSemaphore = (SemaphoreHandle_t)getCutSemaphore();
-                
-        engine.headType = getPrintHeadType();
-        /* get the line compensation levels */
-        engine.levels = getCompLevel( engine.headType );
-        /* get the over all line burn time */
-        engine.sltTime = getSltTime( engine.headType, contrast );
-        
-        engine.contrast = config_.contrast_adjustment;
-        engine.sltHalfTime = engine.sltTime / 2;
-        engine.lineCounter = 0;
-        engine.burnSequence = 0; 
+    engType = type;
+    if( engType == _HOBART_PRINTER ) {
+        if( pHandle != NULL ) {
+            /* assign our command queue */
+            pCmdQHandler_ = pHandle;
+            /* get the head temperature index */
+            unsigned char tempIndex = getPrintheadTemperatureInCelsius();
 
-        engine.numSteps = 0;
-        engine.numPrintLines = 0;
-        engine.outOfMediaCnt = 0;
-        engine.stepsOffset = 0;
-        engine.labelTracking = 0;
-        engine.totalLinesToPrint = 0;
-        engine.maxMediaCount = 200;
-        engine.direction = FORWARD_;
-        engine.labelOrientation = HEEL_FIRST;
-        engine.pHistory = getFirstHistoryLine();
-        engine.pImage        = getImageBuffer();
-        
-        labelAlignment      = 0;
-        /* keep track of three label positions */
-        label0.position     = 0;
-        label0.next         = &label1;
-        label1.position     = 0;
-        label1.next         = &label2;
-        label2.position     = 0;
-        label2.next         = &label0;
-                
-        pCurrentLabel = &label0;
-        
-        applyVerticalOffset_ = false;
-        prevVertOffset_ = 0;
-#if 1
-        /* intialize stepper motor */
-        initializeStepper( engine.direction );
-        
-        /* initialize the paper takeup motor control 
-        initTakeupIntr();       */
-        
-        /* gets rid of whine before running the stepper */
-        powerOffStepper();
-#endif        
-        /* set the operational directive to idle operation */
-        engine.currentCmd.generic.directive =  IDLE_DIRECTIVE;
-        
-        /* setup the start times for history, adjacency and current line */        
-        //PRINTF("initializePrintEngine() - engine.levels == %d\r\n", engine.levels);
-        
-        if( engine.levels == 3 ) {
-            engine.histAdj[0].compType = FIRST_LEVEL_HIST;
-            engine.histAdj[0].time = getHistoryTime( contrast );
-            engine.histAdj[1].compType = FIRST_LEVEL_ADJ;
-            engine.histAdj[1].time = getAdjacencyTime( contrast );
-            engine.histAdj[2].compType = CURRENT_LINE;
-            engine.histAdj[2].time = getCurrentLineTime( contrast );
+            pCutSemaphore = (SemaphoreHandle_t)getCutSemaphore();
+                    
+            engine.headType = getPrintHeadType();
+            /* get the line compensation levels */
+            engine.levels = getCompLevel( engine.headType );
+            /* get the over all line burn time */
+            engine.sltTime = getSltTime( engine.headType, contrast );
+            
+            engine.contrast = config_.contrast_adjustment;
+            engine.sltHalfTime = engine.sltTime / 2;
+            engine.lineCounter = 0;
+            engine.burnSequence = 0; 
 
-            engine.pwmStartTime = getPwmStartTime( contrast );
-            engine.pwmDutyCycle = getPwmDutyCycle( contrast );
+            engine.numSteps = 0;
+            engine.numPrintLines = 0;
+            engine.outOfMediaCnt = 0;
+            engine.stepsOffset = 0;
+            engine.labelTracking = 0;
+            engine.totalLinesToPrint = 0;
+            engine.maxMediaCount = 200;
+            engine.direction = FORWARD_;
+            engine.labelOrientation = HEEL_FIRST;
+            engine.pHistory = getFirstHistoryLine();
+            engine.pImage        = getImageBuffer();
+            
+            labelAlignment      = 0;
+            /* keep track of three label positions */
+            label0.position     = 0;
+            label0.next         = &label1;
+            label1.position     = 0;
+            label1.next         = &label2;
+            label2.position     = 0;
+            label2.next         = &label0;
+                    
+            pCurrentLabel = &label0;
+            
+            applyVerticalOffset_ = false;
+            prevVertOffset_ = 0;
+            
+            /* intialize stepper motor */
+            initializeStepper( engine.direction );
+            
+            /* initialize the paper takeup motor control 
+            initTakeupIntr();       */
+            
+            /* gets rid of whine before running the stepper */
+            powerOffStepper();
+           
+            
+            /* set the operational directive to idle operation */
+            engine.currentCmd.generic.directive =  IDLE_DIRECTIVE;
+            
+            /* setup the start times for history, adjacency and current line */        
+            //PRINTF("initializePrintEngine() - engine.levels == %d\r\n", engine.levels);
+            
+            if( engine.levels == 3 ) {
+                engine.histAdj[0].compType = FIRST_LEVEL_HIST;
+                engine.histAdj[0].time = getHistoryTime( contrast );
+                engine.histAdj[1].compType = FIRST_LEVEL_ADJ;
+                engine.histAdj[1].time = getAdjacencyTime( contrast );
+                engine.histAdj[2].compType = CURRENT_LINE;
+                engine.histAdj[2].time = getCurrentLineTime( contrast );
+
+                engine.pwmStartTime = getPwmStartTime( contrast );
+                engine.pwmDutyCycle = getPwmDutyCycle( contrast );
+            } else {
+                engine.histAdj[0].compType = FIRST_LEVEL_HIST;
+                engine.histAdj[0].time = getHistoryTime( contrast );
+                engine.histAdj[1].compType = CURRENT_LINE;
+                engine.histAdj[1].time = getCurrentLineTime( contrast );
+
+                engine.pwmStartTime = getPwmStartTime( contrast );
+                engine.pwmDutyCycle = getPwmDutyCycle( contrast );
+            }
+            
+            
+            /* initialize print engine timer */
+            startLineTimer( false );
+            initializePrintEngineTimer( DEFAULT_ENGINE_COUNT );
         } else {
-            engine.histAdj[0].compType = FIRST_LEVEL_HIST;
-            engine.histAdj[0].time = getHistoryTime( contrast );
-            engine.histAdj[1].compType = CURRENT_LINE;
-            engine.histAdj[1].time = getCurrentLineTime( contrast );
+            PRINTF("initializePrintEngine(): PR Command Queue NULL! \r\n");      
+        }    
+    } else if( engType == _AVERY_PRINTER ) {
+        avPrEngine.onLabelCnt             = 0;
+        avPrEngine.onLabel                = -1;
+        avPrEngine.lastOnLabel            = -1;
 
-            engine.pwmStartTime = getPwmStartTime( contrast );
-            engine.pwmDutyCycle = getPwmDutyCycle( contrast );
-        }
-        
-        
-        /* initialize print engine timer */
-        startLineTimer( false );
-        initializePrintEngineTimer( DEFAULT_ENGINE_COUNT );
+        avPrEngine.labelGapLength         = 0;        
+        avPrEngine.labelLen               = 0;
+        avPrEngine.labelGapLength         = 0;
+        avPrEngine.measuredLabelGapLength = 0;
+        avPrEngine.measuredLabelLength    = 0;
+        avPrEngine.labelSpan              = 0;
+        avPrEngine.seqStep                = 0;        
     } else {
-        PRINTF("initializePrintEngine(): PR Command Queue NULL! \r\n");      
-    }    
+        PRINTF("initializePrintEngine(): error uknown engine type! \r\n");  
+    }
 }
 
 /******************************************************************************/
@@ -321,15 +349,28 @@ void initializePrintHeadSPI( void )
     EDMA_GetDefaultConfig( &edmaConfig );   
     EDMA_Init( DMA0, &edmaConfig );
     
-    PrintEngine *pEngine  = getPrintEngine();
+    PrintEngine *pEngine  = getPrintEngine(_HOBART_PRINTER);
+    
     if( pEngine != NULL ) {        
-        /* setup spi4 master configuration kjt-56 max clock rate 12Mhz */     
-        masterConfig.baudRate                      = 12000000u; /* 10Mhz */
+        /* setup spi4 master configuration kjt-56 max clock rate 12Mhz */ 
+      
+        if(getPrintHeadType() == KYOCERA753_OHM || getPrintHeadType() == KYOCERA800_OHM ||getPrintHeadType() == KYOCERA849_OHM )
+        {
+            masterConfig.baudRate                      = 8000000u;
+        }
+        else
+        {
+            masterConfig.baudRate                      = 12000000u;
+        }
+        
         masterConfig.bitsPerFrame                  = 8;       
         masterConfig.cpol                          = kLPSPI_ClockPolarityActiveHigh;        
         masterConfig.cpha                          = kLPSPI_ClockPhaseFirstEdge;
-
-        masterConfig.direction                 =  kLPSPI_MsbFirst;
+        //if( pEngine->labelOrientation ==  HEAD_FIRST ) {
+            //masterConfig.direction                 = kLPSPI_LsbFirst; 
+        //} else {
+            masterConfig.direction                 =  kLPSPI_MsbFirst;
+        //}
         masterConfig.pcsToSckDelayInNanoSec        = 50;
         masterConfig.lastSckToPcsDelayInNanoSec    = 50;
         masterConfig.betweenTransferDelayInNanoSec = 50;
@@ -337,7 +378,7 @@ void initializePrintHeadSPI( void )
         masterConfig.pcsActiveHighOrLow            = kLPSPI_PcsActiveLow;
         masterConfig.pinCfg                        = kLPSPI_SdiInSdoOut;    
         masterConfig.dataOutConfig                 = kLpspiDataOutTristate;
-                
+        
         /* intialize the spi interface */
         LPSPI_MasterInit( LPSPI4, &masterConfig, ( CLOCK_GetFreq(kCLOCK_Usb1PllPfd0Clk) / 8 ) );
         NVIC_SetPriority( LPSPI4_IRQn, 1 );
@@ -354,7 +395,7 @@ void initializePrintHeadSPI( void )
                                              NULL, &eDmaHandle_0, &eDmaHandle_1 );        
     } else {
         PRINTF("initializePrintHeadSPI(): printEngine is NULL. critical error!\r\n" );
-    }   
+    }
     spiDmaTransferComplete = false;
 }
 
@@ -368,20 +409,12 @@ void initializePrintHeadSPI( void )
       \author
           Aaron Swift
 *******************************************************************************/
-#if 1 /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
 void LPSPI_MasterUserCallback( LPSPI_Type *base, lpspi_master_edma_handle_t *handle, status_t status, void *userData )
-#else 
-void LPSPI_MasterUserCallback( LPSPI_Type *base, lpspi_master_handle_t *handle, status_t status, void *userData )
-#endif
 {
     /* assert data latch only on history loads */
     if( !isCurrentLine() ) {
         /* data is transfered to the head, assert the data latch */ 
-        GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, false );         //false
-        
-        /* load history line*/
-        //historyAdjacency();
-        //loadHistory();
+        GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, false );         //false        
     }
  
     if( status == kStatus_Success ) {
@@ -390,7 +423,6 @@ void LPSPI_MasterUserCallback( LPSPI_Type *base, lpspi_master_handle_t *handle, 
         PRINTF("DSPI_MasterUserCallback(): Dma transfer failed. critical error!\r\n" );
     }
 }
-
 
 /******************************************************************************/
 /*!   \fn void addCmdToQueue( PrCommand *pCmd )
@@ -438,12 +470,32 @@ void setSkipLabelTakenCheck( void )
 *******************************************************************************/
 void startPrintEngine( void )
 { 
-     
-    //set the estimated amount of labels on roll of labels
-    updateNumberOfLabelsOnRoll();
+    cutMsgSent = false;
   
-    //calculate roll completion percentage estimations and update currentStatus
-    updateRollCompletionPercentage();
+    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+  
+    HeadType_t head = getPrintHeadType();
+    
+    if(getCutterInstalled() == true && getCutterBladeDelayNeeded() == true )
+    {
+        powerOnMotors();
+        powerOnMotors();
+    }
+    
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+    {
+        __NOP();
+    }
+    else
+    {
+        /* set the estimated amount of labels on roll of labels */
+        updateNumberOfLabelsOnRoll();
+  
+        /* calculate roll completion percentage estimations and update currentStatus */
+        updateRollCompletionPercentage();
+    }
+    
+    
     
     setLTWaitCount_(0);
     
@@ -460,21 +512,18 @@ void startPrintEngine( void )
     expelDone = false; // are we done with the expel?
     //labelLowIndexOffset = 0; // reset the label low buffer index
     setShootIndex(0);
-    //TPHStepsPastGapThisPrint = 0;
     
     setHeadTimings();
       
     /* turn on print head power */ 
     setHeadPower( true );
-    //setHeadPower( false );
     
     /* initialize the printhead roller motor interrupt, this function is currently defined in 
     takeupMotor.c */
     initTPHIntr();
     
     /* if we are taking up paper, tighten the paper before the print starts */
-    if(getTakingUpPaper() == true)
-    {
+    if( getTakingUpPaper() == true ) {
         /* if(engine.totalLinesToPrint >= 1200) tensionModifier is incremented by 2 each print, 
         otherwise it is incremented by 1 each print, currently it is capped to 400. tensionModifier is
         reset/estimated every cassette open/close*/
@@ -485,46 +534,34 @@ void startPrintEngine( void )
             startingTUSpeed = 1160;
         }
       
-        enableVScope();
-        /*tightenStock starts an interupt that pulses the takeup motor step pin at startingSpeed until
+        /* tightenStock starts an interupt that pulses the takeup motor step pin at startingSpeed until
         the takeup clutch tension sensor counts equal the first argument. */
         
         unsigned short tensionSetting = 0;
         static float tensionDivider = 0.85; /* made this variable so it can be adjusted while debugging */
-        tensionSetting = (unsigned short)((float)config_.takeup_sensor_max_tension_counts/tensionDivider);
-        //PRINTF("tension SP: %d\r\n",tensionSetting);
-        tightenStock(   
-            tensionSetting,   
-            startingTUSpeed, 
-            true,
-                        HALF_STEP);
+        tensionSetting = (unsigned short)((float)config_.takeupMaxTension/tensionDivider);
+        tightenStock( tensionSetting, startingTUSpeed, true, HALF_STEP );
     }        
     
     /* if we are taking up paper, start the takeup motor interrupt */
-    if(getTakingUpPaper() == true)
-    {
+    if( getTakingUpPaper() == true ) {
         tModifier = getTensionModifier();
         uint16_t startingSpeed = 760 + getTensionModifier();
         
-        if(startingSpeed > 1500) //1160 uS
-        {
+        if( startingSpeed > 1500 ) {    //1160 uS
             startingSpeed = 1500;
         }
       
         /* increment the tension modifier more for larger labels  */
-        if(engine.totalLinesToPrint >= 1200)
-        {
+        if(engine.totalLinesToPrint >= 1200 ) {
             tModifier += 2;
             setTensionModifier(tModifier);
-        }
-        else
-        {
+        } else {
             tModifier++;
             setTensionModifier(tModifier);
         }
 
-        if(tModifier >= 400)
-        {
+        if( tModifier >= 400 ) {
             tModifier = 400;
             setTensionModifier(tModifier);
         }
@@ -534,11 +571,39 @@ void startPrintEngine( void )
     }
     
     /* start the printhead roller motor */
-    if(continuousStock_ == true)
-    {
+    if( continuousStock_ == true ) {
         /* start the print roller motor interrupt, for a continuous stock print we want to travel the 
         amount of steps equal to (lead in + numPrintLines + expel)*/
-        startTPHIntr(engine.numPrintLines + 210 + getIndirectData( (CMD_DATA_IDS)4 ));
+        if( head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM ) {
+            startTPHIntr(engine.numPrintLines + 110 + getIndirectData( (CMD_DATA_IDS)4 ));
+        } else {
+            startTPHIntr(engine.numPrintLines + 210 + getIndirectData( (CMD_DATA_IDS)4 ));
+        }
+    } else if( getCutterInstalled() == true ) {   
+         /* getLargeGapFlag() will return true if during the last sizing the label gap was estimated to
+        to be larger than 55 steps (HT/RFID labels with a larger gap than the standard smaller GT gap)*/
+        if(getLargeGapFlag() == true)
+        {    
+            if(getWaitForLabelTaken() == true)
+            {
+                startTPHIntr((engine.numPrintLines) + getStreamingLeadInMod() + getStreamingExpelMod()); //printlines + expel + lead in 
+            }
+            else
+            {
+                startTPHIntr((engine.numPrintLines) + getStreamingLeadInMod()); //printlines + expel + lead in                     
+            }       
+        }  
+        else
+        {
+            if(getWaitForLabelTaken() == true)
+            {
+                startTPHIntr((engine.numPrintLines) + getStreamingLeadInMod() + getStreamingExpelMod()); //printlines + expel + lead in 
+            }
+            else
+            {
+                startTPHIntr((engine.numPrintLines) + getStreamingLeadInMod()); //printlines + expel + lead in                     
+            }  
+        }   
     }
     else
     {
@@ -689,7 +754,7 @@ void scalePrintLineTimesRamped(void)
    int difference = currentTemperature - 25; 
    int increments = difference / 5;
    float modificationFactor = 1 + ((float)increments * 0.0125);
-   currentLineTimeTemperatureAdjusted = ((float)rohm80mmCurrentLine[ engine.contrast ] * modificationFactor);
+   currentLineTimeTemperatureAdjusted = ((float)printHeadCurrentLine[ engine.contrast ] * modificationFactor);
   
    if(  /* getLeadInDone() == true && */ engine.linePrintDone == false )
    {
@@ -700,16 +765,15 @@ void scalePrintLineTimesRamped(void)
          percentageToScale = 1;   
                
       /* scale sltTime to match print roller motor speed */
-      engine.sltTime = (unsigned short)(rohm80mmSLTTimes[engine.contrast]*percentageToScale);
+      engine.sltTime = (unsigned short)(printHeadSLTTimes[engine.contrast]*percentageToScale);
       
       /* change in SLT time should always be positive (we're printing slower */
       short changeInSLTTime = 0;
-      changeInSLTTime = (short)(engine.sltTime-rohm80mmSLTTimes[engine.contrast]);
+      changeInSLTTime = (short)(engine.sltTime - printHeadSLTTimes[engine.contrast]);
       if(changeInSLTTime < 10)
          changeInSLTTime = 0;
       
       changeInSLTTime = (short)(changeInSLTTime/4);  
-      //changeInSLTTime = 0;
       
       if(percentageToScale == 1)
          changeInSLTTime = 1;  /* Debug only. For setting a breakpoint. TFinkToDo delete */
@@ -719,27 +783,35 @@ void scalePrintLineTimesRamped(void)
          There may be a better but more complicated way to adjust */
       engine.sltHalfTime = engine.sltTime / 2;
       engine.histAdj[0].compType = FIRST_LEVEL_HIST;        
-      engine.histAdj[0].time = ((unsigned short) (rohm80mmHistory[ engine.contrast ]*percentageToScale))+changeInSLTTime;
+      engine.histAdj[0].time = ((unsigned short) (printHeadHistory[ engine.contrast ]*percentageToScale))+changeInSLTTime;
       engine.histAdj[1].compType = CURRENT_LINE;    
       engine.histAdj[1].time = ((unsigned short) (currentLineTimeTemperatureAdjusted*percentageToScale)) + changeInSLTTime; 
-      engine.pwmStartTime = engine.sltTime - 10;  /* We're not using PWM. Set it a bit before sltTime so the PWM and SLT interrupts don't happen at the same time */
-      engine.pwmDutyCycle = ( rohm80mmPwmDuty[ engine.contrast ]);
+      
+      HeadType_t head = getPrintHeadType();
+        
+      if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+      {
+          engine.pwmStartTime = printHeadPwmStart[ engine.contrast ]; 
+      }
+      else
+      {
+          engine.pwmStartTime = engine.sltTime - 10;  /* We're not using PWM. Set it a bit before sltTime so the PWM and SLT interrupts don't happen at the same time */
+      }
+
+      engine.pwmDutyCycle = ( printHeadPwmDuty[ engine.contrast ]);
    }
    else
    {     
       /* Lead in not done. Lead in is blank lines, so it shouldn't what the burn times are */
-      engine.sltTime = rohm80mmSLTTimes[ engine.contrast ];
+      engine.sltTime = printHeadSLTTimes[ engine.contrast ];
       engine.sltHalfTime = engine.sltTime / 2;
       engine.histAdj[0].compType = FIRST_LEVEL_HIST;        
-      engine.histAdj[0].time = rohm80mmHistory[ engine.contrast ];
+      engine.histAdj[0].time = printHeadHistory[ engine.contrast ];
       engine.histAdj[1].compType = CURRENT_LINE;    
       engine.histAdj[1].time = (unsigned short)currentLineTimeTemperatureAdjusted; 
-      engine.pwmStartTime = rohm80mmPwmStart[ engine.contrast ];
-      engine.pwmDutyCycle = ( rohm80mmPwmDuty[ engine.contrast ]);
-   }
-   
-   
-   
+      engine.pwmStartTime = printHeadPwmStart[ engine.contrast ];
+      engine.pwmDutyCycle = ( printHeadPwmDuty[ engine.contrast ]);
+   } 
 }
 
 
@@ -789,48 +861,106 @@ void stopLineTimer( void )
 *******************************************************************************/
 void lineTimerSLT( void ) 
 {    
-    /* deinitialize strobe pwm channel, we are not currently PWM'ing the strobe pins */
-    //PWM_Deinit( PWM2, kPWM_Module_0 );
+    HeadType_t head = getPrintHeadType();
     
-    /*  re-enable peripheral io control of the strobe pin */
-    gpio_pin_config_t strobeConfig = { kGPIO_DigitalOutput, 0 };
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_38_GPIO3_IO06, 0x70A0U );
-   
-    /* release data strobe */
-    GPIO_PinInit( PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, &strobeConfig );
-    GPIO_PinInit( PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, &strobeConfig );
+    if( head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM ) {
+        strobeForceHigh();
+    } else {
+        /*  re-enable peripheral io control of the strobe pin */
+        gpio_pin_config_t strobeConfig = { kGPIO_DigitalOutput, 0 };
+        IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_38_GPIO3_IO06, 0x70A0U );
+       
+        /* release data strobe */
+        GPIO_PinInit( PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, &strobeConfig );
+        GPIO_PinInit( PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, &strobeConfig );
+    }
     
-    /* release strobe enable */
-    //GPIO_WritePinOutput( PHEAD_STROBE_EN_GPIO, PHEAD_STROBE_EN_PIN, true ); 
+    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
     
     engine.burnSequence = 0; // reset the burnSequence
-
+    
     /* if we aren't done with the lead in yet and we are using continuous stock */
     if(getTakingUpPaper() == false)
     {
         if(leadInDone == false && engine.linePrintDone == false)
         {
-            if(getCutterInstalled_() == true || getUsingContinuous() == true)
+            if(getCutterInstalled() == true || getUsingContinuous() == true)
             {
-                if(getCutterInstalled_() == true)
+                if(getCutterInstalled() == true)
                 {
-                    leadInStepTarget = (config_.verticalPosition);
+                    if(getUsingContinuous() == true)
+                    {
+                        leadInStepTarget = (config_.verticalPosition) + 20;
+                    }
+                    else
+                    {
+                        if( getLargeGapFlag() == true )
+                        {
+                            leadInStepTarget = (calculateHTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                        }
+                        else
+                        {
+                            leadInStepTarget = (calculateGTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                        }
+                    }  
                 }
                 else
                 {
-                    leadInStepTarget = (config_.verticalPosition + 25);
-                }
-                
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                    {
+                        if(config_.verticalPosition - 34 >= 0)
+                        {
+                            leadInStepTarget = (config_.verticalPosition - 34);
+                        }
+                        else
+                        {
+                            leadInStepTarget = (34 - config_.verticalPosition);
+                        }
+        
+                        if(leadInStepTarget <= 0)
+                        {
+                            leadInStepTarget = 1;
+                        }
+                    }
+                    else
+                    {
+                        leadInStepTarget = (config_.verticalPosition + 25);
+                    }
+                }   
             }
             else
             {
-                if( getLargeGapFlag() == true )
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                 {
-                    leadInStepTarget = (calculateHTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                      if( getLargeGapFlag() == true )
+                      {
+                          leadInStepTarget = (/*calculateHTLeadInTarget() + getStreamingLeadInMod() + */config_.verticalPosition);
+                      }
+                      else
+                      {
+                          leadInStepTarget = (/*calculateGTLeadInTarget() + getStreamingLeadInMod() + */config_.verticalPosition);
+                      }
+                  
+                      if(leadInStepTarget <= 0)
+                      {
+                          leadInStepTarget = 1;
+                      }
                 }
                 else
                 {
-                    leadInStepTarget = (calculateGTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                      if( getLargeGapFlag() == true )
+                      {
+                          leadInStepTarget = (calculateHTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                      }
+                      else
+                      {
+                          leadInStepTarget = (calculateGTLeadInTarget() + getStreamingLeadInMod() + config_.verticalPosition);
+                      }
+                  
+                      if(leadInStepTarget <= 0)
+                      {
+                          leadInStepTarget = 1;
+                      }
                 }
             }
             
@@ -895,7 +1025,9 @@ void lineTimerSLT( void )
             } 
             else 
             {
-                stopLineTimer();       
+                stopLineTimer();    
+                
+                //PRINTF("\r\n%d", engine.numPrintLines);
 
                 /* load history line*/
                 loadHistory();  
@@ -916,7 +1048,7 @@ void lineTimerSLT( void )
             
             uint16_t contLeadInSteps = 0;
             
-            if(getCutterInstalled_() == true)
+            if(getCutterInstalled() == true)
             {
                 contLeadInSteps = (config_.verticalPosition);
             }
@@ -996,7 +1128,7 @@ void lineTimerSLT( void )
             
             /* if our expel steps are greater than or equal to our desired expel (hardcoded to expel + 136) 
             then set expelDone to true and restart our timer*/
-            if(expelSteps >= (getIndirectData( (CMD_DATA_IDS)4 )))
+            if(expelSteps >= ( getIndirectData( (CMD_DATA_IDS)4 ) ) )
             {
                 //PRINTF("expel done\r\n");
                 expelDone = true;
@@ -1066,24 +1198,8 @@ void loadHistory( void )
         /* setup master transfer */
         masterXfer.txData = (unsigned char *)engine.pHistory;
         masterXfer.rxData = NULL;
-             
-        if( getHeadStyleSize() == HEAD_DOTS_72MM ) {
-            masterXfer.dataSize = PRINTER_HEAD_SIZE_72MM;
-        } else if( getHeadStyleSize() == HEAD_DOTS_80MM ) {
-            masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;        
-        } else {
-            PRINTF( "loadHistory(): unsupported head style!\r\n"); 
-        }
+        masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;        
         
-        /*
-        PRINTF("\r\n\r\nHistory:\r\n");
-        for(int i = 0; i < masterXfer.dataSize; i++)
-        {
-            PRINTF("%b,", masterXfer.txData[i]);
-            //takeupDelayShort();
-        }
-        PRINTF("\r\n\r\n");
-        */
         masterXfer.configFlags = kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
         
         #if 1   /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
@@ -1108,11 +1224,8 @@ void loadHistory( void )
             
             /* try re-init of SPI/DMA */
             initializePrintHeadSPI();
-            #if 1  /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
+
             result  = LPSPI_MasterTransferEDMA( LPSPI4, &spiHeadMasterHandle, &masterXfer );
-            #else 
-            result = LPSPI_MasterTransferNonBlocking( LPSPI4, &spiHeadMasterHandle, &masterXfer);
-            #endif            
             if( kStatus_Success != result ) {
                 PRINTF( "loadHistory(): Nope that doesn't work! %d\r\n", result );    
             }
@@ -1142,89 +1255,40 @@ void loadPrintLine( void )
     
     unsigned long printLines = 0;
     
-    if(getPrintHeadType() == ROHM_72MM_800_OHM)
-    {
-        printLines = N_PRINTER_LINES_72MM;
-    }
-    else
-    {
-        printLines = N_PRINTER_LINES_80MM;
-    }
+    printLines = N_PRINTER_LINES_80MM;
     
     /* do not allow the print engine outside the image buffer */
-    //if( engine.lineCounter > N_PRINTER_LINES ) {
     if( engine.lineCounter ==  printLines) {
         engine.lineCounter = 0;
         /* label image is greater than 5" */ 
         offset = engine.lineCounter;        
-    } else {
-    	
-    	if(getHeadStyleSize() == HEAD_DOTS_72MM)
-    	{
-    		offset = ( engine.lineCounter * PRINTER_HEAD_SIZE_72MM );	 
-    	}
-    	else
-    	{
-    		offset = ( engine.lineCounter * PRINTER_HEAD_SIZE_80MM );	
-    	}
-    	
-           
+    } 
+    else 
+    {
+        offset = ( engine.lineCounter * PRINTER_HEAD_SIZE_80MM );	  
     }
     
-        
-    /*
-    if( engine.lineCounter == ( N_PRINTER_LINES - 2 ) ) {
-        memcpy( &lastBfr[0], (unsigned char *)engine.pImage + offset, 144 );   
-    } */
-
     /* setup master transfer */
     masterXfer.txData = (unsigned char *)engine.pImage + offset; 
     masterXfer.rxData = NULL;
-    
-    
-    
-
-    if( getHeadStyleSize() == HEAD_DOTS_72MM ) {
-        masterXfer.dataSize = PRINTER_HEAD_SIZE_72MM;
-    } else if( getHeadStyleSize() == HEAD_DOTS_80MM ) {
-        masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;        
-    } else {
-        PRINTF( "loadHistory(): unsupported head style!\r\n"); 
-    }
-    
+    masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;            
     
     masterXfer.configFlags =  kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
 
-    #if 1  /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
-    unsigned long result  = LPSPI_MasterTransferEDMA( LPSPI4, &spiHeadMasterHandle, &masterXfer );    
-    #else
-    unsigned long result = LPSPI_MasterTransferNonBlocking( LPSPI4, &spiHeadMasterHandle, &masterXfer);
-    #endif
-        
+    unsigned long result  = LPSPI_MasterTransferEDMA( LPSPI4, &spiHeadMasterHandle, &masterXfer );            
     
     if( kStatus_Success != result ) {
         PRINTF( "loadPrintLine(): Print head load error! %d\r\n", result );
-        while(1)
-        {
-            __NOP();
-        }
+
         /* stop engine timer and fix problem */
         stopLineTimer();
         
-        #if 1  /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
         /* abort the current transfer and retry */
         LPSPI_MasterTransferAbortEDMA( LPSPI4, &spiHeadMasterHandle );
-        #else
-        LPSPI_MasterTransferAbort( LPSPI4, &spiHeadMasterHandle );
-        #endif        
         /* try re-init of SPI/DMA */
         initializePrintHeadSPI();
         
-        #if 1  /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
         result  = LPSPI_MasterTransferEDMA( LPSPI4, &spiHeadMasterHandle, &masterXfer );
-        #else
-        result = LPSPI_MasterTransferNonBlocking( LPSPI4, &spiHeadMasterHandle, &masterXfer);
-        #endif
         
         if( kStatus_Success != result ) {
             PRINTF( "loadPrintLine(): Print head load error! %d\r\n", result );      
@@ -1255,26 +1319,18 @@ void loadPrintLine( void )
 void loadZeroPrintLine( void ) 
 {
     lpspi_transfer_t masterXfer;  
-     
+    
+    //unsigned long offset = 0; 
+    
     /* setup master transfer */
     masterXfer.txData = (unsigned char *)pattern1;
     masterXfer.rxData = NULL;
     
-    if( getHeadStyleSize() == HEAD_DOTS_72MM ) {
-        masterXfer.dataSize = PRINTER_HEAD_SIZE_72MM;
-    } else if( getHeadStyleSize() == HEAD_DOTS_80MM ) {
-        masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;        
-    } else {
-        PRINTF( "loadZeroPrintLine(): unsupported head style!\r\n"); 
-    }
+    masterXfer.dataSize = PRINTER_HEAD_SIZE_80MM;        
     
     masterXfer.configFlags =  kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
     
-    #if 1  /* edma transfers are slower than a manual transfer! 500uS -> edma vs 150us manual */
     unsigned long result  = LPSPI_MasterTransferEDMA( LPSPI4, &spiHeadMasterHandle, &masterXfer );
-    #else
-    unsigned long result = LPSPI_MasterTransferNonBlocking( LPSPI4, &spiHeadMasterHandle, &masterXfer);
-    #endif
     
     if( kStatus_Success != result ) {
         PRINTF( "loadZeroPrintLine(): Print head load error! %d\r\n", result );
@@ -1337,38 +1393,26 @@ void clearPrevVertOffset( void )
       \author
           Aaron Swift
 *******************************************************************************/
-void lineTimerStrobe( void )
+void lineTimerStrobe( uint8_t pwmDuty )
 {
-    pwm_config_t pwmConfig;
-    pwm_signal_param_t pwmSignal;
-
-    pwmSignal.pwmChannel       = kPWM_PwmA;
-    pwmSignal.level            = kPWM_HighTrue;          // kPWM_LowTrue kPWM_HighTrue;
-    /* strobe signal is active low! pulse width low is measured*/ 
-    pwmSignal.dutyCyclePercent = engine.pwmDutyCycle;      
-    pwmSignal.deadtimeValue    = 0;
-    pwmSignal.faultState       = kPWM_PwmFaultState0;
-
-    
-    /* disable GPIO control of the pin select ftm0 pwm control for printhead strobe */
+    //PRINTF("\r\nLTS");
+  
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_38_FLEXPWM2_PWMA00, 0 );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_38_FLEXPWM2_PWMA00, 0x10B0U ); 
-
-    PWM_GetDefaultConfig( &pwmConfig );
-    pwmConfig.prescale = kPWM_Prescale_Divide_1;
-    /* Use full cycle reload */
-    pwmConfig.reloadLogic = kPWM_ReloadPwmFullCycle;
-    /* PWM A & PWM B operate as 2 independent channels */
-    pwmConfig.pairOperation   = kPWM_Independent;
-    pwmConfig.enableDebugMode = true;
     
-    PWM_Init( PWM2, kPWM_Module_0, &pwmConfig);     
-    PWM_SetupPwm( PWM2, kPWM_Module_0, &pwmSignal, 1U, kPWM_SignedCenterAligned, 25265U , CLOCK_GetFreq( kCLOCK_IpgClk ) );
+    pwm_signal_param_t pwmSignal;
+    
+    pwmSignal.pwmChannel       = kPWM_PwmA;
+    pwmSignal.level            = kPWM_HighTrue;
+    pwmSignal.dutyCyclePercent = pwmDuty;
+    pwmSignal.deadtimeValue    = 0U;
+    pwmSignal.faultState       = kPWM_PwmFaultState0;
+    
+    PWM_SetupPwm( PWM2, kPWM_Module_0, &pwmSignal, 1U, kPWM_EdgeAligned, 25265U, CLOCK_GetFreq(kCLOCK_IpgClk) );
+
+    PWM_StartTimer(PWM2, kPWM_Control_Module_0);
     
     PWM_SetPwmLdok( PWM2, kPWM_Control_Module_0, true );
-    PWM2->SM[kPWM_Module_0].DISMAP[kPWM_Module_0] = 0x00;
-    
-    PWM_StartTimer( PWM2, kPWM_Control_Module_0 );
 }
 
 /******************************************************************************/
@@ -1386,121 +1430,14 @@ void lineTimerBurn( void )
     if( engine.numPrintLines != 0 ) {
         /* track where we are history / adjacency */
         engine.burnSequence++;
-        /* transfer the data to the print head */
-        if(leadInDone == true && engine.linePrintDone == false)
-        {
+        /* transfer the data to the print head */        
+        if( leadInDone == true && engine.linePrintDone == false ) {
             loadPrintLine();  
-        }
-        else
-        {
+        } else {
             loadZeroPrintLine();
         }
     }
 }
-
-/******************************************************************************/
-/*!   \fn void lineTimerIsr( void )
-
-      \brief
-         This function handles the general purpose line timer interrupts.
-        Compare 2 is dual purpose history and pwm start time.
-
-
-      \author
-          Aaron Swift
-*******************************************************************************/
-#if 0
-void lineTimerIsr ( void )
-{  
-    static bool pwmStartTime_ = false, pwmSltTime_ = false;
-    
-    /* latch hist/adj load and burn, start pwm to hold line temperature */
-    if( ( GPT_GetStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare1Flag ) & kGPT_OutputCompare1Flag ) == kGPT_OutputCompare1Flag ) {
-        GPT_ClearStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare1Flag );		
-        /* setup for pwm start time after history isr */
-        if( !pwmStartTime_ ) { 
-                
-            /* latch control during history */ 
-            if( !isCurrentLine() ) {    
-  
-                    /* latch was set Low in LPSPI_MasterUserCallback(); lets set it back to High now.
-                       this should give us around ~150Us pulse width. */ 
-                    GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, true ); //true
-                    
-                    /* small delay before we assert the strobe, 
-                       according to datasheet should be 100ns min 
-                    delay(1);*/
-            }
-
-            /* enable the strobe*/
-            //GPIO_WritePinOutput( PHEAD_STROBE_EN_GPIO, PHEAD_STROBE_EN_PIN, false );  
-            
-            GPIO_WritePinOutput(PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, true);  
-            GPIO_WritePinOutput(PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, true);
-
-            /* get the current line loaded in the head but don't latch until current line time */
-            lineTimerBurn();  
-            /* setup for pwm start time */
-            GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel1, engine.pwmStartTime );
-            pwmStartTime_ = true;
-        } else {
-            lineTimerStrobe();
-            
-            /* latch control during current line. 
-               data latch was set low above, lets set it back high now. 
-               this should give us enough pulse width */ 
-            GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, true );                      
-            pwmStartTime_ = false;
-            
-            /* setup for history ( next line ) */
-            GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel1, engine.histAdj[0].time );            
-        }        
-    }  
-	
-    
-    /* latch control during Current line load and burn, slt end */
-    if( ( GPT_GetStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare2Flag ) & kGPT_OutputCompare2Flag ) == kGPT_OutputCompare2Flag ) {
-        GPT_ClearStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare2Flag );
-        if( !pwmSltTime_ ) {
-            /* current line data is transfered to the head, assert the data latch LOW*/ 
-            GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, false );    //false
-            /* setup for end of slt time */
-             GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel2, engine.sltTime );
-             pwmSltTime_ = true;
-        } else { 
-            /* end of line burn. reset for next line */
-            lineTimerSLT();    
-            
-            /* reset for current line ( next line ) */
-            GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel2, engine.histAdj[1].time );            
-            pwmSltTime_ = false;            
-        }
-    }
-    
-	/* half way through line burn (half slt time) */
-    if( ( GPT_GetStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare3Flag ) & kGPT_OutputCompare3Flag ) == kGPT_OutputCompare3Flag ) {     
-        GPT_ClearStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare3Flag );
-        
-        if( getDotWearHandle() != NULL && readyToNotify()) {
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            xTaskNotifyFromISR( getDotWearHandle(), DOT_SAMPLE, eSetBits, &xHigherPriorityTaskWoken );  
-        }   
-        /* added for debug */
-	engine.steps++;			
-        //if(getTakingUpPaper() == true)
-        //{
-        //    halfStepMotor();    //half step TPH and quarter step takeup here
-        //}
-        //else
-        //{
-            stepMainMotor();    //half step TPH here
-        //}    
-    }
-    
-    /* added for arm errata 838869 */
-    SDK_ISR_EXIT_BARRIER;        
-}
-#endif
 
 /******************************************************************************/
 /*!   \fn void shutdownPrintEngine( void )
@@ -1836,7 +1773,7 @@ void initializePrintHeadPwm( void )
 }
 
 /******************************************************************************/
-/*!   \fn PrintEngine *getPrintEngine( void )                                                             
+/*!   \fn void *getPrintEngine( PrintEngineType_t type )                                                             
  
       \brief
         This function returns a pointer to the print engine. 
@@ -1844,9 +1781,13 @@ void initializePrintHeadPwm( void )
       \author
           Aaron Swift
 *******************************************************************************/ 
-PrintEngine *getPrintEngine( void )
+void *getPrintEngine( PrintEngineType_t type )
 {
-    return &engine;
+    if( type == _HOBART_PRINTER ) {
+        return &engine;
+    } else {
+        return &avPrEngine;
+    }
 }
 
 /******************************************************************************/
@@ -1893,11 +1834,7 @@ unsigned long getPrintEngineLineCntr( void )
           Aaron Swift
 *******************************************************************************/
 void printEngineISR( void ) 
-{       
-    #if 0   /* added for debugging printEngine */
-    //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
-    #endif
-    
+{           
     if( ( GPT_GetStatusFlags( ENGINE_TIMER_BASE, kGPT_OutputCompare1Flag ) & 
           kGPT_OutputCompare1Flag ) == kGPT_OutputCompare1Flag ) {
   
@@ -2019,13 +1956,8 @@ void printEngineISR( void )
     }
 
     GPT_ClearStatusFlags( ENGINE_TIMER_BASE,  kGPT_OutputCompare1Flag );   
-
     /* added for arm errata 838869 */
-    SDK_ISR_EXIT_BARRIER;   
-    
-    #if 0   /* added for debugging printEngine */    
-    //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
-    #endif    
+    SDK_ISR_EXIT_BARRIER;       
 }
 
 /******************************************************************************/
@@ -2049,9 +1981,9 @@ void compareStatus( PrStatusInfo *pCurrent, PrStatusInfo *pPrevious)
     if( (pPrevious->error != pCurrent->error) ||
       ( pPrevious->state != pCurrent->state ) ||
       ( pPrevious->command != pCurrent->command ) ||  
-    ( ( pPrevious->sensor & pCurrent->mask.sensor ) != ( pCurrent->sensor & pCurrent->mask.sensor ) ) ||
-    ( ( pPrevious->sensor2 & pCurrent->mask.sensor2 ) != ( pCurrent->sensor2 & pCurrent->mask.sensor2 ) ) ||
-    ( ( pPrevious->user & pCurrent->mask.user) != ( pCurrent->user & pCurrent->mask.user ) ) ) {
+    ( ( pPrevious->sensor ) != ( pCurrent->sensor ) ) ||
+    ( ( pPrevious->sensor2 ) != ( pCurrent->sensor2) ) ||
+    ( ( pPrevious->user ) != ( pCurrent->user) ) ) {
       
 
         #if 0
@@ -2211,46 +2143,26 @@ void calibratePrinter( PrinterCal cal )
 *******************************************************************************/
 void createCheckerBoardLabel( unsigned char offset, unsigned long length )
 {    
-#if 1   /* make like cm4 / k64 checkerboard image */
+    /* make like cm4 / k64 checkerboard image */
     PRINTF("\r\n\r\n-----CREATING CHECKERBOARD LABEL LOCAL------\r\n\r\n");
-    //unsigned short rowByteWidth = getHeadStyleSize() / 8;
-    //unsigned short rowByteWidth = PRINTER_HEAD_SIZE_80MM; /* was 72 */
-    //unsigned short centeringOffset = 0;
     unsigned char bmpPitch = BMP_PITCH;
-    /* prepack printer 
-    unsigned short centeringOffset = (getHeadStyleSize() - stockLoaded.getWidthDots()) / 2; */
     
-    //unsigned short leftMostBit = centeringOffset + EDGE_MARGIN; 
     unsigned short leftMostBit = 0;
     unsigned short rightMostBit = leftMostBit + WIDE_STOCK_WIDTH_DOTS - (8 * 2);
-    //unsigned short rightMostBit = leftMostBit + WIDE_STOCK_WIDTH_DOTS - EDGE_MARGIN * 2;
     
-
     /* our buffer is only big enough for a 3" label*/
     if( length <= STEPS_PER_LENGTH3_00 ) {
       
-        /* right most bit position cannot be bigger then the print head 
-        if( rightMostBit > getHeadStyleSize() ) {
-                rightMostBit = getHeadStyleSize();            
-        }*/
-        /* clear our pattern buffers  */
-        //memset( &pattern1[0], '\0', ( PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-        //memset( &pattern2[0], '\0', ( PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-        /*
-        memset( &pattern1[0], '\0', ( 72 * 2 ) ); 
-        memset( &pattern2[0], '\0', ( 72 * 2 ) );  */
-
         /* create our first bitmap pattern */
         unsigned short i = leftMostBit;
         while( i < rightMostBit ) {
-                i = i + 2 * bmpPitch;
+            i = i + 2 * bmpPitch;
         }
         
         /* create our second bitmap pattern */
         i = leftMostBit + bmpPitch;
-        while (i < rightMostBit)
-        {
-                i = i + 2 * bmpPitch;
+        while( i < rightMostBit ) {
+            i = i + 2 * bmpPitch;
         }
                     
         unsigned char *pImage = getImageBuffer();
@@ -2259,91 +2171,16 @@ void createCheckerBoardLabel( unsigned char offset, unsigned long length )
         bool isPattern1 = true;
         /* copy the test patterns to the image buffer */
         while( rowCount < length ) {
-            if( isPattern1 ) {
-                    //memcpy( ( pImage + rowCount * rowByteWidth ), &pattern1[0], rowByteWidth );
-            } else {
-                    //memcpy(( pImage + rowCount * rowByteWidth ), &pattern2[0], rowByteWidth );
-            }
             rowCount++;
 
             if ( ( rowCount % 32 ) == 0 ) {       // bmpPitch
                 isPattern1 = !isPattern1;
             }
         }
-
-        /* clear our pattern buffers */
-        //memset( &pattern1[0], '\0', (PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-        //memset( &pattern2[0], '\0', (PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-        /*
-        memset( &pattern1[0], '\0', ( 72 * 2 ) ); 
-        memset( &pattern2[0], '\0', ( 72 * 2 ) );  */
         
     } else {
         PRINTF("createCheckerBoardLabel(): Warning: label length too long for test pattern!\r\n" ); 
     }    
-#else    
-    unsigned short rowByteWidth = getHeadStyleSize() / 8;
-    unsigned short centeringOffset = 0;
-    unsigned char bmpPitch = BMP_PITCH;
-    /* prepack printer 
-    unsigned short centeringOffset = (getHeadStyleSize() - stockLoaded.getWidthDots()) / 2; */
-    
-    unsigned short leftMostBit = centeringOffset + EDGE_MARGIN; 
-    unsigned short rightMostBit = leftMostBit + WIDE_STOCK_WIDTH_DOTS - EDGE_MARGIN * 2;
-      
-    /* our buffer is only big enough for a 5" label*/
-    if( length <= STEPS_PER_LENGTH5_00 ) {
-      
-        /* right most bit position cannot be bigger then the print head */
-        if( rightMostBit > getHeadStyleSize() ) {
-                rightMostBit = getHeadStyleSize();            
-        }
-        /* clear our pattern buffers */
-        memset( &pattern1[0], '\0', ( PRINTER_HEAD_SIZE_72MM * 2 ) ); 
-        memset( &pattern2[0], '\0', ( PRINTER_HEAD_SIZE_72MM * 2 ) ); 
-
-        /* create our first bitmap pattern */
-        unsigned short i = leftMostBit;
-        while( i < rightMostBit ) {
-                unsigned short iMax = ( ( i + bmpPitch ) < rightMostBit ) ? i + bmpPitch : rightMostBit;                
-                bitSet( i, iMax - i, &pattern1[0] );
-                i = i + 2 * bmpPitch;
-        }
-        
-        /* create our second bitmap pattern */
-        i = leftMostBit + bmpPitch;
-        while (i < rightMostBit)
-        {
-                unsigned short iMax = ( ( i + bmpPitch ) < rightMostBit ) ? i + bmpPitch : rightMostBit;               
-                bitSet( i, iMax - i, &pattern2[0] );
-                i = i + 2 * bmpPitch;
-        }
-                    
-        unsigned char *pImage = getImageBuffer();
-
-        unsigned long rowCount = offset;
-        bool isPattern1 = true;
-        /* copy the test patterns to the image buffer */
-        while( rowCount < length ) {
-            if( isPattern1 ) {
-                    memcpy( ( pImage + rowCount * rowByteWidth ), &pattern1[0], rowByteWidth );
-            } else {
-                    memcpy(( pImage + rowCount * rowByteWidth ), &pattern2[0], rowByteWidth );
-            }
-            rowCount++;
-
-            if ( ( rowCount % 32 ) == 0 ) {       //bmpPitch
-                isPattern1 = !isPattern1;
-            }
-        }
-
-        /* clear our pattern buffers */
-        memset( &pattern1[0], '\0', (PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-        memset( &pattern2[0], '\0', (PRINTER_HEAD_SIZE_80MM * 2 ) ); 
-    } else {
-        PRINTF("createCheckerBoardLabel(): Warning: label length too long for test pattern!\r\n" ); 
-    }
-#endif    
 }
 
 /******************************************************************************/
@@ -2361,10 +2198,7 @@ void createVerticalLinesLabel(  unsigned char offset, unsigned long length )
 {	
     unsigned short pattern[8] = { 0xC0, 0xE0, 0xC0, 0xE0, 0xC0, 0xE0, 0xC0, 0xE0 };
     unsigned char *pImage = getImageBuffer();
-    unsigned short centeringOffset = 0;
-    /* prepack printer 
-    unsigned short centeringOffset = (getHeadStyleSize() - stockLoaded.getWidthDots()) / 2; */
-        
+    unsigned short centeringOffset = 0;        
     unsigned long rowByteWidth = PRINTER_HEAD_SIZE_72MM;
     
     unsigned long leftMarginByte =  ( centeringOffset + EDGE_MARGIN ) / 8;
@@ -2405,19 +2239,13 @@ void createSingleVerticalLineLabel(  unsigned char offset, unsigned long length 
    
     unsigned char *pImage = getImageBuffer();
     unsigned long rowCount = offset;
+    
     /* our buffer is only big enough for a 4" label*/
     if( length <= STEPS_PER_LENGTH4_00 ) {
 
-        //unsigned long rowCount = offset;
-        while( rowCount < length ) {
-                
-                //unsigned long startByte = leftMarginByte + ( rowCount * rowByteWidth );
-                //unsigned long lastByte = rightMarginByte + ( rowCount * rowByteWidth );
-
-                //for( unsigned long i = startByte; i < lastByte; i++ ) {
-                    pImage[ rowCount * PRINTER_HEAD_SIZE_72MM ] = 0x10;
-                //}
-                rowCount++;
+        while( rowCount < length ) {                
+            pImage[ rowCount * PRINTER_HEAD_SIZE_72MM ] = 0x10;
+            rowCount++;
         }
     } else {
         PRINTF("createVerticalLinesLabel(): Warning: label length too long for test pattern!\r\n" ); 
@@ -2436,10 +2264,7 @@ void createSingleVerticalLineLabel(  unsigned char offset, unsigned long length 
 *******************************************************************************/
 void createHorizontalLinesLabel( unsigned char offset, unsigned long length )
 {
-    unsigned short centeringOffset = 0;
-    /* prepack printer 
-    unsigned short centeringOffset = (getHeadStyleSize() - stockLoaded.getWidthDots()) / 2; */
-    
+    unsigned short centeringOffset = 0;    
     unsigned short leftMostBit = centeringOffset + EDGE_MARGIN;
     unsigned short rightMostBit = leftMostBit + WIDE_STOCK_WIDTH_DOTS - EDGE_MARGIN * 2;
     
@@ -2453,6 +2278,7 @@ void createHorizontalLinesLabel( unsigned char offset, unsigned long length )
     unsigned char *pImage = getImageBuffer();
     unsigned long lineWidthBytes = PRINTER_HEAD_SIZE_72MM;
     unsigned long rowCount = offset ;
+    
     /* our buffer is only big enough for a 4" label*/
     if( length <= STEPS_PER_LENGTH4_00 ) {
     
@@ -2551,19 +2377,16 @@ void delay( unsigned long time )
 *******************************************************************************/
 void idleOp( void )
 {  
-    if((getGapCalStatus() == true || getTUCalStatus() == true) && getTUSlip() == false )
-    {
+    if((getGapCalStatus() == true || getTUCalStatus() == true) && 
+        getTUSlip() == false ) {
         powerOnMotorsDuringCal();
-    }
-    else
-    {
+    } else {
         powerOffMotors();
     }
   
     /* if this is the first time thru, do some initialization.*/
-    if( currentStatus.state != ENGINE_IDLE )
-    {   
-       // PRINTF("currentStatus.state: Entering ENGINE_IDLE\r\n" );
+    if( currentStatus.state != ENGINE_IDLE ) {   
+        PRINTF("currentStatus.state: Entering ENGINE_IDLE\r\n" );
       
         currentStatus.state = ENGINE_IDLE;
         /*previous command is complete. */
@@ -2572,10 +2395,23 @@ void idleOp( void )
         currentStatus.sensor2 &= ~OUT_OF_DATA_BUFFERS; 
         
         setPrintingStatus(false);
+
+        idleOpCycleCounter = 0;
         
         /* sample the shoot through sensor 100 times, if 90% of the samples are less than 
            OUT_OF_MEDIA_THRESHOLD, OUT_OF_MEDIA is set*/
-        checkForOutOfMedia();
+        HeadType_t head = getPrintHeadType();
+                    
+        if( head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM ) {
+            checkForOutOfMediaHTPrinter();
+        } else {
+            checkForOutOfMedia();
+        }
+        
+        cutMsgSentCounter = 0;
+        
+        idleCutCount1 = 0;
+        idleCutCount2 = 0;
         
         /* notify the host the printer is idle. */        
         compareStatus( &currentStatus, &prevStatus );
@@ -2583,75 +2419,326 @@ void idleOp( void )
         engine.steps = 0;
         engine.stepsOffset = 0;
         setHeadTimings();
-        powerOffMotors();		
-		
-    } 
-    else 
-    {    
-        //PRINTF("LT: %d\r\n", getLabelTaken());
-      
-        if(getLabelQueuePaused() == true)
+        powerOffMotors();
+    } else {          
+        idleOpCycleCounter++;
+        
+        if(idleOpCycleCounter > 4000)
         {
+            if(getCutterInstalled() == true)
+            {   
+                idleOpCycleCounter = 0;
+                
+                cSMsg.msgType = _I_CUTTER_REQ_STATUS;
+              
+                if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                {
+                    //BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cSMsg, 0 );
+                }
+            }
+        }
+
+        
+        HeadType_t head = getPrintHeadType();
+        
+        if( getLabelQueuePaused() == true ) {
             labelPauseTimeout++;
             
             if(labelPauseTimeout >= 1000)
             {
                 labelPauseTimeout = 0;
-                setLabelQueuePaused(false);
-                setLabelPauseBackwindPending(true);
-                setStartOfQueue(true);
+                setLabelQueuePaused( false );
+                setLabelPauseBackwindPending( true );
+                setStartOfQueue( true );
                 
-                setHalfStepMode(_MAIN_STEPPER);
-                setHalfStepMode(_TAKEUP_STEPPER);
-                if(getTakingUpPaper() == false)
+                setHalfStepMode( _MAIN_STEPPER );
+                setHalfStepMode( _TAKEUP_STEPPER );
+                
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                 {
-                    if(getUsingContinuous() == true || getCutterInstalled_() == true)
-                    {
-                        __NOP();
-                    }
-                    else if(getLargeGapFlag() == true)
-                    {
-                        stepToNextLabel(210 + getIndirectData((CMD_DATA_IDS)4), 1000);
-                    }
-                    else
-                    {
-                        stepToNextLabel(160 + getIndirectData((CMD_DATA_IDS)4), 1000);
-                    }
-                } 
-            }
-        }
-        
-        
-        if(getBackwindAfterSizing() == true && getLabelTaken() <= LABEL_TAKEN_THRESHOLD_NO_LABEL && getTUCalStatus() == false)
-        {          
-            setHalfStepMode(_MAIN_STEPPER);
-            setHalfStepMode(_TAKEUP_STEPPER);
-          
-            setTakeUpMotorDirection( FORWARDM_ ); 
-            setMainMotorDirection( BACKWARDM_ );
-          
-            setBackwindAfterSizing(false);
-  
-            if(getCutterInstalled_() == true)
-            {
-                __NOP();                
-            }
-            else
-            {
-                if(getUsingContinuous() == true)
-                {
-                    if(getTakingUpPaper() == true)
-                    {
-                        backwindStock(100, 1000);
-                    }
+                    __NOP();
                 }
                 else
                 {
-                    backwindStock(calculateSizingBackwindSteps(), 1000);
-                }              
+                    if(getTakingUpPaper() == false)
+                    {
+                        if(getUsingContinuous() == true)
+                        {
+                            //takeupDelay();
+                            if(getTakeupBusy() == false)
+                            {
+                                if(getCutterInstalled() == true)
+                                {
+                                    cutMsgSent = true;
+                                    //cutMsgSentCounter = 0;
+                                    PRINTF("\r\ncutter expel - cut msg sent");
+                                    //stepToNextLabel(475, 1000);
+                                }
+                                else
+                                {
+                                    //stepToNextLabel(800, 1000);
+                                }
+                            }
+                        }
+                        else if(getLargeGapFlag() == true)
+                        {
+                            stepToNextLabel(210 + getIndirectData( (CMD_DATA_IDS)4 ), 1000);
+                        }
+                        else
+                        {
+                            stepToNextLabel(160 + getIndirectData( (CMD_DATA_IDS)4 ), 1000);
+                        }
+                        
+                        if(getCutterInstalled() == true)
+                        {   
+                            cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                          
+                            while(getTakeupBusy() == true)
+                            {
+                                __NOP();
+                            }
+                            
+                            if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                            {
+                                //cutMsgSent = true;
+                                //cutMsgSentCounter = 0;
+                              
+                                PRINTF("\r\ncut msg sent from idleOp\r\n");
+                              
+                                BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cCMsg, 0 );
+                            }
+                        } 
+                    } 
+                }
             }
         }
         
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+        {
+            __NOP();
+        }
+        else
+        {
+            if(getBackwindAfterSizing() == true && getCutterInstalled() == false && getLabelTaken() <= LABEL_TAKEN_THRESHOLD_NO_LABEL && getTUCalStatus() == false)
+            {          
+                setHalfStepMode(_MAIN_STEPPER);
+                setHalfStepMode(_TAKEUP_STEPPER);
+              
+                setTakeUpMotorDirection( FORWARDM_ ); 
+                setMainMotorDirection( BACKWARDM_ );
+              
+                setBackwindAfterSizing(false);
+      
+                if(getCutterInstalled() == true)
+                {
+                    if(getUsingContinuous() == true)
+                    {
+                        __NOP(); 
+                    }
+                    else
+                    {
+                        takeupDelay();
+                        backwindStock(calculateSizingBackwindSteps(), 1000);
+                    }  
+                }
+                else
+                {
+                    if(getUsingContinuous() == true)
+                    {
+                        if(getTakingUpPaper() == true)
+                        {
+                            takeupDelay();
+                            PRINTF("\r\ncont backwind in idleOp\r\n");
+                            backwindStock(175, 1000);
+                        }
+                    }
+                    else
+                    {
+                        takeupDelay();
+                        backwindStock(calculateSizingBackwindSteps(), 1000);
+                    }              
+                }
+            }
+            
+            if(getBackwindAfterSizing() == true && getCutterInstalled() == true && getTUCalStatus() == false)
+            {          
+                setHalfStepMode(_MAIN_STEPPER);
+                setHalfStepMode(_TAKEUP_STEPPER);
+              
+                setTakeUpMotorDirection( FORWARDM_ ); 
+                setMainMotorDirection( BACKWARDM_ );
+              
+                setBackwindAfterSizing(false);
+      
+                if(getCutterInstalled() == true)
+                {
+                    if(getUsingContinuous() == true)
+                    {
+                        if(getCutterInstalled() == true)
+                        {   
+                            cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                          
+                            if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                            {
+                                while(getTakeupBusy() == true)
+                                {
+                                    __NOP();
+                                }
+                              
+                                cutMsgSent = true;
+                                cutMsgSentCounter = 0;
+                                BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cCMsg, 0 );
+                            }
+                        } 
+                    }
+                    else
+                    {
+                        if(getCutterInstalled() == true)
+                        {   
+                            cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                          
+                            if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                            {
+                                while(getTakeupBusy() == true)
+                                {
+                                    __NOP();
+                                }
+                              
+                                //PRINTF("\r\nsizing die cut - cut sent\r\n");
+                               
+                                cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                                
+                                if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                                {
+                                    cutMsgSent = true;
+                                    cutMsgSentCounter = 0;
+                                    BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cCMsg, 0 );
+                                }
+                            }
+                        } 
+                      
+                        cutterSizingDoneFlag = false;
+                    }  
+                }
+                else
+                {
+                    if(getUsingContinuous() == true)
+                    {
+                        if(getTakingUpPaper() == true)
+                        {
+                            takeupDelay();
+                            PRINTF("\r\ncont backwind in idleOp 2\r\n");
+                            backwindStock(100, 1000);
+                        }
+                    }
+                    else
+                    {
+                        takeupDelay();
+                        backwindStock(calculateSizingBackwindSteps(), 1000);
+                    }              
+                }
+            }
+            
+            
+            if(getBackwindAfterSizing() == false && getCutterInstalled() == true && cutterSizingDoneFlag == false && getLabelTaken() <= LABEL_TAKEN_THRESHOLD_NO_LABEL)
+            {
+                if(getUsingContinuous() == true)
+                {
+                    __NOP();
+                }
+                else
+                {
+                    if(cutMsgSent == false)
+                    {
+                        __NOP();
+                    }
+                    else
+                    {
+                        cutMsgSentCounter++;
+                        
+                        if(cutMsgSentCounter > 2000)
+                        {
+                            //PRINTF("\r\ncut delay finished");
+                          
+                            cutMsgSentCounter = 0;
+                            cutMsgSent = false;
+                            cutterSizingDoneFlag = true;
+                            backwindStock(calculateSizingBackwindSteps(), 1000);
+                        }
+                    }   
+                }
+            }
+            
+            if(getBackwindAfterSizing() == false && getCutterInstalled() == true && getUsingContinuous() == true && getHeadUp() == false && ((currentStatus.sensor2 & JAMMED_LABEL) != JAMMED_LABEL) && ((currentStatus.sensor & OUT_OF_MEDIA) != OUT_OF_MEDIA) && cutterJiggleEnabled == true && getCutterState() == AC_WAIT_FOR_COMMAND_)
+            {
+                idleCutCount1++;
+                
+                //PRINTF("\r\njiggle counter 1: %d of: 25000\r\n", idleCutCount1);
+                
+                if(idleCutCount1 > 25000)
+                //if(idleCutCount1 > 1000)
+                {
+                    idleCutCount1 = 0;
+                    idleCutCount2++;
+                    
+                    PRINTF("\r\njiggle counter 2:%d of: 99", idleCutCount2);
+                    
+                    if(idleCutCount2 > 99)
+                    //if(idleCutCount2 > 5)
+                    {
+                        cutterJiggling = true;
+                        
+                        PRINTF("\r\njiggle\r\n");
+                      
+                        setHalfStepMode(_MAIN_STEPPER);
+                        setHalfStepMode(_TAKEUP_STEPPER);
+                      
+                        setTakeUpMotorDirection( FORWARDM_ ); 
+                        setMainMotorDirection( BACKWARDM_ );
+                      
+                        if(getCutterState() == AC_WAIT_FOR_COMMAND_)
+                        {
+                            stepToNextLabel(101, 950);
+                            
+                            while(getTakeupBusy() == true)
+                            {
+                                __NOP();
+                            }
+                        }
+                            
+                        if(getCutterState() == AC_WAIT_FOR_COMMAND_)
+                        {
+                            backwindStock(100, 950);
+                            
+                            while(getTakeupBusy() == true)
+                            {
+                                __NOP();
+                            }
+                        }
+                            
+                        if(getLabelTaken() >= LABEL_TAKEN_THRESHOLD_LABEL)
+                        {
+                            if(getCutterState() == AC_WAIT_FOR_COMMAND_)
+                            {
+                                PRINTF("\r\njiggle LT backwind\r\n");
+                              
+                                backwindStock(50, 950);
+                                
+                                while(getTakeupBusy() == true)
+                                {
+                                    __NOP();
+                                }
+                            } 
+                        }
+                        
+                        cutterJiggling = false;
+                        
+                        idleCutCount1 = 0;
+                        idleCutCount2 = 0;
+                    }
+                }
+            }
+        }
         
         /* send requested changes in printer status to the controller. */
         compareStatus( &currentStatus, &prevStatus );
@@ -2695,30 +2782,17 @@ void idleOp( void )
 *******************************************************************************/
 void printOp( CmdOp *pOperation )
 {
-    /* added to debug drift and correction
-    static bool onceGap_ = false; 
-    static bool onceTaken_ = false;
-    static bool ltOnce_ = false;
-    static bool expelDist_ = false;
-    static bool roll_      = false;
-    static int cnt_ = 0, rollTicks_ = 0;
-    static bool rcrd_ = false;  */
+    /* added to debug drift and correction */
     static unsigned long printLines = 0;
     
     unsigned long half_image_buffer_line_count = 0;
     
-    unsigned short expelSteps = (getIndirectData( (CMD_DATA_IDS)4 ));
+    unsigned short expelSteps = getIndirectData( (CMD_DATA_IDS)4 );
     
-    if(getPrintHeadType() == ROHM_72MM_800_OHM)
-    {
-        printLines						= N_PRINTER_LINES_72MM;
-		half_image_buffer_line_count 	= HALF_IMAGE_BUFFER_LINE_COUNT_72MM;
-    }
-    else
-    {
-        printLines						= N_PRINTER_LINES_80MM;
-		half_image_buffer_line_count 	= HALF_IMAGE_BUFFER_LINE_COUNT_80MM;
-    }
+
+    printLines = N_PRINTER_LINES_80MM;
+    half_image_buffer_line_count = HALF_IMAGE_BUFFER_LINE_COUNT_80MM;
+    
    
     /* clear if there was an error */
     currentStatus.error &= ~OUT_OF_PRINTDATA; 
@@ -2752,6 +2826,14 @@ void printOp( CmdOp *pOperation )
             }
         }
 
+        if(getBackwindAfterSizing() == false && getCutterInstalled() == true && cutterSizingDoneFlag == false /* && getUsingContinuous() == false*/)
+        {
+            //PRINTF("\r\nBACKWIND CUTTER pOp\r\n");
+            //backwindStock(calculateSizingBackwindSteps(), 1000);
+            //takeupDelay();
+            cutterSizingDoneFlag = true;
+        }
+        
         if( currentStatus.error == NO_ERROR && getTakeupBusy() == false && backwindAfterSizing == true) 
         {
             takeupBusyTimeout = 0;
@@ -2759,8 +2841,34 @@ void printOp( CmdOp *pOperation )
             setHalfStepMode(_MAIN_STEPPER);
             setHalfStepMode(_TAKEUP_STEPPER);
 
-            if(getCutterInstalled_() == false)
+            if(getCutterInstalled() == false)
             {
+                HeadType_t head = getPrintHeadType();
+                      
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                    //PRINTF("\r\nHT BACKWIND AFTER SIZING");
+                    //backwindStock(0, 1000);
+                }
+                else
+                {
+                    PRINTF("\r\nGT BACKWIND AFTER SIZING in printOp");
+                    if(getUsingContinuous() == true)
+                    {
+                        backwindStock(175, 1000);
+                    }
+                    else
+                    {
+                        backwindStock(calculateSizingBackwindSteps(), 1000);
+                    }
+                }
+            }
+            else
+            {
+                //PRINTF("\r\nCUTTER BW pOp\r\n");
+                takeupDelay();
+                takeupDelay();
+              
                 backwindStock(calculateSizingBackwindSteps(), 1000);
             }
             
@@ -2789,43 +2897,113 @@ void printOp( CmdOp *pOperation )
         }
         else
         {
-            if( currentStatus.error == NO_ERROR && getTakeupBusy() == false ) 
+            if( currentStatus.error == NO_ERROR && getTakeupBusy() == false /*&& getLabelTaken() <= LABEL_TAKEN_THRESHOLD_NO_LABEL*/ ) 
             {
-                currentStatus.state = ENGINE_PRINTING;
+                if(getCutterInstalled() == true)
+                {
+                    if(cutMsgSent == false)
+                    {
+                        currentStatus.state = ENGINE_PRINTING;
                 
-                shootCounts = getShootThroughBuffer();
-                
-                takeupBusyTimeout = 0;
+                        shootCounts = getShootThroughBuffer();
+                        
+                        takeupBusyTimeout = 0;
 
-                engine.numPrintLines = getOpData( pOperation->print.type, pOperation->print.data );
-                engine.direction = ( engine.numPrintLines < 0 ) ? BACKWARD_ : FORWARD_;
-                engine.numPrintLines = abs( engine.numPrintLines );
-                engine.totalLinesToPrint = engine.numPrintLines;
-                engine.labelOrientation = pOperation->print.orientation;
-                engine.steps = 0;
+                        engine.numPrintLines = getOpData( pOperation->print.type, pOperation->print.data );
+                        engine.direction = ( engine.numPrintLines < 0 ) ? BACKWARD_ : FORWARD_;
+                        engine.numPrintLines = abs( engine.numPrintLines );
+                        engine.totalLinesToPrint = engine.numPrintLines;
+                        engine.labelOrientation = pOperation->print.orientation;
+                        engine.steps = 0;
+                        
+                        startPrintEngine();
+                    }
+                    else
+                    {
+                        cutMsgSentCounter++;
+                        
+                        //PRINTF("\r\npOp cut delay %d", cutMsgSentCounter);
+                        
+                        if(cutMsgSentCounter > 250)
+                        {
+                            PRINTF("\r\npOp cut delay finished");
+                          
+                            backwindStock(calculateSizingBackwindSteps(), 1000);
+                            takeupDelay();
+                            
+                            currentStatus.state = ENGINE_PRINTING;
                 
-                startPrintEngine();
+                            shootCounts = getShootThroughBuffer();
+                            
+                            takeupBusyTimeout = 0;
+
+                            engine.numPrintLines = getOpData( pOperation->print.type, pOperation->print.data );
+                            engine.direction = ( engine.numPrintLines < 0 ) ? BACKWARD_ : FORWARD_;
+                            engine.numPrintLines = abs( engine.numPrintLines );
+                            engine.totalLinesToPrint = engine.numPrintLines;
+                            engine.labelOrientation = pOperation->print.orientation;
+                            engine.steps = 0;
+                            
+                            startPrintEngine();
+                        }
+                    }
+                }
+                else
+                {
+                    currentStatus.state = ENGINE_PRINTING;
+                
+                    shootCounts = getShootThroughBuffer();
+                    
+                    takeupBusyTimeout = 0;
+
+                    engine.numPrintLines = getOpData( pOperation->print.type, pOperation->print.data );
+                    engine.direction = ( engine.numPrintLines < 0 ) ? BACKWARD_ : FORWARD_;
+                    engine.numPrintLines = abs( engine.numPrintLines );
+                    engine.totalLinesToPrint = engine.numPrintLines;
+                    engine.labelOrientation = pOperation->print.orientation;
+                    engine.steps = 0;
+                    
+                    startPrintEngine();
+                }  
             }
         }
    } 
    else 
    {
+        
         if(getLabelSizeInQuarterSteps() <= 750 /*&& getLargeGapFlag() == false*/)
         {
             if(getReadyToRecordShootVal() == true && shootIndex < 300)
             {
                 setReadyToRecordShootVal(false);
                 
-                updateLowLabelStatus();
+                HeadType_t head = getPrintHeadType();
+                      
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                    __NOP();
+                }
+                else
+                {
+                    updateLowLabelStatus();
+                }
+                  
 
                 if(shootIndex < SHOOT_COUNT_ARRAY_SIZE)
                 {
-                    shootCounts[shootIndex] = pollMediaCounts();
-                    
-                    
-                    if(shootCounts[shootIndex] > (config_.backingAndlabel * 1.08))
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                     {
-                        shootCounts[shootIndex] = (short)(config_.backingAndlabel * 1.08);
+                        //shootCounts[shootIndex] = 0;
+                        shootCounts[shootIndex] = adcManager.value[CHANNEL_SHOOT];
+                    }
+                    else
+                    {
+                        shootCounts[shootIndex] = pollMediaCounts();
+                        
+                        if(shootCounts[shootIndex] > (config_.backingAndlabel * 1.08))
+                        {
+                            shootCounts[shootIndex] = (short)(config_.backingAndlabel * 1.08);
+                        }
                     }
                 }
                 
@@ -2838,17 +3016,33 @@ void printOp( CmdOp *pOperation )
             {
                 setReadyToRecordShootVal(false);
                 
-                updateLowLabelStatus();
+                HeadType_t head = getPrintHeadType();
+                
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                    __NOP();
+                }
+                else
+                {
+                    updateLowLabelStatus();
+                }
 
                 if(shootIndex < SHOOT_COUNT_ARRAY_SIZE)
                 {
-                    shootCounts[shootIndex] = pollMediaCounts();
-                    
-                    
-                    if(shootCounts[shootIndex] > (config_.backingAndlabel * 1.08))
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                     {
-                        shootCounts[shootIndex] = (short)(config_.backingAndlabel * 1.08);
+                        //shootCounts[shootIndex] = 0;
+                        shootCounts[shootIndex] = pollMediaCounts();
                     }
+                    else
+                    {
+                        shootCounts[shootIndex] = adcManager.value[CHANNEL_SHOOT];
+                        
+                        if(shootCounts[shootIndex] > (config_.backingAndlabel * 1.08))
+                        {
+                            shootCounts[shootIndex] = (short)(config_.backingAndlabel * 1.08);
+                        }
+                    }  
                 }
 
                 shootIndex++;
@@ -2906,112 +3100,232 @@ void printOp( CmdOp *pOperation )
             paused_ = false;
             resetPrintDataLine();
             
-            firstPrint = false;
+            if(cutMsgSentCounter == 0)
+            {
+                //calcLabelTakenThreshold(false);
+            }
             
-            
-           
             if( continuousStock_ )  //continuous stock print complete
             {
 
-                if(getCutterInstalled_() == true)
-                {
-                    ICMessages msg1;                    
-                    msg1.generic.msgType = _I_CUTTER_CUT_CMD;
-                    handleInternalMessage( &msg1 );
-                }
+                if(getCutterInstalled() == true && cutMsgSent == false)
+                {   
+                    cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                    
+                    //PRINTF("\r\ncut message sent pOp 1\r\n");
+                    
+                    if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                    {
+                        cutMsgSent = true;
+                        cutMsgSentCounter = 0;
+                        BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cCMsg, 0 );
+                    }
+                } 
                 
-                compareStatus( &currentStatus, &prevStatus );
-                setNextOperation(&currentStatus);
+                
+                if(cutMsgSent == false)
+                {
+                    compareStatus( &currentStatus, &prevStatus );
+                    setNextOperation(&currentStatus);
+                }
+                else
+                {
+                    cutMsgSentCounter++;
+                    
+                    if(cutMsgSentCounter > 1500)
+                    {
+                        //PRINTF("\r\ncut delay finished");
+                      
+                        cutMsgSentCounter = 0;
+                        cutMsgSent = false;
+                        compareStatus( &currentStatus, &prevStatus );
+                        setNextOperation(&currentStatus);    
+                    }
+                }
             }
             else //die cut print complete  
             {        
                 if(getTakingUpPaper() == true)
                 {
+                    /*
+                    short* shoots = getShootThroughBuffer();
+            
+                    PRINTF("\r\n");
+                    PRINTF("shoot through counts post filter:");
+                    PRINTF("\r\n");
+                    
+                    for(uint16_t ind = 0; ind < shootIndex; ind++)
+                    {
+                        PRINTF("%d,", shoots[ind]);
+                        takeupDelayShort();
+                    }
+                    
+                    PRINTF("\r\n");
+                    */
+
                     compareStatus( &currentStatus, &prevStatus );
                     setNextOperation(&currentStatus);
                 } 
                 else
                 {      
-                    //find gap
                     short* shoots = getShootThroughBuffer();
                   
-                    int startFilterIdx = 0;
-                    int endFilterIdx = 24;
+                    HeadType_t head = getPrintHeadType();
                     
-                    while(endFilterIdx < (shootIndex))
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                     {
-                        averageAndStore(shoots, startFilterIdx, endFilterIdx);
-                        startFilterIdx++;
-                        endFilterIdx++;
+                        shootIndex = 0;
+                        memset(shoots, 0, sizeof(&shoots));
+                        
+                        setPrintingStatus(false);
                     }
-                  
-                    double desiredPercentage;
-                    
-                    desiredPercentage = 85;
-                    
-                    double result = find_percentage_of_average(shoots, shootIndex, desiredPercentage);
+                    else
+                    {
+                        if(cutMsgSentCounter == 0)
+                        {
+                            //find gap
+                            int startFilterIdx = 0;
+                            int endFilterIdx = 24;
+                            
+                            while(endFilterIdx < (shootIndex))
+                            {
+                                averageAndStore(shoots, startFilterIdx, endFilterIdx);
+                                startFilterIdx++;
+                                endFilterIdx++;
+                            }
+                          
+                            double desiredPercentage;
+                            
+                            desiredPercentage = 85;
+                            
+                            double result = find_percentage_of_average(shoots, shootIndex, desiredPercentage);
 
-                    find_lowest_points_lowest(shoots, shootIndex, (int)result);
-                    
-                    TPHStepsPastGapThisPrint = ( getTPHStepsThisPrint() - getPrintDip() );
-                    
-                    if(TPHStepsPastGapThisPrint >= 600)
-                    {
-                        TPHStepsPastGapThisPrint = 600;
+                            find_lowest_points_lowest(shoots, shootIndex, (int)result);
+                            
+                            TPHStepsPastGapThisPrint = ( getTPHStepsThisPrint() - getPrintDip() );
+                            
+                            //PRINTF("\r\n\r\nTPHStepsPastGapThisPrint %d", TPHStepsPastGapThisPrint);
+                            
+                            if(TPHStepsPastGapThisPrint >= 600)
+                            {
+                                TPHStepsPastGapThisPrint = 600;
+                            }
+                            
+                            if(getPrintDip() < 10)
+                            {
+                                TPHStepsPastGapThisPrint = 400;
+                            }
+                            
+                            /*
+                            PRINTF("\r\n");
+                            PRINTF("shoot through counts post filter:");
+                            PRINTF("\r\n");
+                            
+                            for(uint16_t ind = 0; ind < shootIndex; ind++)
+                            {
+                                PRINTF("%d,", shoots[ind]);
+                                takeupDelayShort();
+                            }
+                            
+                            PRINTF("\r\n");
+                            */
+                            
+                            shootIndex = 0;
+                            memset(shoots, 0, sizeof(&shoots));
+                            
+                            setPrintingStatus(false);
+                        }
                     }
-                    
-                    if(getPrintDip() < 10)
-                    {
-                        TPHStepsPastGapThisPrint = 400;
-                    }
-                                        
-                    shootIndex = 0;
-                    memset(shoots, 0, sizeof(&shoots));
-                    
-                    setPrintingStatus(false);
                     
                     //if the command option == 2 goto waitUntil, else goto idle
                     if(getWaitForLabelTaken() == false)
                     {
-                        int calcSteps = getTPHStepsPastGapThisPrint(); 
-                  
-                        int modifier = 0;
-                        
-                        if(getLargeGapFlag() == true)
+                        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                         {
-                            modifier = 330;
+                              setStreamingLeadInMod(0);
+                          
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus );
                         }
                         else
                         {
-                            modifier = 345;
-                        }
-                        
-                        if(calcSteps != 0)
-                        {
-                            if(calcSteps > modifier) 
-                            {
-                                calcSteps = calcSteps - modifier;
-                            }
-                            else
-                            {
-                                calcSteps = modifier - calcSteps;
-                            }
-                        }
-                        
-                        setStreamingLeadInMod(calcSteps);
+                              if(cutMsgSentCounter == 0)
+                              {
+                                  int calcSteps = getTPHStepsPastGapThisPrint(); 
                       
-                        skipNextOperation( &currentStatus ); 
-                        skipNextOperation( &currentStatus ); 
-                        skipNextOperation( &currentStatus ); 
-                        skipNextOperation( &currentStatus );
+                                  int modifier = 0;
+                                  
+                                  if(getLargeGapFlag() == true)
+                                  {
+                                      modifier = 330;
+                                  }
+                                  else
+                                  {
+                                      modifier = 345;
+                                  }
+                                  
+                                  if(calcSteps != 0)
+                                  {
+                                      if(calcSteps > modifier) 
+                                      {
+                                          calcSteps = calcSteps - modifier;
+                                      }
+                                      else
+                                      {
+                                          calcSteps = modifier - calcSteps;
+                                      }
+                                  }
+                                  
+                                  setStreamingLeadInMod(calcSteps);
+                              }
+                            
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus ); 
+                              skipNextOperation( &currentStatus );
+                        } 
                     }
                     else
-                    {                        
+                    {                  
+                        if(getCutterInstalled() == true && cutMsgSent == false)
+                        {   
+                            cCMsg.msgType = _I_CUTTER_CUT_CMD;
+                            
+                            //PRINTF("\r\ncut message sent pOp 2\r\n");
+                            
+                            if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                            {
+                                cutMsgSent = true;
+                                cutMsgSentCounter = 0;
+                                BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cCMsg, 0 );
+                            }
+                        } 
+                      
                         setStreamingLeadInMod(0);
                         
                         setStartOfQueue(true);
-
-                        setNextOperation(&currentStatus);
+                        
+                        if(cutMsgSent == false)
+                        {
+                            //compareStatus( &currentStatus, &prevStatus );
+                            setNextOperation(&currentStatus);
+                        }
+                        else
+                        {
+                            cutMsgSentCounter++;
+                            
+                            if(cutMsgSentCounter > 1500)
+                            {
+                                //PRINTF("\r\ncut delay finished");
+                              
+                                cutMsgSentCounter = 0;
+                                cutMsgSent = false;
+                                //compareStatus( &currentStatus, &prevStatus );
+                                setNextOperation(&currentStatus);    
+                            }
+                        }
                     }
                 } 
             }   
@@ -3074,6 +3388,7 @@ void historyAdjacency( void )
     unsigned char *pCurrentLine = getCurrentPrintDataLine();  
     
     if( pCurrentLine != NULL ) {
+        //PRINTF("historyAdjacency() pCurrentLine != null\r\n");
         history( pCurrentLine );
     } else {
         PRINTF("historyAdjacency(): Warning: Out of print head data!\r\n" );            
@@ -3108,29 +3423,23 @@ void stepUntilOp( StepUntilOperation *pOperation )
     if( currentStatus.state != ENGINE_STEPPING ) {
         PRINTF("currentStatus.state: Entering Single ENGINE_STEPPING_UNTIL!\r\n" );
 
-        if( getMyModel() == GLOBAL_SCALE_HB_GT ) {        
 
-            if( testCondition( &currentStatus, pOperation->operator, pOperation->bits, 
-                      pOperation->result) == true)
-            {
-                PRINTF( "Here!! steps: %d\r\n",  engine.steps );
-                
-                /* if we are going to skip stepping then we need to clear the user 
-                   status because we do not set label present and taken status bits.
-                   when the test is ran (sizing) then a missing label error is generated 
-                   in the backend which is not handled correctly and causes the backend to 
-                   stop printing labels. This condition is recreated after x number of reboots.
-                */
-                skipMissingLabel_ = true;
-                /* stepping complete */
-                resetPrintEngineTimer();
-                powerOffStepper();
-                setNextOperation( &currentStatus );
-            }
+        if( testCondition( &currentStatus, pOperation->operator, pOperation->bits, 
+                  pOperation->result) == true) {
+            PRINTF( "Here!! steps: %d\r\n",  engine.steps );
+            
+            /* if we are going to skip stepping then we need to clear the user 
+               status because we do not set label present and taken status bits.
+               when the test is ran (sizing) then a missing label error is generated 
+               in the backend which is not handled correctly and causes the backend to 
+               stop printing labels. This condition is recreated after x number of reboots.
+            */
+            skipMissingLabel_ = true;
+            /* stepping complete */
+            resetPrintEngineTimer();
+            powerOffStepper();
+            setNextOperation( &currentStatus );
         }
-
-        /* freestanding scale        
-        index_ = 0; */
 
         currentStatus.state = ENGINE_STEPPING;
   
@@ -3163,7 +3472,17 @@ void stepUntilOp( StepUntilOperation *pOperation )
         /* removed to keep motor from stalling at 6ips when sizing labels -- ats 07102014 */	     
         if( ( engine.headType == KYOCERA753_OHM ) || ( engine.headType == KYOCERA800_OHM ) ||            
             ( engine.headType == KYOCERA849_OHM ) ) {
-            engine.steps++;                        
+            engine.steps++;
+            
+            if(getTakingUpPaper() == true)
+            {
+                //halfStepMotor(); 
+            }
+            else
+            {
+                //stepMainMotor();
+            }    
+            
             motorStep( engine.direction, &currentStatus );
         }
     } else {
@@ -3190,7 +3509,7 @@ void stepUntilOp( StepUntilOperation *pOperation )
                 currentStatus.sensor &= ~SYNCHRONIZED;
             }
         }        
-
+       
         if( engine.outOfMediaCnt < engine.maxMediaCount ) {
             currentStatus.sensor &= ~OUT_OF_MEDIA;
             currentStatus.error &= ~MEDIA_SHUTDOWN;
@@ -3200,11 +3519,13 @@ void stepUntilOp( StepUntilOperation *pOperation )
             else        
                 currentStatus.error &= ~MEDIA_SHUTDOWN;
         }
-        
+      
         /* read label taken sensor */
         if( !readLabelTakenSensor() ) {
             currentStatus.sensor |= LABEL_TAKEN;                
-        } 
+        } else {
+            //currentStatus.sensor &= ~LABEL_TAKEN;
+        }
 
         /* check for error conditions. */
         if( currentStatus.error != NO_ERROR ) {
@@ -3226,7 +3547,16 @@ void stepUntilOp( StepUntilOperation *pOperation )
             }
             
             engine.steps++;
-                        
+            
+            if(getTakingUpPaper() == true)
+            {
+                //halfStepMotor(); 
+            }
+            else
+            {
+                //stepMainMotor();
+            }    
+            
             /* notify host of any status change */
             compareStatus( &currentStatus, &prevStatus ); 
         } else {
@@ -3255,13 +3585,14 @@ void stepGapOp( StepUntilOperation *pOperation )
     setStreamingLeadInMod(0);
     setStartOfQueue(false);
     
-    firstPrint = true;
+    //firstPrint = true;
     
-    setLabelQueuePaused(false);
-    setLabelPauseBackwindPending(false);
-    setLabelPauseTimeout(0);
+    setLabelQueuePaused( false );
+    setLabelPauseBackwindPending( false );
+    setLabelPauseTimeout( 0 );
 
-  
+    HeadType_t head = getPrintHeadType();
+    
     if(getCanceledSizingFlag() == true)
     {
         sizingState = GO_TO_IDLE;   
@@ -3276,37 +3607,62 @@ void stepGapOp( StepUntilOperation *pOperation )
         setStreamingLabelBackwind( 0 );
         setTPHStepsPastGapThisPrint( 0 );
         setTPHStepsThisPrint( 0 );
-        setTakeupBusy(true);
         
         currentStatus.sensor2 &= ~LOW_STOCK_REACHED;
         currentStatus.sensor &= ~OUT_OF_MEDIA;
-                
-        if(getCutterInstalled_() == false && ( currentStatus.sensor & HEAD_UP ) != HEAD_UP)
+        currentStatus.sensor &= ~LABEL_TAKEN;
+        
+        if( ( currentStatus.sensor & HEAD_UP ) != HEAD_UP )
         { 
             switch(sizingState)
             {
                 case PRE_SIZE_TIGHTEN:
                 {
-                    PRINTF("PRE SIZE TIGHTEN\r\n");
+                    checkForPaper( (uint16_t)((float)config_.takeupMaxTension * 0.90), 820);
+                                       
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                    {
+                        takeupDelay();
+                    }
 
-                    checkForPaper( (uint16_t)((float)config_.takeup_sensor_max_tension_counts * 0.90), 820 );                                   
-                    sizingState++;                    
+                    sizingState++;
+                    
                     break;
                 }
               
                 case STEP_TO_LABEL_TAKEN:
                 {            
-                    PRINTF("STEP_TO_LABEL_TAKEN\r\n");
+                    //PRINTF("STEP_TO_LABEL_TAKEN\r\n");
 
                     currentStatus.sensor2 &= ~JAMMED_LABEL;
+                    currentStatus.sensor2 &= ~LOW_STOCK_REACHED;
+                    currentStatus.sensor &= ~OUT_OF_MEDIA;
                     
                     sizingLabels = true;
                   
                     currentStatus.counter = 0;
                     engine.steps = 0;
                   
-                    uint16_t stepsToLt = 4999;
-                    stepToLt(stepsToLt, 575);
+                    /*
+                    if(getCutterInstalled() == true)
+                    {
+                        takeupDelay();
+                        takeupDelay();
+                    }
+                    */
+                    
+                    uint16_t stepsToLt = 3000;
+                    
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                    {
+                        stepToLt(stepsToLt, 575);
+                    }
+                    else
+                    {
+                        stepToLt(stepsToLt, 575);
+                    }
+                    
+                    
                     
                     sizingState = TAKEUP_BUSY;
                     break;
@@ -3314,10 +3670,18 @@ void stepGapOp( StepUntilOperation *pOperation )
                 
                 case SIZE:
                 { 
-                    PRINTF("SIZE\r\n");
+                    //PRINTF("SIZE\r\n");
                     
                     uint16_t stepsToSize = 10000;
-                    sizeLabels(stepsToSize, 575);
+                    
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                    {
+                        sizeLabels(stepsToSize, 575);
+                    }
+                    else
+                    {
+                        sizeLabels(stepsToSize, 575);  
+                    }
                     
                     sizingState = TAKEUP_BUSY;
                     break;
@@ -3325,32 +3689,59 @@ void stepGapOp( StepUntilOperation *pOperation )
                 
                 case STEP_TO_NEXT:
                 {            
-                    PRINTF("STEP_TO_NEXT\r\n");
+                    //PRINTF("STEP_TO_NEXT\r\n");
                     
-
                     if(getLargeGapFlag() == true)
                     {
                         if(getTakingUpPaper() == true)
                         {
+                            //PRINTF("\r\nHT label stepping to next paper");
                             stepToNextLabel(GAP_SENSOR_TO_PEEL_BAR_HT - getStepsBackToGap(), 575);
                         }
                         else
                         {
-                            stepToNextLabel(GAP_SENSOR_TO_TEAR_BAR_HT - getStepsBackToGap(), 575);
+                            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                            {
+                                stepToNextLabel((GAP_SENSOR_TO_PEEL_BAR_HT_PRINTER  + (getIndirectData( (CMD_DATA_IDS)4 ) + 20) * 2) - getStepsBackToGap(), 575);
+                            }
+                            else
+                            {
+                                //PRINTF("\r\nHT label stepping to next no paper");
+                                stepToNextLabel(GAP_SENSOR_TO_TEAR_BAR_HT - getStepsBackToGap(), 575);
+                            }
                         }
                     }
                     else
                     {
                         if(getTakingUpPaper() == true)
                         {
+                            //PRINTF("\r\nGT label stepping to next paper");
                             stepToNextLabel(GAP_SENSOR_TO_PEEL_BAR_GT - getStepsBackToGap(), 575);
                         }
                         else
                         {
-                            stepToNextLabel(GAP_SENSOR_TO_TEAR_BAR_GT - getStepsBackToGap(), 575);
+                            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                            {
+                                stepToNextLabel((GAP_SENSOR_TO_PEEL_BAR_HT_PRINTER + (getIndirectData( (CMD_DATA_IDS)4 ) + 20) * 2) - getStepsBackToGap(), 575);
+                            }
+                            else
+                            {
+                                //PRINTF("\r\nGT label stepping to next paper");
+                                stepToNextLabel(GAP_SENSOR_TO_TEAR_BAR_GT - getStepsBackToGap(), 575); 
+                            }
                         }
                     }
                     
+                   
+                    
+                    if(getCutterInstalled() == true)
+                    {
+                        cutterSizingDoneFlag = false;
+                        setCutterBladeDelayNeeded(true);
+                    }
+                    
+
+                     
                     backwindAfterSizing = true;
                     
                     sizingState = TAKEUP_BUSY;
@@ -3358,7 +3749,9 @@ void stepGapOp( StepUntilOperation *pOperation )
                 }
                 
                 case GO_TO_IDLE:
-                {                          
+                {          
+                    //PRINTF("GO_TO_IDLE\r\n");
+                    
                     setSizingStatus(false);
                   
                     streamingLabelBackwind = 0;
@@ -3373,13 +3766,15 @@ void stepGapOp( StepUntilOperation *pOperation )
                 
                 case TAKEUP_BUSY:
                 {
+                    //PRINTF("sizingState = %d = busy\r\n", sizingState);
                     break;
                 }
             }
         }
-        else if( getCutterInstalled_() == true && ( currentStatus.sensor & HEAD_UP ) != HEAD_UP)
+        /*
+        else if( getCutterInstalled() == true && ( currentStatus.sensor & HEAD_UP ) != HEAD_UP)
         {
-            PRINTF("\r\n\r\nCUTTER SIZING INITIATED\r\n\r\n");
+            //PRINTF("\r\n\r\nCUTTER SIZING INITIATED\r\n\r\n");
             
             ICMessages msg1;
             ICMessages msg2;
@@ -3387,17 +3782,11 @@ void stepGapOp( StepUntilOperation *pOperation )
             msg1.generic.msgType = _I_CUTTER_CUT_CMD;
             msg2.generic.msgType = _I_CUTTER_HOME_CMD;
             
-            if(getCutterHome() == false)
-            {
-                PRINTF("\r\ncutter not home on size\r\n");
-                handleInternalMessage(&msg2);
-            }
-            
-            checkForPaper( (uint16_t)((float)config_.takeup_sensor_max_tension_counts * 0.90), 820 );
+            checkForPaper(((float)config_.takeupMaxTension * 0.90), 820);
           
             if(getTakingUpPaper() == true)
             {
-                tightenStock( (uint16_t)((float)config_.takeup_sensor_min_tension_counts * 1.0), 920, false, HALF_STEP );
+                tightenStock(((float)config_.takeupMinTension * 1.0), 920, false, HALF_STEP);
             }
             
             while(getTakeupBusy() == true)
@@ -3412,10 +3801,15 @@ void stepGapOp( StepUntilOperation *pOperation )
                 __NOP();
             }
             
-            handleInternalMessage(&msg1);
+            if(getHeadUp() == false)
+            {
+                //handleInternalMessage(&msg1); 
+            }
+            
                     
             setNextOperation( &currentStatus );
         }
+        */
         else
         {
             PRINTF("NO SIZING - OUT_OF_MEDIA OR HEAD UP\r\n");
@@ -3512,6 +3906,7 @@ void detectionOp( StepUntilOperation *pOperation )
 
         /*we are sizing a label, slow sizing speed to 3ips  */ 
         currentStatus.sensor |= MOTOR_FORWARD;
+        //currentStatus.sensor &= ~LABEL_TAKEN;
             
         setPrintEngineTimer( getSltSizingTime( engine.headType ) );
 
@@ -3551,9 +3946,9 @@ void detectionOp( StepUntilOperation *pOperation )
                 }
                 engine.steps++;
                 if( getTakingUpPaper() == true ) {
-                    halfStepMotor(); 
+                    //halfStepMotor(); 
                 } else {
-                    stepMainMotor();
+                    //stepMainMotor();
                 }                    
             } else {                
                 clrMotorStopOnGap();
@@ -3579,9 +3974,9 @@ void detectionOp( StepUntilOperation *pOperation )
                 }
                 engine.steps++;
                 if( getTakingUpPaper() == true ) {
-                    halfStepMotor(); 
+                    //halfStepMotor(); 
                 } else {
-                    stepMainMotor();
+                    //stepMainMotor();
                 }                    
             } else {
               
@@ -3659,11 +4054,11 @@ void stepEdgeOp( StepUntilOperation *pOperation )
             engine.steps++;
             if(getTakingUpPaper() == true)
             {
-                halfStepMotor(); 
+                //halfStepMotor(); 
             }
             else
             {
-                stepMainMotor();
+                //stepMainMotor();
             }    
             
             motorStep( engine.direction, &currentStatus );
@@ -3740,11 +4135,11 @@ void stepEdgeOp( StepUntilOperation *pOperation )
                 engine.steps++;
                 if(getTakingUpPaper() == true)
                 {
-                    halfStepMotor(); 
+                    //halfStepMotor(); 
                 }
                 else
                 {
-                    stepMainMotor();
+                    //stepMainMotor();
                 }    
                 
                 /* notify host of any status change 
@@ -3776,11 +4171,11 @@ void stepEdgeOp( StepUntilOperation *pOperation )
             engine.steps++;
             if(getTakingUpPaper() == true)
             {
-                halfStepMotor(); 
+                //halfStepMotor(); 
             }
             else
             {
-                stepMainMotor();
+                //stepMainMotor();
             }            
         }
     }	
@@ -3830,6 +4225,16 @@ void stepTakeupTightenOp( StepOperation *pOperation )
             resetPrintEngineTimer();
             setNextOperation( &currentStatus );
         } else {
+          
+            int even = 0;
+
+            even = engine.numSteps & 0x0001;
+            if( even == 0 ) {
+                /* Two half steps per printline */  
+                if(getTakingUpPaper() == true) {
+                    //stepTakeUpMotor();                            
+                }
+            }
             engine.steps++;
         }
     }
@@ -3852,12 +4257,14 @@ void stepTakeupTightenOp( StepOperation *pOperation )
 *******************************************************************************/
 void testForSyncOp( StepOperation *pOperation )
 {
-#if 0   
-    static bool syncFound_ = false;
-    static int index_ = 0;
+
     /* not supported in global scale. global scale stock has no sync bars */
     setNextOperation( &currentStatus ); 
-   
+#if 0    
+    
+    static bool syncFound_ = false;
+    static int index_ = 0;
+
     if (currentStatus.state != ENGINE_STEPPING ) {       
         PRINTF("currentStatus.state: Entering Single TEST_FOR_SYNC!\r\n" );  
                 
@@ -3963,11 +4370,11 @@ void testForSyncOp( StepOperation *pOperation )
             
             if(getTakingUpPaper() == true)
             {
-                halfStepMotor(); 
+                //halfStepMotor(); 
             }
             else
             {
-                stepMainMotor();
+                //stepMainMotor();
             }    
             
             /* notify host of any status change */
@@ -4074,11 +4481,11 @@ void testForLabelOp( StepOperation *pOperation )
             
             if(getTakingUpPaper() == true)
             {
-                halfStepMotor(); 
+                //halfStepMotor(); 
             }
             else
             {
-                stepMainMotor();
+                //stepMainMotor();
             }     
             
             /* notify host of any status change */
@@ -4121,6 +4528,7 @@ void testForContinuous( StepOperation *pOperation )
                 setOperation( IDLE_DIRECTIVE, &currentStatus ); 
             } else if ( engine.numSteps-- <= 0 ) {
                 /* stepping complete */
+                //resetPrintEngineTimer();
                 powerOffStepper();
                                         
                 setNextOperation( &currentStatus );                        
@@ -4134,11 +4542,11 @@ void testForContinuous( StepOperation *pOperation )
                 
                 if(getTakingUpPaper() == true)
                 {
-                    halfStepMotor(); 
+                    //halfStepMotor(); 
                 }
                 else
                 {
-                    stepMainMotor();
+                    //stepMainMotor();
                 }    
                 
                 /* notify host of any status change */
@@ -4213,24 +4621,53 @@ void waitUntilOp(  WaitUntilOperation *pOperation  )
     if(currentStatus.state != ENGINE_WAITING)
     {
         currentStatus.state = ENGINE_WAITING;
-        //PRINTF("Entering waitUntilOp()\r\n");
+        PRINTF("Entering waitUntilOp()\r\n");
         
         setPrintingStatus(false);
         
+        uint16_t setPoint = getLabelTaken();
+        
+        PRINTF("\r\nenter wait until LT %d\r\n", setPoint);
+        
         /* sample the shoot through sensor 100 times, if 90% of the samples are less than 
            OUT_OF_MEDIA_THRESHOLD, OUT_OF_MEDIA is set*/
-        checkForOutOfMedia();
+        HeadType_t head = getPrintHeadType();
+                    
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+        {
+            checkForOutOfMediaHTPrinter();
+        }
+        else
+        {
+            checkForOutOfMedia();
+        }
+        
+        idleOpCycleCounter = 0;
+        
+        //cutterStatusChecked = false;
+        //cutterStatusCheckedCounter = 0;
     }
     
+    idleOpCycleCounter++;
+    
+    //PRINTF("\r\nidle %d", idleOpCycleCounter);
+        
+    if(idleOpCycleCounter > 60000)
+    {
+        idleOpCycleCounter = 0;
+        
+        PRINTF("\r\nwait until LT %d, LABEL_TAKEN_THRESHOLD_NO_LABEL %d\r\n", getLabelTaken(), LABEL_TAKEN_THRESHOLD_NO_LABEL);
+    }
     
     if(getLabelTaken() <= LABEL_TAKEN_THRESHOLD_NO_LABEL)
     { 
+        PRINTF("\r\nleaving waitUntilOp\r\n");
         setOperation( IDLE_DIRECTIVE, &currentStatus );
     }
 }
 
 /******************************************************************************/
-/*!   \fn void waitUntilSizingOp(  WaitUntilOperation *pOperation  )
+/*!   \fn void waitUntilSizingOp(  WaitUntilOperation f*pOperation  )
       \brief
         This function handles the teach table wait until event operation during
         sizing for FSSS.
@@ -4563,9 +5000,6 @@ void calibrateTUOp( CmdOp *pOperation )
 			engine.TUCalState = IDLE_TU_CAL;		
 		}
 		
-//debug,  setting pin low before cal starts
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
-		
 
     } else {
       
@@ -4605,7 +5039,7 @@ void calibrateTUOp( CmdOp *pOperation )
 							sendPrTUCalStatusFromISR( &calStatus ); 
 							
 							/* Keep config value */
-							setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+							setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 							/* Enable motor again */
 							releaseFromReset( _TAKEUP_STEPPER );
@@ -4642,9 +5076,7 @@ void calibrateTUOp( CmdOp *pOperation )
 				*	we set current to Emitter at startup. One engine cycle == 1mS
 				*/
 				if( engine.cycleCounter >= engine.cycleCounterRel+TEN_mS ) 
-				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, true);					
+				{				
 
 					/* clear out motor struct */
 					memset( &tu_motor, 0, sizeof(tu_motor) );
@@ -4676,8 +5108,6 @@ void calibrateTUOp( CmdOp *pOperation )
 				/* Is motor done or we've reached a timeout */
 				if( getTakeupBusy() == false )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
 
 					/* grab a copy of the Take Up motor driver */
 					getTUMotor( &tu_motor );
@@ -4718,7 +5148,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;
@@ -4738,7 +5168,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					sendPrTUCalStatusFromISR( &calStatus ); 
 					
 					/* Keep config value */
-					setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+					setPaperTakeupCurrent( config_.takeupDriveCurrent );
 					
 					/* Stop Takeup Motor */
 					stopTakeupIntr();
@@ -4785,8 +5215,6 @@ void calibrateTUOp( CmdOp *pOperation )
 				/* Wait for TU motor to stall */
 				if( getTakeupBusy() == false )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
 
 					/* grab a copy of the Take Up motor driver to see results */
 					getTUMotor( &tu_motor );
@@ -4824,7 +5252,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;	
@@ -4843,7 +5271,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					sendPrTUCalStatusFromISR( &calStatus ); 
 					
 					/* Keep config value */
-					setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+					setPaperTakeupCurrent( config_.takeupDriveCurrent );
 					
 					/* Exit Cal, TIME OUT reached */
 					engine.TUCalState = IDLE_TU_CAL;
@@ -4859,8 +5287,7 @@ void calibrateTUOp( CmdOp *pOperation )
 				*/
 				if( engine.cycleCounter >= engine.cycleCounterRel+HALF_SECOND_IN_mS )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, true);					
+					
 		
 					/* renable motor */
 					releaseFromReset( _TAKEUP_STEPPER );
@@ -4897,8 +5324,7 @@ void calibrateTUOp( CmdOp *pOperation )
 				/* wait for TU motor to finish */
 				if( getTakeupBusy() == false )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
+
 
 					/* grab a copy of the Take Up motor driver */
 					getTUMotor( &tu_motor );
@@ -4938,7 +5364,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 						
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;
@@ -4957,7 +5383,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					sendPrTUCalStatusFromISR( &calStatus ); 
 					
 					/* Keep config value */
-					setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+					setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 					/* Exit Cal, TIME OUT reached */
 					engine.TUCalState = IDLE_TU_CAL;
@@ -4971,11 +5397,9 @@ void calibrateTUOp( CmdOp *pOperation )
 				*	At this point, spring is at max extension,
 				*	keep motors (On) while we're gathering cal data 
 				*/
-#if 1
+
 				powerOnMotorsDuringCal();
-#else	
-    			powerOnMotors();
-#endif
+
 				
 				/* 
 				*	If for some reason the Cassette opens during this process
@@ -4994,7 +5418,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					sendPrTUCalStatusFromISR( &calStatus ); 
 					
 					/* Keep config value */
-					setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+					setPaperTakeupCurrent( config_.takeupDriveCurrent );
 					
 					/* Exit Cal */
 					engine.TUCalState = IDLE_TU_CAL;
@@ -5005,16 +5429,12 @@ void calibrateTUOp( CmdOp *pOperation )
 				/* Collect cal data, let about 10mS pass by everytime we take a reading */
 				if( engine.cycleCounter >= engine.cycleCounterRel+TEN_mS )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, true);					
+			
 
 					/* Record TU sensor reading at every mA emitter current */
 					if( engine.TUCalMaxTensionVals != NULL )
 					{
 						engine.TUCalMaxTensionVals[engine.TUCalEmittermACurrent] = getPaperTakeUp();
-#if 0						
-						PRINTF("engine.TUCalMaxTensionVals[%d] =\t%d \r\n", engine.TUCalEmittermACurrent, engine.TUCalMaxTensionVals[engine.TUCalEmittermACurrent] );		
-#endif						
 					}
 					else
 					{
@@ -5029,7 +5449,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;
@@ -5044,9 +5464,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						setPaperTakeupCurrent( engine.TUCalEmittermACurrent );
 						
 						/* record time */
-						engine.cycleCounterRel = engine.cycleCounter;	
-//debug						
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);						
+						engine.cycleCounterRel = engine.cycleCounter;						
 
 					}
 					else
@@ -5062,10 +5480,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						engine.cycleCounterRel = engine.cycleCounter;
 						
 						/* go to relax period */
-						engine.TUCalState = RELAX3_MEDIA_TU_CAL;
-
-//debug						
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);												
+						engine.TUCalState = RELAX3_MEDIA_TU_CAL;												
 		
 					}
 					
@@ -5104,11 +5519,7 @@ void calibrateTUOp( CmdOp *pOperation )
 				*	Spring is now relaxed at min extension, keep motors (On)
 				*	at this position while we gathering cal data 
 				*/
-#if 1
 				powerOnMotorsDuringCal();
-#else	
-    			powerOnMotors();
-#endif
 				
 				/* 
 				*	If for some reason the Cassette opens during this process
@@ -5127,7 +5538,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					sendPrTUCalStatusFromISR( &calStatus ); 
 					
 					/* Keep config value */
-					setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+					setPaperTakeupCurrent( config_.takeupDriveCurrent );
 							
 					/* Exit Cal */
 					engine.TUCalState = IDLE_TU_CAL;
@@ -5138,16 +5549,11 @@ void calibrateTUOp( CmdOp *pOperation )
 				/* Collect Cal data, let about 10mS pass by everytime we take a reading */
 				if( engine.cycleCounter >= engine.cycleCounterRel+TEN_mS )
 				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, true);
 
 					/* record TU sensor reading at every mA emitter current */
 					if( engine.TUCalMinTensionVals != NULL )
 					{
 						engine.TUCalMinTensionVals[engine.TUCalEmittermACurrent] = getPaperTakeUp();
-#if 0
-						PRINTF("engine.TUCalMinTensionVals[%d] =\t%d \r\n", engine.TUCalEmittermACurrent, engine.TUCalMinTensionVals[engine.TUCalEmittermACurrent] );								
-#endif						
 					}
 					else
 					{
@@ -5159,10 +5565,10 @@ void calibrateTUOp( CmdOp *pOperation )
 						calStatus.state 				= _TakeupCalFailure;
 						calStatus.deflectionVoltage		= (unsigned short)COLLECT_MIN_TENSION_DATA_TU_CAL;//debug;;;;
 						
-                    	sendPrTUCalStatusFromISR( &calStatus ); 
+                                                sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 						
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;
@@ -5178,8 +5584,6 @@ void calibrateTUOp( CmdOp *pOperation )
 						
 						/* record time */
 						engine.cycleCounterRel = engine.cycleCounter;						
-//debug						
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
 					}
 					else
 					{
@@ -5192,8 +5596,6 @@ void calibrateTUOp( CmdOp *pOperation )
 						
 						/* go to calculate calibration */
 						engine.TUCalState = CALCULATE_TU_CAL_DELTAS;
-//debug						
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);
 					}
 					
 				}		
@@ -5206,9 +5608,7 @@ void calibrateTUOp( CmdOp *pOperation )
 				*	Calculate the deflections between min and max readings
 				*/
 				if( engine.cycleCounter >= engine.cycleCounterRel+TEN_mS )
-				{
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, true);					
+				{					
 					
 					if( engine.TUCalDeltaTensionVals != NULL )
 					{
@@ -5232,7 +5632,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						sendPrTUCalStatusFromISR( &calStatus ); 
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 						
 						/* Exit Cal */
 						engine.TUCalState = IDLE_TU_CAL;
@@ -5243,9 +5643,7 @@ void calibrateTUOp( CmdOp *pOperation )
 					engine.cycleCounterRel = engine.cycleCounter;
 					
 					/* go to calc set point */
-					engine.TUCalState = CALCULATE_TU_CAL_SETPOINT;
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);							
+					engine.TUCalState = CALCULATE_TU_CAL_SETPOINT;						
 				}
 				break;
 			}
@@ -5281,21 +5679,17 @@ void calibrateTUOp( CmdOp *pOperation )
 						  max_delta						> MIN_TU_CAL_DELTA_CNTS	) 
 					{
 						//set min/max sensor values
-#if 0//Toms method						
-						unsigned short max_sensor_value = engine.TUCalMaxTensionVals[ engine.TUCalEmittermACurrent ];
-						unsigned short min_sensor_value = engine.TUCalMinTensionVals[ engine.TUCalEmittermACurrent ];
-#else
 						unsigned short max_sensor_value = (int)(0.72 * (float)engine.TUCalMaxTensionVals[ engine.TUCalEmittermACurrent ]);
 						unsigned short min_sensor_value = (int)(0.70 * (float)engine.TUCalMaxTensionVals[ engine.TUCalEmittermACurrent ]);											
-#endif						
+					
 						BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 						
 						setPaperTakeupCurrent( engine.TUCalEmittermACurrent );
 						
 						/* Update global config struct */
-						config_.takeup_sensor_drive_current			= engine.TUCalEmittermACurrent;    
-    					config_.takeup_sensor_max_tension_counts 	= max_sensor_value;
-    					config_.takeup_sensor_min_tension_counts 	= min_sensor_value;
+						config_.takeupDriveCurrent	= engine.TUCalEmittermACurrent;    
+                                                config_.takeupMaxTension 	= max_sensor_value;
+                                                config_.takeupMinTension 	= min_sensor_value;
 
 						/* 
 						*	Notify Printer Task that we're done. 
@@ -5308,14 +5702,14 @@ void calibrateTUOp( CmdOp *pOperation )
 						/* Update Host application */
 						memset(&calStatus, 0, sizeof(calStatus) );
 						calStatus.state 				= _Done;
-						calStatus.deflectionVoltage 	= engine.TUCalEmittermACurrent;//Confusing.... but backend uses deflectionVoltage to fill TUCal current
-						calStatus.driveCurrent 			= config_.media_sensor_adjustment;
+						calStatus.deflectionVoltage 	        = engine.TUCalEmittermACurrent;
+						calStatus.driveCurrent 			= config_.shootThroughCal;
 						sendPrTUCalStatusFromISR( &calStatus );
 #if 1						
 						PRINTF("\r\ntakeupSensorCal(): struct values: \r\n");
 						PRINTF("calStatus.msgType: %d\r\n", calStatus.msgType );
 						PRINTF("calStatus.state: %d\r\n", calStatus.state );
-						PRINTF("calStatus.TUSensorDriveCurrent: %d\r\n", calStatus.TUSensorDriveCurrent );
+						PRINTF("calStatus.takeupDriveCurrent: %d\r\n", calStatus.takeupDriveCurrent );
 						PRINTF("calStatus.deflectionVoltage(TU Drive mA): %d\r\n", calStatus.deflectionVoltage );
 						PRINTF("calStatus.driveCurrent: %d\r\n", calStatus.driveCurrent );
 						PRINTF("calStatus.backingVoltage: %d\r\n", calStatus.backingVoltage );
@@ -5341,7 +5735,7 @@ void calibrateTUOp( CmdOp *pOperation )
 						
 						
 						/* Keep config value */
-						setPaperTakeupCurrent( config_.takeup_sensor_drive_current );
+						setPaperTakeupCurrent( config_.takeupDriveCurrent );
 #if 1						
 						PRINTF("takeupSensorCal(): _TakeupCalFailure: %d\r\n\r\n", max_delta );
 						PRINTF("takeupSensorCal(): bias point: %d\r\n", engine.TUCalEmittermACurrent );
@@ -5351,8 +5745,6 @@ void calibrateTUOp( CmdOp *pOperation )
 					
 					/* Done with Calibration, go to idle */
 					engine.TUCalState = IDLE_TU_CAL;
-//debug					
-//GPIO_WritePinOutput(HEART_BEAT_LED_GPIO, HEART_BEAT_LED_PIN, false);		
 				}
 				
 				
@@ -5437,14 +5829,14 @@ void writePrintheadFrame(uint8_t * data)
     dotChecker.isTransferCompleted = false;
     lpspi_transfer_t masterXfer;
 
-    for(int i = 0; i < DATA_LENGTH_IN_BYTES; i++) 
+    for(int i = 0; i < dotChecker.dataLengthInBytes; i++) 
     {
         dotChecker.txData[i] = data[i];
     }
     
     masterXfer.txData      = dotChecker.txData;
     masterXfer.rxData      = dotChecker.rxData;
-    masterXfer.dataSize    = DATA_LENGTH_IN_BYTES; 
+    masterXfer.dataSize    = dotChecker.dataLengthInBytes; 
     masterXfer.configFlags = kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
     LPSPI_MasterTransferNonBlocking(LPSPI4, &dotChecker.masterHandle, &masterXfer);
 }
@@ -5549,10 +5941,10 @@ HeadDotStatus getHeadWearDotStatus( int x )
     
     if(dotCheckerCalibratedAverage == 0)
     {
-        dotResistanceBadHigh =  DOT_RESISTANCE_EXPECTED + ((30.0f / 100.0f) * (DOT_RESISTANCE_EXPECTED));
-        dotResistanceBadLow =  DOT_RESISTANCE_EXPECTED - ((30.0f / 100.0f) * ( DOT_RESISTANCE_EXPECTED));
-        dotResistanceMarginalHigh =  DOT_RESISTANCE_EXPECTED + ((20.0f / 100.0f) * (DOT_RESISTANCE_EXPECTED));
-        dotResistanceMarginalLow =  DOT_RESISTANCE_EXPECTED - ((20.0f / 100.0f) * ( DOT_RESISTANCE_EXPECTED));
+        dotResistanceBadHigh =  DOT_RESISTANCE_EXPECTED + (uint32_t)((30.0f / 100.0f) * (DOT_RESISTANCE_EXPECTED));
+        dotResistanceBadLow =  DOT_RESISTANCE_EXPECTED - (uint32_t)((30.0f / 100.0f) * ( DOT_RESISTANCE_EXPECTED));
+        dotResistanceMarginalHigh =  DOT_RESISTANCE_EXPECTED + (uint32_t)((20.0f / 100.0f) * (DOT_RESISTANCE_EXPECTED));
+        dotResistanceMarginalLow =  DOT_RESISTANCE_EXPECTED - (uint32_t)((20.0f / 100.0f) * ( DOT_RESISTANCE_EXPECTED));
     }
     else
     {
@@ -5561,7 +5953,9 @@ HeadDotStatus getHeadWearDotStatus( int x )
         dotResistanceMarginalHigh = dotCheckerCalibratedAverage + (uint32_t)((20.0f / 100.0f) * (dotCheckerCalibratedAverage));
         dotResistanceMarginalLow = dotCheckerCalibratedAverage - (uint32_t)((20.0f / 100.0f) * (dotCheckerCalibratedAverage));
     }
-        
+    
+    
+    
     //Higher counts is lower resistance
     if( dotStatus >= dotResistanceBadHigh || dotStatus <= dotResistanceBadLow )
     {
@@ -5591,6 +5985,7 @@ uint32_t getHeadWearDot( int x )
     return dotChecker.dotResistanceValues[x];
 }
 
+#pragma diag_suppress=Pa039
 /******************************************************************************/
 /*!   \fn void dotWearOp( CmdOp *pOperation )
       \brief
@@ -5622,6 +6017,14 @@ void dotWearOp( CmdOp *pOperation )
             {   
                 //PRINTF("DOT_WEAR_INIT\r\n");
 
+                HeadType_t head = getPrintHeadType();
+                
+                /*
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                }
+                */
+                
                 bool dotCheckerDataAvailable = false;
                 if(dotChecker.readyToSend == true)
                 {
@@ -5639,7 +6042,16 @@ void dotWearOp( CmdOp *pOperation )
                 dotChecker.bitCount =                   0;
                 dotChecker.byteCount =                  0;
                 dotChecker.runCount =                   0;
-                dotChecker.dataLengthInBytes =          DATA_LENGTH_IN_BYTES;
+                
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                    dotChecker.dataLengthInBytes =      DATA_LENGTH_IN_BYTES_HT_PRINTER;
+                }
+                else
+                {
+                    dotChecker.dataLengthInBytes =      DATA_LENGTH_IN_BYTES_GT_PRINTER;
+                }
+                
                 dotChecker.isTransferCompleted =        false;
                 dotChecker.isStrobeCompleted =          false;
                 dotChecker.isSetupCompleted =           false;
@@ -5661,7 +6073,7 @@ void dotWearOp( CmdOp *pOperation )
             {
                 //PRINTF("DOT_WEAR_WRITE_DOT_TO_PH %d %d\r\n", dotChecker.byteCount, dotChecker.runCount);
 
-                if(dotChecker.byteCount >= DATA_LENGTH_IN_BYTES)
+                if(dotChecker.byteCount >= dotChecker.dataLengthInBytes)
                 {
                     memset(dotChecker.printheadBuffer, 0, sizeof(dotChecker.printheadBuffer));
 
@@ -5680,28 +6092,28 @@ void dotWearOp( CmdOp *pOperation )
                     switch(dotChecker.bitCount)
                     {
                         case 0:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT0;
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT7;
                             break;
                         case 1:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT1; 
-                            break;
-                        case 2:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT2; 
-                            break;
-                        case 3:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT3; 
-                            break;
-                        case 4:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT4; 
-                            break;
-                        case 5:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT5; 
-                            break;
-                        case 6:
                             dotChecker.printheadBuffer[dotChecker.byteCount] = BIT6; 
                             break;
+                        case 2:
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT5; 
+                            break;
+                        case 3:
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT4; 
+                            break;
+                        case 4:
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT3; 
+                            break;
+                        case 5:
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT2; 
+                            break;
+                        case 6:
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT1; 
+                            break;
                         case 7:
-                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT7; 
+                            dotChecker.printheadBuffer[dotChecker.byteCount] = BIT0; 
                             break; 
                     }
                     
@@ -5712,9 +6124,6 @@ void dotWearOp( CmdOp *pOperation )
                     
                     //increment the dot we are checking
                     dotChecker.dotCount++;
-                    
-                    
-                    
                     
                     //clear SPI tx/rx buffers
                     memset(dotChecker.rxData, 0, sizeof(dotChecker.rxData));
@@ -5748,7 +6157,7 @@ void dotWearOp( CmdOp *pOperation )
                 //PRINTF("\r\nADC buff\r\n");
               
                 //timing, 344 uS
-                GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
+                //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
               
                 //turn on strobe
                 dotCheckerPwrEnable();
@@ -5771,7 +6180,7 @@ void dotWearOp( CmdOp *pOperation )
             {
                 //PRINTF("DOT_WEAR_CALCULATE_DOT_RESISTANCE");
                 
-                if(dotChecker.byteCount >= DATA_LENGTH_IN_BYTES)
+                if(dotChecker.byteCount >= dotChecker.dataLengthInBytes)
                 {
                     memset(dotChecker.printheadBuffer, 0, sizeof(dotChecker.printheadBuffer));
                     
@@ -5784,20 +6193,19 @@ void dotWearOp( CmdOp *pOperation )
                 else
                 {
                     //get printhead voltage ADC value
-                    dotChecker.ADCBuffer = 0;
-                    
+                    dotChecker.ADCBuffer = 0;                   
                     dotChecker.ADCBuffer = getHeadVoltage();//ADC_ETC_GetADCConversionValue( ADC_ETC, 4U, 1U);
-                     
+                    
                     //stop the printhead strobe
                     activateStrobeCheckStop();
                     
                     dotCheckerPwrDisable();
                     
                     //timing
-                    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+                    //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
                     
                     //calculate ADCBuff->dot resistance in ohms
-                    uint32_t dotInOhms = (uint32_t)(-2.115 * dotChecker.ADCBuffer / (0.00045 * dotChecker.ADCBuffer - 1));
+                    uint32_t dotInOhms = (uint32_t)( -2.115 * dotChecker.ADCBuffer / ( 0.00045 * dotChecker.ADCBuffer - 1 ) );
                     
                     //populate checkedDots array with current dot resistance
                     dotChecker.dotResistanceValues[(dotChecker.dotCount - 1)] += dotInOhms;
@@ -5817,9 +6225,7 @@ void dotWearOp( CmdOp *pOperation )
                 break;
             }
             case DOT_WEAR_RESET: 
-            {
-                //PRINTF("DOT_WEAR_RESET\r\n");
-                
+            {            
                 dotChecker.runCount++;
                 
                 if(dotChecker.runCount == 1)
@@ -5837,7 +6243,7 @@ void dotWearOp( CmdOp *pOperation )
                         delay_uS(10);
                     }
 
-                    sendDotWear(PRINTER_HEAD_SIZE_80MM);
+                    sendPrHeadDotStatus( PRINTER_HEAD_SIZE_80MM );
                     
                     dotChecker.readyToSend = true; 
                 
@@ -5867,7 +6273,7 @@ void dotWearOp( CmdOp *pOperation )
                 PIT_SetTimerPeriod( PIT, kPIT_Chnl_0, USEC_TO_COUNT( 100U, CLOCK_GetFreq( kCLOCK_PerClk ) ) );
                 
                 intializePrintHead( config_.contrast_adjustment, RT_SERVICE_80MM );
-                initializePrintEngine( config_.contrast_adjustment, config_.out_of_media_count, getPrCommandQueueHandle() );
+                initializePrintEngine( _HOBART_PRINTER, config_.contrast_adjustment, config_.out_of_media_count, getPrCommandQueueHandle() );
 
                 //timing
                 //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
@@ -5920,7 +6326,7 @@ void dotWearOp( CmdOp *pOperation )
                         
                         dotChecker.state = DOT_WEAR_WAIT;
                         
-                        if(dotChecker.byteCount < DATA_LENGTH_IN_BYTES)
+                        if(dotChecker.byteCount < dotChecker.dataLengthInBytes)
                         {
                             if(dotChecker.isSetupCompleted == true)
                             {
@@ -5987,6 +6393,8 @@ void dotWearCalOp( CmdOp *pOperation )
             {   
                 //PRINTF("DOT_WEAR_INIT\r\n");
 
+                HeadType_t head = getPrintHeadType();
+              
                 bool dotCheckerDataAvailable = false;
                 if(dotChecker.readyToSend == true)
                 {
@@ -6004,7 +6412,16 @@ void dotWearCalOp( CmdOp *pOperation )
                 dotChecker.bitCount =                   0;
                 dotChecker.byteCount =                  0;
                 dotChecker.runCount =                   0;
-                dotChecker.dataLengthInBytes =          DATA_LENGTH_IN_BYTES;
+                
+                if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                {
+                    dotChecker.dataLengthInBytes =      DATA_LENGTH_IN_BYTES_HT_PRINTER;
+                }
+                else
+                {
+                    dotChecker.dataLengthInBytes =      DATA_LENGTH_IN_BYTES_GT_PRINTER;
+                }
+                
                 dotChecker.isTransferCompleted =        false;
                 dotChecker.isStrobeCompleted =          false;
                 dotChecker.isSetupCompleted =           false;
@@ -6026,7 +6443,7 @@ void dotWearCalOp( CmdOp *pOperation )
             {
                 //PRINTF("DOT_WEAR_WRITE_DOT_TO_PH %d %d\r\n", dotChecker.byteCount, dotChecker.runCount);
 
-                if(dotChecker.byteCount >= DATA_LENGTH_IN_BYTES)
+                if(dotChecker.byteCount >= dotChecker.dataLengthInBytes)
                 {
                     memset(dotChecker.printheadBuffer, 0, sizeof(dotChecker.printheadBuffer));
 
@@ -6092,8 +6509,6 @@ void dotWearCalOp( CmdOp *pOperation )
             }
             case DOT_WEAR_LATCH_PH: 
             {
-                //PRINTF("DOT_WEAR_LATCH_PH\r\n");
-                
                 //cycle printhead latch ~10 microseconds
                 activateLatch(LATCH_SETUP_TIME, LATCH_HOLD_TIME);
                 
@@ -6103,11 +6518,6 @@ void dotWearCalOp( CmdOp *pOperation )
             }
             case DOT_WEAR_STROBE_PH: 
             {
-                //PRINTF("DOT_WEAR_STROBE_PH\r\n");
-                
-                //timing, 344 uS
-                //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
-              
                 //turn on strobe
                 dotCheckerPwrEnable();
                 
@@ -6126,10 +6536,8 @@ void dotWearCalOp( CmdOp *pOperation )
                 break;
             }
             case DOT_WEAR_CALCULATE_DOT_RESISTANCE: 
-            {
-                //PRINTF("DOT_WEAR_CALCULATE_DOT_RESISTANCE");
-                
-                if(dotChecker.byteCount >= DATA_LENGTH_IN_BYTES)
+            {               
+                if(dotChecker.byteCount >= dotChecker.dataLengthInBytes)
                 {
                     memset(dotChecker.printheadBuffer, 0, sizeof(dotChecker.printheadBuffer));
                     
@@ -6142,21 +6550,19 @@ void dotWearCalOp( CmdOp *pOperation )
                 else
                 {
                     //get printhead voltage ADC value
-                    dotChecker.ADCBuffer = 0;
-                    
+                    dotChecker.ADCBuffer = 0;                    
                     dotChecker.ADCBuffer = getHeadVoltage();//ADC_ETC_GetADCConversionValue( ADC_ETC, 4U, 1U);
-
+                    
                     //stop the printhead strobe
                     activateStrobeCheckStop();
                     
                     dotCheckerPwrDisable();
                                         
                     //calculate ADCBuff->dot resistance in ohms
-                    uint32_t dotInOhms = (uint32_t)(-2.115 * dotChecker.ADCBuffer / (0.00045 * dotChecker.ADCBuffer - 1));
+                    uint32_t dotInOhms = (uint32_t)( -2.115 * dotChecker.ADCBuffer / ( 0.00045 * dotChecker.ADCBuffer - 1 ) );
                     
                     //populate checkedDots array with current dot resistance
                     dotChecker.dotResistanceValues[(dotChecker.dotCount - 1)] += dotInOhms;
-                    
                     
                     //clear dot checker printhead buffer 
                     memset(dotChecker.printheadBuffer, 0, sizeof(dotChecker.printheadBuffer));
@@ -6172,9 +6578,7 @@ void dotWearCalOp( CmdOp *pOperation )
                 break;
             }
             case DOT_WEAR_RESET: 
-            {
-                //PRINTF("DOT_WEAR_RESET\r\n");
-                
+            {                
                 dotChecker.runCount++;
                 
                 if(dotChecker.runCount == 1)
@@ -6242,7 +6646,7 @@ void dotWearCalOp( CmdOp *pOperation )
                 dotCheckerPwrDisable();
               
                 intializePrintHead( config_.contrast_adjustment, RT_SERVICE_80MM );
-                initializePrintEngine( config_.contrast_adjustment, config_.out_of_media_count, getPrCommandQueueHandle() );
+                initializePrintEngine( _HOBART_PRINTER, config_.contrast_adjustment, config_.out_of_media_count, getPrCommandQueueHandle() );
 
                 //timing
                 //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
@@ -6287,7 +6691,7 @@ void dotWearCalOp( CmdOp *pOperation )
                         
                         dotChecker.state = DOT_WEAR_WAIT;
                         
-                        if(dotChecker.byteCount < DATA_LENGTH_IN_BYTES)
+                        if(dotChecker.byteCount < dotChecker.dataLengthInBytes)
                         {
                             if(dotChecker.isSetupCompleted == true)
                             {
@@ -6319,6 +6723,7 @@ void dotWearCalOp( CmdOp *pOperation )
         }
     }
 }
+#pragma diag_default=Pa039
 
 /******************************************************************************/
 /*!   \fn void disableOp( CmdOp *pOperation )
@@ -6413,19 +6818,15 @@ void stepTakeupOp( StepUntilOperation *pOperation )
         engine.direction = ( engine.numSteps < 0 ) ? BACKWARD_ : FORWARD_;    
         
         engine.direction = BACKWARD_;
-        /* 10" of label travel into steps 
-        engine.numSteps = 10 * 203; */
         engine.numSteps = abs(engine.numSteps);
         engine.numSteps = engine.numSteps << 1;
         
-        /* PRINTF( "number of steps allowed: %d\r\n",  engine.numSteps ); */
-
         setStepperDirection( engine.direction );
+        
         /* removed to keep motor from stalling at 6ips when sizing labels -- ats 07102014 */	     
         if( ( engine.headType == KYOCERA753_OHM ) || ( engine.headType == KYOCERA800_OHM ) ||            
             ( engine.headType == KYOCERA849_OHM ) ) {
-            engine.steps++;
-                          
+            engine.steps++;                         
             motorStep( engine.direction, &currentStatus );
         }
     } else {
@@ -6439,7 +6840,6 @@ void stepTakeupOp( StepUntilOperation *pOperation )
             powerOffStepper();
             setOperation( IDLE_DIRECTIVE, &currentStatus ); 
         } else if( torque <= 2500 ) {
-
             int even = 0;
             even = engine.numSteps & 0x0001;
             if(getTakingUpPaper() == true)
@@ -6455,6 +6855,7 @@ void stepTakeupOp( StepUntilOperation *pOperation )
         } else {                                  
             PRINTF( "torque: %d\r\n",  torque );
             PRINTF( "engine.numSteps: %d\r\n",  engine.numSteps );
+            
             /* stepping complete */
             resetPrintEngineTimer();
             powerOffStepper();
@@ -6490,16 +6891,8 @@ void clearLabelImageBuffer( void )
 {
     unsigned long buffSize = 0;
     
-    if(getPrintHeadType() == ROHM_72MM_800_OHM)
-    {
-        buffSize = PRINTER_BUFFER_SIZE_72MM;
-    }
-    else
-    {
-        buffSize = PRINTER_BUFFER_SIZE_80MM;
-    }
-  
-  
+    buffSize = PRINTER_BUFFER_SIZE_80MM;
+     
     unsigned char *pBuffer = getImageBuffer();
     if( pBuffer != NULL) {
         memset( pBuffer, 0, buffSize );    
@@ -6521,6 +6914,7 @@ void clearLabelImageBuffer( void )
 void setContinuousStock( void )
 {
     continuousStock_ = true; 
+    //sizingLabels = false;
 }
 
 /******************************************************************************/
@@ -6536,6 +6930,7 @@ void setContinuousStock( void )
 void clrContinuousStock( void )
 {
     continuousStock_ = false;
+    //sizingLabels = true;
 }
 
 void printerTests()
@@ -6720,17 +7115,14 @@ uint16_t calculateSizingBackwindSteps( void )
     {
         if(getLargeGapFlag() == true && getSyncBarFlag() == false)
         {
-            //PRINTF("HT STOCK SIZING BACKWIND - NO PAPER\r\n");
             return (161);
         }
         else if(getSyncBarFlag() == true)
         {
-            //PRINTF("HT SYNC BAR STOCK SIZING BACKWIND - NO PAPER\r\n");
             return (161);
         }
         else
         { 
-            //PRINTF("GT STOCK SIZING BACKWIND - NO PAPER \r\n");
             return (153);
         }
     }
@@ -6777,14 +7169,22 @@ uint16_t calculateStreamingBackwindSteps( void )
         }
         else //GT backwind
         {
+            
+          
             if(TPHStepsPastGapThisPrint >= 340) 
             {
                 streamingLabelBackwind = (TPHStepsPastGapThisPrint - 340);
+                
+                PRINTF("\r\nbackwind calc %d", streamingLabelBackwind);
+                
                 return streamingLabelBackwind;
             }
             else
             {
                 streamingLabelBackwind = (340 - TPHStepsPastGapThisPrint);
+                
+                PRINTF("\r\nbackwind calc %d", streamingLabelBackwind);
+                
                 return streamingLabelBackwind;
             }
         }
@@ -6924,8 +7324,6 @@ uint16_t calculateGTLeadInTarget( void )
     {
         if (labelSize >= GTlabelRanges[i].min && labelSize <= GTlabelRanges[i].max) 
         {
-            //PRINTF("\r\nGT LEAD IN - paper %d - no paper %d\r\n", GTlabelRanges[i].paperValue, GTlabelRanges[i].noPaperValue);
-          
             return isTakingPaper ? GTlabelRanges[i].paperValue : GTlabelRanges[i].noPaperValue;
         }
     }
@@ -6944,9 +7342,7 @@ uint16_t calculateGTLeadInTarget( void )
 *******************************************************************************/
 void setStreamingLabelBackwind( uint16_t steps )
 {
-    streamingLabelBackwind = steps;
-    
-    //PRINTF("setStreamingLabelBackwind() - steps = %d\r\n", steps);
+    streamingLabelBackwind = steps;    
 }
 
 
@@ -6961,8 +7357,6 @@ void setStreamingLabelBackwind( uint16_t steps )
 void setTPHStepsPastGapThisPrint(uint16_t steps)
 {
     TPHStepsPastGapThisPrint = steps;
-    
-    //PRINTF("setTPHStepsPastGapThisPrint() - steps = %d\r\n", steps);
 }
 
 
@@ -6976,8 +7370,6 @@ void setTPHStepsPastGapThisPrint(uint16_t steps)
 *******************************************************************************/
 uint16_t getTPHStepsPastGapThisPrint( void )
 {
-    //PRINTF("getTPHStepsPastGapThisPrint() - steps = %d\r\n", TPHStepsPastGapThisPrint);
-    
     return TPHStepsPastGapThisPrint;
 }
 
@@ -7008,24 +7400,18 @@ void setGapCurrentToSeventyFivePercent( bool status )
 {
     if(status == true)
     {   
-        if(config_.media_sensor_adjustment == 0)
-        { 
-            //PRINTF("setGapCurrentToSeventyFivePercent() - adjustment == 0 - setting current to %d\r\n", 20);
-          
+        if( config_.shootThroughCal == 0 )
+        {           
             setGapCurrent(20);
         }
         else
         {
-            //PRINTF("setGapCurrentToSeventyFivePercent() - current == %d, setting current to %d\r\n", config_.media_sensor_adjustment, (char)(config_.media_sensor_adjustment * 0.75));
-            
-            setGapCurrent((char)(config_.media_sensor_adjustment * 0.75));
+            setGapCurrent((char)(config_.shootThroughCal * 0.75));
         }
     }
     else
     {
-        //PRINTF("setGapCurrentToSeventyFivePercent() - setting current to %d for printing/sizing\r\n", (config_.media_sensor_adjustment));
-      
-        setGapCurrent(config_.media_sensor_adjustment);
+        setGapCurrent(config_.shootThroughCal);
     }
 }
 
@@ -7109,6 +7495,34 @@ int getTempAtStart( void )
     return tempAtStart;
 }
 
+bool checkForOutOfMediaHTPrinter( void )
+{
+    
+    currentStatus.sensor &= ~OUT_OF_MEDIA;
+  
+    if(adcManager.value[CHANNEL_SHOOT] >= config_.backingPaper * 20)
+    {
+        OutOfMedia = true;
+        currentStatus.sensor |= OUT_OF_MEDIA;
+        
+        PRINTF("\r\nOOS check config backing = %d", config_.backingPaper);
+        PRINTF("\r\nOOS check thresh = %d", config_.backingPaper * 20);
+        PRINTF("\r\nOOS check OOS val = %d", adcManager.value[CHANNEL_SHOOT]);
+        
+        return true;
+    }
+    else
+    {
+        OutOfMedia = false;
+        currentStatus.sensor &= ~OUT_OF_MEDIA;
+        
+        PRINTF("\r\nOOS check config backing = %d", config_.backingPaper);
+        PRINTF("\r\nOOS check thresh = %d", config_.backingPaper * 20);
+        PRINTF("\r\nOOS check NOT OOS val = %d", adcManager.value[CHANNEL_SHOOT]);
+        
+        return false;
+    }
+}
 
 bool checkForOutOfMedia( void )
 {
@@ -7176,7 +7590,7 @@ bool checkForOutOfMedia( void )
                         setLowLabelPeelingMinFromHost(lowLabelStatus.segmentLengthMinPeeling);
                     }
                 }
-                else
+                else 
                 {
                     if(lowLabelStatus.averagedSensorFeedback >= LOW_LABEL_MIN_STREAMING_DEFAULT_MIN)
                     {
@@ -7196,6 +7610,7 @@ bool checkForOutOfMedia( void )
             }
             
             currentStatus.sensor |= OUT_OF_MEDIA;
+
             setHeadPower( false );           
         }
         else
@@ -7253,7 +7668,7 @@ void setStreamingExpelMod( uint16_t steps )
     
     if( getTakingUpPaper() == true )
     {
-        if(getLargeGapFlag() == true || getCutterInstalled_() == true)
+        if(getLargeGapFlag() == true || getUsingContinuous() == true)
         {
             streamingExpelMod += 210;
         }
@@ -7264,7 +7679,7 @@ void setStreamingExpelMod( uint16_t steps )
     }
     else
     {
-        if(getLargeGapFlag() == true || getCutterInstalled_() == true)
+        if(getLargeGapFlag() == true || getUsingContinuous() == true)
         {
             streamingExpelMod += 210;
         }
@@ -7281,6 +7696,10 @@ uint16_t getStreamingExpelMod( void )
     return streamingExpelMod;
 }
 
+void setFirstPrint( bool fPrint)
+{
+    firstPrint = fPrint;
+}
 
 bool getFirstPrint( void )
 {
@@ -7424,8 +7843,10 @@ void updateLowLabelStatus( void )
                 // shift current largest into second largest
                 segmentB = segmentA;
 
+
                 // update largest
                 segmentA = distanceBetweenPoints;
+
             }
             else if(distanceBetweenPoints > segmentB) //second largest segment
             {
@@ -7603,7 +8024,7 @@ void updateLowLabelStatus( void )
                 else
                 {
                     //set our label count estimation to a percentage that matches our sensor feedback estimated roll completion percentage
-                    lowLabelStatus.estimatedLabelCount = (uint16_t)lowLabelStatus.numberOfLabelsOnFullRoll * (uint16_t)(((((float)(lowLabelStatus.averagedSensorFeedback - lowLabelStatus.segmentLengthMinStreaming) / (lowLabelStatus.segmentLengthMaxStreaming - lowLabelStatus.segmentLengthMinStreaming)) * 100.0f)) / 100);
+                    lowLabelStatus.estimatedLabelCount = lowLabelStatus.numberOfLabelsOnFullRoll * (uint16_t)(((((float)(lowLabelStatus.averagedSensorFeedback - lowLabelStatus.segmentLengthMinStreaming) / (lowLabelStatus.segmentLengthMaxStreaming - lowLabelStatus.segmentLengthMinStreaming)) * 100.0f)) / 100);
                 }
             }  
         }
@@ -7664,6 +8085,7 @@ short getLabelLowSteps( void )
 
 void resetLabelLowVars( void )
 {    
+    //PRINTF("resetLabelLowVars()\r\n");
     lowLabelStatus.sensorFeedbackMax = 0;
     lowLabelStatus.sensorFeedbackMin = 4999;
       
@@ -7765,7 +8187,7 @@ void updateRollCompletionPercentage( void )
     }
   
     //calculate estimated label count roll completion percentage
-    lowLabelStatus.estimatedLabelCountPercentageOfRollRemaining = (char)(((float)(lowLabelStatus.estimatedLabelCount - 1) / (lowLabelStatus.numberOfLabelsOnFullRoll - 1)) * 100.0f);
+    lowLabelStatus.estimatedLabelCountPercentageOfRollRemaining = (uint16_t)( (float)( ( lowLabelStatus.estimatedLabelCount - 1 ) / ( lowLabelStatus.numberOfLabelsOnFullRoll - 1 ) ) * 100.0f );
   
     //if we have collected enough low label samples to have a segment average
     if(lowLabelStatus.averagedSensorFeedback > 0)
@@ -7942,42 +8364,241 @@ uint16_t calculateSizingOffset(uint16_t labelSteps)
     uint16_t steps = labelSteps;
     bool hasLargeGap = getLargeGapFlag();
 
-    const size_t tableSize = sizeof(labelOffsetTable) / sizeof(labelOffsetTable[0]);
-
-    // Default to first entry
-    size_t index = 0;
-
-    // Find the largest entry where stepLimit < steps
-    for (size_t i = 0; i < tableSize; i++)
+    HeadType_t head = getPrintHeadType();
+     
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
     {
-        if (steps >= labelOffsetTable[i].stepLimit) 
+        const size_t tableSize = sizeof(labelOffsetTableHTPrinter) / sizeof(labelOffsetTableHTPrinter[0]);
+
+        // Default to first entry
+        size_t index = 0;
+
+        // Find the largest entry where stepLimit < steps
+        for (size_t i = 0; i < tableSize; i++)
         {
-            index = i;
-        }        
-        else
-        {
-            break;
+            if (steps >= labelOffsetTableHTPrinter[i].stepLimit) 
+            {
+                index = i;
+            }        
+            else
+            {
+                break;
+            }
         }
-    }
 
-    // Clamp to last entry if steps exceeds all limits
-    if (steps > labelOffsetTable[tableSize - 1].stepLimit)
-    {
-        index = tableSize - 1;
+        // Clamp to last entry if steps exceeds all limits
+        if (steps > labelOffsetTableHTPrinter[tableSize - 1].stepLimit)
+        {
+            index = tableSize - 1;
+        }
+        
+        uint16_t stepOffset = 0;
+            
+        stepOffset = hasLargeGap ?
+          labelOffsetTableHTPrinter[index].HTOffset : labelOffsetTableHTPrinter[index].GTOffset;
+        
+        PRINTF("\r\nHT PRINTER STEPS BEFORE OFFSETTING: %d", steps);  
+        PRINTF("\r\nOFFSET INDEX: %d", index); 
+        PRINTF("\r\nSIZING OFFSET APPLIED: %d\r\n\r\n", stepOffset);
+            
+        return stepOffset;
     }
-    
-    uint16_t stepOffset = 0;
+    else
+    {
+        const size_t tableSize = sizeof(labelOffsetTableGTPrinter) / sizeof(labelOffsetTableGTPrinter[0]);
+
+        // Default to first entry
+        size_t index = 0;
+
+        // Find the largest entry where stepLimit < steps
+        for (size_t i = 0; i < tableSize; i++)
+        {
+            if (steps >= labelOffsetTableGTPrinter[i].stepLimit) 
+            {
+                index = i;
+            }        
+            else
+            {
+                break;
+            }
+        }
+
+        // Clamp to last entry if steps exceeds all limits
+        if (steps > labelOffsetTableGTPrinter[tableSize - 1].stepLimit)
+        {
+            index = tableSize - 1;
+        }
         
-    stepOffset = hasLargeGap ?
-        labelOffsetTable[index].HTOffset : labelOffsetTable[index].GTOffset;
-    
-    PRINTF("\r\nSTEPS BEFORE OFFSETTING: %d", steps);  
-    PRINTF("\r\nOFFSET INDEX: %d", index); 
-    PRINTF("\r\nSIZING OFFSET APPLIED: %d\r\n\r\n", stepOffset);
-        
-    return stepOffset;
+        uint16_t stepOffset = 0;
+            
+        stepOffset = hasLargeGap ?
+            labelOffsetTableGTPrinter[index].HTOffset : labelOffsetTableGTPrinter[index].GTOffset;
+            
+        PRINTF("\r\nGT PRINTER STEPS BEFORE OFFSETTING: %d", steps);  
+        PRINTF("\r\nOFFSET INDEX: %d", index); 
+        PRINTF("\r\nSIZING OFFSET APPLIED: %d\r\n\r\n", stepOffset);
+            
+        return stepOffset;
+    } 
 }
 
+uint16_t conversion_to_voltage_dV(uint16_t conversion)
+{
+    /* Returns voltage in decivolts (e.g. 235 = 23.5V) */
 
+    const uint16_t C_LOW = 2175;
+    const uint16_t C_HIGH = 2272;
 
+    const uint16_t V_LOW_dV = 230;  // 23.0V
+    const uint16_t V_HIGH_dV = 240; // 24.0V
 
+    /* Clamp */
+    if (conversion <= C_LOW)
+        return V_LOW_dV;
+
+    if (conversion >= C_HIGH)
+        return V_HIGH_dV;
+
+    /* Linear interpolation with rounding */
+    return V_LOW_dV +
+           ((uint32_t)(conversion - C_LOW) * (V_HIGH_dV - V_LOW_dV)
+            + (C_HIGH - C_LOW) / 2) /
+           (C_HIGH - C_LOW);
+}
+
+void calcLabelTakenThreshold( bool fPrint )
+{
+    if(getFirstPrint() == true)
+    {
+        int setPoint = getLabelTaken();
+        int lowestReading = getLowestLabelTakenReading();
+        
+        // Offsets to try in descending order
+        static const int offsets[] = {4000, 3500, 3000, 2500, 2000, 1500, 1000, 900, 800, 700, 600, 500, 400, 300, 275, 250, 225, 200, 175, 150, 125, 100, 75, 50 };
+        static const int numOffsets = sizeof(offsets) / sizeof(offsets[0]);
+        
+        bool calibrated = false;
+        
+        for(int i = 0; i < numOffsets; i++)
+        {
+            if(setPoint - offsets[i] >= (lowestReading + 100))
+            {
+                LABEL_TAKEN_THRESHOLD_LABEL    = setPoint - offsets[i];
+                LABEL_TAKEN_THRESHOLD_NO_LABEL = setPoint - offsets[i] + 1;
+                
+                PRINTF("\r\nLT CAL sensor val - %d %d\r\n", offsets[i], setPoint);
+                PRINTF("\r\nLABEL_TAKEN_THRESHOLD_LABEL %d", LABEL_TAKEN_THRESHOLD_LABEL);
+                PRINTF("\r\nlowest LT %d", lowestReading);
+                
+                firstPrint = fPrint;
+                calibrated = true;
+                break;
+            }
+        }
+        
+        if(!calibrated)
+        {
+            PRINTF("\r\nLT CAL FAILED");
+            PRINTF("\r\nLT CAL sensor val %d\r\n", setPoint);
+             
+            LABEL_TAKEN_THRESHOLD_LABEL    = lowestReading + 50;
+            LABEL_TAKEN_THRESHOLD_NO_LABEL = lowestReading + 49;
+            
+            PRINTF("\r\nLABEL_TAKEN_THRESHOLD_LABEL %d", LABEL_TAKEN_THRESHOLD_LABEL);
+            PRINTF("\r\nlowest LT %d\r\n", lowestReading);
+        }
+    }
+}
+
+void strobeForceHigh(void)
+{
+    PWM_UpdatePwmDutycycleHighAccuracy(PWM2, kPWM_Module_0, kPWM_PwmA,
+                                       kPWM_EdgeAligned, 1U);
+    
+    PWM_StopTimer(PWM2, kPWM_Control_Module_0);
+    PWM_StartTimer(PWM2, kPWM_Control_Module_0);
+    
+    PWM_SetPwmLdok(PWM2, kPWM_Control_Module_0, true);
+}
+
+void strobeForceLow(void)
+{
+    PWM_UpdatePwmDutycycleHighAccuracy(PWM2, kPWM_Module_0, kPWM_PwmA,
+                                       kPWM_EdgeAligned, 65534U);
+    
+    PWM_StopTimer(PWM2, kPWM_Control_Module_0);
+    PWM_StartTimer(PWM2, kPWM_Control_Module_0);
+    
+    PWM_SetPwmLdok(PWM2, kPWM_Control_Module_0, true);
+}
+
+void strobeReleaseToPWM(uint8_t pwmDuty)
+{
+    PWM_StopTimer(PWM2, kPWM_Control_Module_0);
+    
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_38_FLEXPWM2_PWMA00, 0 );
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_38_FLEXPWM2_PWMA00, 0x10B0U ); 
+    
+    pwm_signal_param_t pwmSignal;
+    
+    pwmSignal.pwmChannel       = kPWM_PwmA;
+    pwmSignal.level            = kPWM_HighTrue;
+    pwmSignal.dutyCyclePercent = pwmDuty;
+    pwmSignal.deadtimeValue    = 0U;
+    pwmSignal.faultState       = kPWM_PwmFaultState0;
+    
+    PWM_SetupPwm(
+        PWM2,
+        kPWM_Module_0,
+        &pwmSignal,
+        1U,
+        kPWM_EdgeAligned,
+        //50000,
+        25265U,
+        CLOCK_GetFreq(kCLOCK_IpgClk)
+    );
+
+    PWM_StartTimer(PWM2, kPWM_Control_Module_0);
+    
+    PWM_SetPwmLdok( PWM2, kPWM_Control_Module_0, true );
+}
+
+uint16_t getCutterStatusCheckedCounter( void )
+{
+    return cutterStatusCheckedCounter;
+}
+
+void setCutterStatusCheckedCounter( uint16_t count )
+{
+    cutterStatusCheckedCounter = count;
+}
+
+bool getCutterStatusChecked( void )
+{
+    return cutterStatusChecked;
+}
+
+void setCutterStatusChecked( bool checked )
+{
+    cutterStatusChecked = checked;
+}
+
+void stopCutterPolling( bool stopped)
+{
+    cutterStatusPollingActive = stopped;
+}
+
+void setCutterJiggleEnabled( bool enabled )
+{
+    cutterJiggleEnabled = enabled;
+}
+
+bool getCutterJiggling( void )
+{
+    return cutterJiggling;
+}
+
+bool getCutMsgSent( void )
+{
+    return cutMsgSent;
+}

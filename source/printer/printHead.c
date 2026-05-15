@@ -1,41 +1,30 @@
 #include "printHead.h"
 #include "serialFlash.h"
-#include "filter.h"
 #include "fsl_gpio.h"
 #include "pin_mux.h"
 #include "printEngine.h"
 #include "sensors.h"
 #include "fsl_debug_console.h"
 #include "lp5521.h"
+#include "threadManager.h"
 
 HeadStyle headStyle;
 static PrinterEnv env_;
-extern FilterData    headTempData;
 extern bool paused_;
+static unsigned short prevContrast_ = 0;
 extern Pr_Config config_;
 extern PrStatusInfo currentStatus;
 extern PrStatusInfo prevStatus;
 
 AT_NONCACHEABLE_SECTION( static ImageBfrMgr imageBfrMgr );
 AT_NONCACHEABLE_SECTION( unsigned char imageBuffer[ PRINTER_BUFFER_SIZE_80MM ] );
-AT_NONCACHEABLE_SECTION( unsigned char dotWear[HEAD_DOTS_72MM] );
+AT_NONCACHEABLE_SECTION( unsigned char dotWear[HEAD_DOTS_80MM] );
 
-//unsigned char lastBfrBytes[512] = { 0 }; 
-
-/* 6ips timing values from Hung */
-/*
-const unsigned short rohm80mmSLTTimes[10] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895, 2166, 2166 }; 
-const unsigned short rohm80mmHistory[8] = { 550, 400, 500, 700, 665, 1020, 975, 935 };
-const unsigned short rohm80mmCurrentLine[8] = { 685, 585, 725, 935, 888, 1260, 1229, 1197 };
-const unsigned short rohm80mmPwmStart[8] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895 };
-const unsigned short rohm80mmPwmDuty[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-*/
-
-AT_NONCACHEABLE_SECTION( unsigned short rohm80mmSLTTimes[10] );
-AT_NONCACHEABLE_SECTION( unsigned short rohm80mmHistory[8] );
-AT_NONCACHEABLE_SECTION( unsigned short rohm80mmCurrentLine[8] );
-AT_NONCACHEABLE_SECTION( unsigned short rohm80mmPwmStart[8] );
-AT_NONCACHEABLE_SECTION( unsigned short rohm80mmPwmDuty[8] );
+AT_NONCACHEABLE_SECTION( unsigned short printHeadSLTTimes[10] );
+AT_NONCACHEABLE_SECTION( unsigned short printHeadHistory[8] );
+AT_NONCACHEABLE_SECTION( unsigned short printHeadCurrentLine[8] );
+AT_NONCACHEABLE_SECTION( unsigned short printHeadPwmStart[8] );
+AT_NONCACHEABLE_SECTION( unsigned short printHeadPwmDuty[8] );
 
 
 /* print head timing tables */
@@ -60,117 +49,298 @@ AT_NONCACHEABLE_SECTION( unsigned char history1Line[ PRINTER_HEAD_SIZE_80MM ] );
 *******************************************************************************/ 
 void intializePrintHead(  unsigned int contrast,  PrinterEnv env )
 {
-    /*
-    //const unsigned short rohm80mmSLTTimes[10] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895, 2166, 2166 }; 
-    //const unsigned short rohm80mmHistory[8] = { 550, 400, 500, 700, 665, 1020, 975, 935 };
-    //const unsigned short rohm80mmCurrentLine[8] = { 685, 585, 725, 935, 888, 1260, 1229, 1197 };
-    //const unsigned short rohm80mmPwmStart[8] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895 };
-    //const unsigned short rohm80mmPwmDuty[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    */
-  
-    //const unsigned short rohm80mmSLTTimes[10] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895, 2166, 2166 };
-    rohm80mmSLTTimes[0] = 1083;
-    rohm80mmSLTTimes[1] = 1083;
-    rohm80mmSLTTimes[2] = 1245;
-    rohm80mmSLTTimes[3] = 1516;
-    rohm80mmSLTTimes[4] = 1516;
-    rohm80mmSLTTimes[5] = 1895;
-    rohm80mmSLTTimes[6] = 1895;
-    rohm80mmSLTTimes[7] = 1895;
-    rohm80mmSLTTimes[8] = 2166;
-    rohm80mmSLTTimes[9] = 2166;
-    
-    //const unsigned short rohm80mmHistory[8] = { 550, 400, 500, 700, 665, 1020, 975, 935 };
-    rohm80mmHistory[0] = 550;
-    rohm80mmHistory[1] = 400;
-    rohm80mmHistory[2] = 500;
-    rohm80mmHistory[3] = 700;
-    rohm80mmHistory[4] = 665;
-    rohm80mmHistory[5] = 1020;
-    rohm80mmHistory[6] = 975;
-    rohm80mmHistory[7] = 935;
-    
-    //const unsigned short rohm80mmCurrentLine[8] = { 685, 585, 725, 935, 888, 1260, 1229, 1197 };
-    rohm80mmCurrentLine[0] = 685;
-    rohm80mmCurrentLine[1] = 585;
-    rohm80mmCurrentLine[2] = 725;
-    rohm80mmCurrentLine[3] = 935;
-    rohm80mmCurrentLine[4] = 888;
-    rohm80mmCurrentLine[5] = 1260;
-    rohm80mmCurrentLine[6] = 1229;
-    rohm80mmCurrentLine[7] = 1197;
-    
-    //const unsigned short rohm80mmPwmStart[8] = { 1083, 1083, 1245, 1516, 1516, 1895, 1895, 1895 };
-    rohm80mmPwmStart[0] = 1083;
-    rohm80mmPwmStart[1] = 1083;
-    rohm80mmPwmStart[2] = 1245;
-    rohm80mmPwmStart[3] = 1516;
-    rohm80mmPwmStart[4] = 1516;
-    rohm80mmPwmStart[5] = 1895;
-    rohm80mmPwmStart[6] = 1895;
-    rohm80mmPwmStart[7] = 1895;
-    
-    //const unsigned short rohm80mmPwmDuty[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    rohm80mmPwmDuty[0] = 0;
-    rohm80mmPwmDuty[1] = 0;
-    rohm80mmPwmDuty[2] = 0;
-    rohm80mmPwmDuty[3] = 0;
-    rohm80mmPwmDuty[4] = 0;
-    rohm80mmPwmDuty[5] = 0;
-    rohm80mmPwmDuty[6] = 0;
-    rohm80mmPwmDuty[7] = 0;
-  
-    HEADTYPE headType = UNKNOWN_HEAD;
-    
+    HeadType_t head = getPrintHeadType();
+      
+    if( head == KYOCERA753_OHM || 
+        head == KYOCERA800_OHM || 
+        head == KYOCERA849_OHM ) {
+        reconfigurePinsForGTXRID();
+
+        uint8_t RID0B = GPIO_PinRead( PHD_RID0B_GPIO, PHD_RID0B_PIN );
+        uint8_t RID1B = GPIO_PinRead( PHD_RID1B_GPIO, PHD_RID1B_PIN );
+        uint8_t RID2 = GPIO_PinRead( PHD_RID2_GPIO, PHD_RID2_PIN );
+
+        uint8_t rank = 0;
+
+        if      (RID0B == 0 && RID1B == 0 && RID2 == 0) rank = 1;  // 2,2,2
+        else if (RID0B == 0 && RID1B == 0 && RID2 == 1) rank = 2;  // 2,2,1
+        else if (RID0B == 0 && RID1B == 1 && RID2 == 0) rank = 3;  // 2,1,2
+        else if (RID0B == 0 && RID1B == 1 && RID2 == 1) rank = 4;  // 2,1,1
+        else if (RID0B == 1 && RID1B == 0 && RID2 == 0) rank = 5;  // 1,2,2
+        else if (RID0B == 1 && RID1B == 0 && RID2 == 1) rank = 6;  // 1,2,1
+        else if (RID0B == 1 && RID1B == 1 && RID2 == 0) rank = 7;  // 1,1,2
+        else if (RID0B == 1 && RID1B == 1 && RID2 == 1) rank = 8;  // 1,1,1
+        else rank = 0; 
+
+        PRINTF("printhead resistance rank %d", rank);
+        
+        typedef enum
+        {
+            LOW_RES = 3,
+            MED_RES = 7,
+            HIGH_RES    
+        }HTRESISTANCELEVEL;
+      
+        char resistanceLevel = 0;
+
+        if(rank <= LOW_RES)
+        {
+            resistanceLevel = LOW_RES;
+        }
+        else if(rank < MED_RES)
+        {
+            resistanceLevel = MED_RES;
+        }
+        else
+        {
+            resistanceLevel = HIGH_RES;
+        }
+        
+        resistanceLevel = LOW_RES;
+        
+        switch (resistanceLevel)
+        {
+            case LOW_RES:
+            {
+                PRINTF("lOW resistance timings HT printhead\r\n");
+                
+                //2% smaller
+                printHeadSLTTimes[0] = 1622;  printHeadSLTTimes[1] = 1622;
+                printHeadSLTTimes[2] = 1622;  printHeadSLTTimes[3] = 1622;
+                printHeadSLTTimes[4] = 1622;  printHeadSLTTimes[5] = 2027;
+                printHeadSLTTimes[6] = 2027;  printHeadSLTTimes[7] = 2027;
+                printHeadSLTTimes[8] = 2315;  printHeadSLTTimes[9] = 2315;
+                
+                // History
+                printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+                printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+                printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+                printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+                // Current Line
+                printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+                printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+                printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+                printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+                // PWM Start
+                printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+                printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+                printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+                printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+                // PWM Duty
+                printHeadPwmDuty[0] = 50;  printHeadPwmDuty[1] = 50;
+                printHeadPwmDuty[2] = 50;  printHeadPwmDuty[3] = 50;
+                printHeadPwmDuty[4] = 50;  printHeadPwmDuty[5] = 50;
+                printHeadPwmDuty[6] = 50;  printHeadPwmDuty[7] = 50;
+
+                break;
+            }
+
+            case MED_RES:
+            {
+                PRINTF("\r\nMED resistance timings HT printhead\r\n");
+
+                // SLT Times
+                printHeadSLTTimes[0] = 1137;  printHeadSLTTimes[1] = 1137;
+                printHeadSLTTimes[2] = 1307;  printHeadSLTTimes[3] = 1592;
+                printHeadSLTTimes[4] = 1592;  printHeadSLTTimes[5] = 1990;
+                printHeadSLTTimes[6] = 1990;  printHeadSLTTimes[7] = 1990;
+                printHeadSLTTimes[8] = 2274;  printHeadSLTTimes[9] = 2274;
+
+                // History
+                printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+                printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+                printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+                printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+                // Current Line
+                printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+                printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+                printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+                printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+                // PWM Start
+                printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+                printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+                printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+                printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+                // PWM Duty
+                printHeadPwmDuty[0] = 0;  printHeadPwmDuty[1] = 0;
+                printHeadPwmDuty[2] = 0;  printHeadPwmDuty[3] = 0;
+                printHeadPwmDuty[4] = 0;  printHeadPwmDuty[5] = 0;
+                printHeadPwmDuty[6] = 0;  printHeadPwmDuty[7] = 0;
+
+                break;
+            }
+
+            case HIGH_RES:
+            {
+                PRINTF("\r\nHIGH resistance timings HT printhead\r\n");
+
+                // (same grouped assignments as above)
+
+                printHeadSLTTimes[0] = 1137;  printHeadSLTTimes[1] = 1137;
+                printHeadSLTTimes[2] = 1307;  printHeadSLTTimes[3] = 1592;
+                printHeadSLTTimes[4] = 1592;  printHeadSLTTimes[5] = 1990;
+                printHeadSLTTimes[6] = 1990;  printHeadSLTTimes[7] = 1990;
+                printHeadSLTTimes[8] = 2274;  printHeadSLTTimes[9] = 2274;
+
+                printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+                printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+                printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+                printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+                printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+                printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+                printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+                printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+                printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+                printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+                printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+                printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+                printHeadPwmDuty[0] = 0;  printHeadPwmDuty[1] = 0;
+                printHeadPwmDuty[2] = 0;  printHeadPwmDuty[3] = 0;
+                printHeadPwmDuty[4] = 0;  printHeadPwmDuty[5] = 0;
+                printHeadPwmDuty[6] = 0;  printHeadPwmDuty[7] = 0;
+
+                break;
+            }
+
+            default:
+            {
+                PRINTF("\r\nUNKNOWN HT PRINTHEAD RESISTANCE\r\n");
+
+                // (same grouped assignments again)
+
+                printHeadSLTTimes[0] = 1137;  printHeadSLTTimes[1] = 1137;
+                printHeadSLTTimes[2] = 1307;  printHeadSLTTimes[3] = 1592;
+                printHeadSLTTimes[4] = 1592;  printHeadSLTTimes[5] = 1990;
+                printHeadSLTTimes[6] = 1990;  printHeadSLTTimes[7] = 1990;
+                printHeadSLTTimes[8] = 2274;  printHeadSLTTimes[9] = 2274;
+
+                printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+                printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+                printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+                printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+                printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+                printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+                printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+                printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+                printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+                printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+                printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+                printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+                printHeadPwmDuty[0] = 0;  printHeadPwmDuty[1] = 0;
+                printHeadPwmDuty[2] = 0;  printHeadPwmDuty[3] = 0;
+                printHeadPwmDuty[4] = 0;  printHeadPwmDuty[5] = 0;
+                printHeadPwmDuty[6] = 0;  printHeadPwmDuty[7] = 0;
+
+                break;
+            }
+        }
+    }
+    else if (head == ROHM_72MM_800_OHM || head == ROHM_80MM_650_OHM)
+    {
+        //PRINTF("\r\nROHM 72/80mm printhead timings\r\n");
+
+        // SLT Times
+        printHeadSLTTimes[0] = 1083;  printHeadSLTTimes[1] = 1083;
+        printHeadSLTTimes[2] = 1245;  printHeadSLTTimes[3] = 1516;
+        printHeadSLTTimes[4] = 1516;  printHeadSLTTimes[5] = 1895;
+        printHeadSLTTimes[6] = 1895;  printHeadSLTTimes[7] = 1895;
+        printHeadSLTTimes[8] = 2166;  printHeadSLTTimes[9] = 2166;
+
+        // History
+        printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+        printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+        printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+        printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+        // Current Line
+        printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+        printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+        printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+        printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+        // PWM Start
+        printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+        printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+        printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+        printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+        // PWM Duty
+        printHeadPwmDuty[0] = 0;  printHeadPwmDuty[1] = 0;
+        printHeadPwmDuty[2] = 0;  printHeadPwmDuty[3] = 0;
+        printHeadPwmDuty[4] = 0;  printHeadPwmDuty[5] = 0;
+        printHeadPwmDuty[6] = 0;  printHeadPwmDuty[7] = 0;
+    }
+    else
+    {
+        PRINTF("\r\nUNKNOWN PRINTHEAD TYPE - ROHM 72/80mm printhead timings\r\n");
+
+        // SLT Times
+        printHeadSLTTimes[0] = 1083;  printHeadSLTTimes[1] = 1083;
+        printHeadSLTTimes[2] = 1245;  printHeadSLTTimes[3] = 1516;
+        printHeadSLTTimes[4] = 1516;  printHeadSLTTimes[5] = 1895;
+        printHeadSLTTimes[6] = 1895;  printHeadSLTTimes[7] = 1895;
+        printHeadSLTTimes[8] = 2166;  printHeadSLTTimes[9] = 2166;
+
+        // History
+        printHeadHistory[0] = 550;   printHeadHistory[1] = 400;
+        printHeadHistory[2] = 500;   printHeadHistory[3] = 700;
+        printHeadHistory[4] = 665;   printHeadHistory[5] = 1020;
+        printHeadHistory[6] = 975;   printHeadHistory[7] = 935;
+
+        // Current Line
+        printHeadCurrentLine[0] = 685;   printHeadCurrentLine[1] = 585;
+        printHeadCurrentLine[2] = 725;   printHeadCurrentLine[3] = 935;
+        printHeadCurrentLine[4] = 888;   printHeadCurrentLine[5] = 1260;
+        printHeadCurrentLine[6] = 1229;  printHeadCurrentLine[7] = 1197;
+
+        // PWM Start
+        printHeadPwmStart[0] = 1083;  printHeadPwmStart[1] = 1083;
+        printHeadPwmStart[2] = 1245;  printHeadPwmStart[3] = 1516;
+        printHeadPwmStart[4] = 1516;  printHeadPwmStart[5] = 1895;
+        printHeadPwmStart[6] = 1895;  printHeadPwmStart[7] = 1895;
+
+        // PWM Duty
+        printHeadPwmDuty[0] = 0;  printHeadPwmDuty[1] = 0;
+        printHeadPwmDuty[2] = 0;  printHeadPwmDuty[3] = 0;
+        printHeadPwmDuty[4] = 0;  printHeadPwmDuty[5] = 0;
+        printHeadPwmDuty[6] = 0;  printHeadPwmDuty[7] = 0;
+    }
+
     env_ = env;
 
-    headType = getPrintHeadType();
-    
     /* intialize our head style */ 
     if( env_ == RT_SERVICE_72MM )    
         headStyle.headSize = HEAD_DOTS_72MM;
     else
         headStyle.headSize = HEAD_DOTS_80MM;
     
-    headStyle.headType = headType;
+    headStyle.headType = head;
        
     clearHistory( env );
     
     /* initialize image buffer manager */
     initializeImageBfr( &imageBfrMgr );
     
-    /* initialize head timings for all temperature ranges */
-    switch( headType )
-    {
-        case ROHM_72MM_800_OHM : 
-        {
-            for( int i = 0; i <= 6; i++ ) 
-            {          
-                historyTimes[i]         = rohm80mmHistory[contrast];
-                adjacencyTimes[i]       = 0;
-                currentLineTimes[i]     = rohm80mmCurrentLine[contrast];
-                pwmTimes[i]             = rohm80mmPwmStart[contrast];
-                pwmDutyCycle[i]         = rohm80mmPwmDuty[contrast];
-            }
-            break;
-        }
-        case ROHM_80MM_650_OHM : 
-        {
-            for( int i = 0; i <= 6; i++ ) 
-            {          
-                historyTimes[i]         = rohm80mmHistory[contrast];
-                adjacencyTimes[i]       = 0;
-                currentLineTimes[i]     = rohm80mmCurrentLine[contrast];
-                pwmTimes[i]             = rohm80mmPwmStart[contrast];
-                pwmDutyCycle[i]         = rohm80mmPwmDuty[contrast];
-            }
-            break;
-        }
-        default: 
-        {
-            PRINTF("intializePrintHead(): Unknown head type. critical error!\r\n" );
-            break;
-        } 
+    /* initialize head timings */
+    for( int i = 0; i <= 6; i++ ) 
+    {          
+        historyTimes[i]         = printHeadHistory[contrast];
+        adjacencyTimes[i]       = 0;
+        currentLineTimes[i]     = printHeadCurrentLine[contrast];
+        pwmTimes[i]             = printHeadPwmStart[contrast];
+        pwmDutyCycle[i]         = printHeadPwmDuty[contrast];
     }
     
     /* initialize print head data latch */
@@ -181,11 +351,7 @@ void intializePrintHead(  unsigned int contrast,  PrinterEnv env )
     gpio_pin_config_t strobe = { kGPIO_DigitalOutput, 1, };
     GPIO_PinInit( PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, &strobe );  
     GPIO_PinInit( PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, &strobe );
-    
-    /* initialize print head strobe enable */
-    //gpio_pin_config_t enable = { kGPIO_DigitalOutput, 1, };
-    //GPIO_PinInit( PHEAD_STROBE_EN_GPIO, PHEAD_STROBE_EN_PIN, &enable );  
-    
+        
     /*intialize head power io */
     gpio_pin_config_t headPower = { kGPIO_DigitalOutput, 0, }; 
     GPIO_PinInit( PHEAD_POWER_EN_GPIO, PHEAD_POWER_EN_PIN, &headPower );  
@@ -209,14 +375,7 @@ void initializeImageBfr( ImageBfrMgr *pMgr )
 {
     static unsigned long buffSize = 0;
     
-     if(getPrintHeadType() == ROHM_72MM_800_OHM)
-    {
-        buffSize = PRINTER_BUFFER_SIZE_72MM;
-    }
-    else
-    {
-        buffSize = PRINTER_BUFFER_SIZE_80MM;
-    }
+    buffSize = PRINTER_BUFFER_SIZE_80MM;
 
     if( pMgr != NULL ) 
     {
@@ -330,9 +489,7 @@ void setLabelImageSizeMgr( unsigned long size )
     
     imageBfrMgr.index = 0;
     
-    if( imageBfrMgr.labelImageSize > imageBfrMgr.bufferSize ) 
-    {
-        //PRINTF("labelImage is multi transfer!\r\n");
+    if( imageBfrMgr.labelImageSize > imageBfrMgr.bufferSize ) {
         imageBfrMgr.rollover = true;
     }
 }
@@ -349,16 +506,11 @@ void setLabelImageSizeMgr( unsigned long size )
 *******************************************************************************/ 
 void clearHistory( PrinterEnv env )
 {
-    if( env == RT_SERVICE_72MM ) 
-    {
+    if( env == RT_SERVICE_72MM )  {
         memset( &history1Line[0], 0, sizeof( PRINTER_HEAD_SIZE_72MM / sizeof(history1Line) ) );
-    } 
-    else if ( env == RT_SERVICE_80MM ) 
-    {
+    }  else if ( env == RT_SERVICE_80MM )  {
         memset( &history1Line[0], 0, sizeof( PRINTER_HEAD_SIZE_80MM / sizeof(history1Line) ) );
-    } 
-    else 
-    {
+    } else {
         PRINTF("clearHistory() error: unsupported head type!\r\n");
     }
 }
@@ -403,24 +555,20 @@ int getImageBufferSize( void )
       \author
           Chris King
 *******************************************************************************/
-HEADTYPE getPrintHeadType( void )
+HeadType_t getPrintHeadType( void )
 {
-    HEADTYPE headType = UNKNOWN_HEAD;
-    
-    if(GPIO_PinRead(GPIO1, 15U) == 1)
-    {
-        headType = ROHM_72MM_800_OHM;
-        return headType;
-    }
-    else
-    {
+    HeadType_t headType = UNKNOWN_HEAD;
+        
+    if( GPIO_PinRead(GPIO1, 15U) == 1 ) {
+        headType = KYOCERA753_OHM;
+    } else {
         headType = ROHM_80MM_650_OHM;
-        return headType;
-    }
+    }    
+    return headType;
 }
 
 /******************************************************************************/
-/*!   \fn unsigned int getSltTime( HEADTYPE type, unsigned int contrast )                                                              
+/*!   \fn unsigned int getSltTime( HeadType_t type, unsigned int contrast )                                                              
  
       \brief
         This function returns the current SLT time based on the contrast.
@@ -428,9 +576,9 @@ HEADTYPE getPrintHeadType( void )
       \author
           Aaron Swift
 *******************************************************************************/ 
-unsigned int getSltTime( HEADTYPE type, unsigned int contrast )
+unsigned int getSltTime( HeadType_t type, unsigned int contrast )
 {
-    return( rohm80mmSLTTimes[ contrast ] ); 
+    return( printHeadSLTTimes[ contrast ] ); 
 }
 
 /******************************************************************************/
@@ -457,18 +605,18 @@ unsigned short getHalfSltTime( void )
       \author
           Aaron Swift
 *******************************************************************************/ 
-unsigned int getSltSizingTime( HEADTYPE type )
+unsigned int getSltSizingTime( HeadType_t type )
 {
-    if( ( type == KYOCERA753_OHM ) || ( type == KYOCERA800_OHM  ) || 
+    if( ( type == KYOCERA753_OHM ) || ( type == KYOCERA800_OHM  ) || ( type == KYOCERA849_OHM  ) ||
         ( type == ROHM_72MM_800_OHM ) || ( type == ROHM_80MM_650_OHM ) )
-        return( rohm80mmSLTTimes[ 7 ] );  /* 3 MAX_CONTRAST */
+        return( printHeadSLTTimes[ 7 ] );  
     else 
         PRINTF("getSltTime(): Unknown head type. critical error!\r\n" );
         return( 0 );  
 }
 
 /******************************************************************************/
-/*!   \fn unsigned int getCompLevel( HEADTYPE type )                                                           
+/*!   \fn unsigned int getCompLevel( HeadType_t type )                                                           
  
       \brief
         This function returns the compensation level based on the head type.
@@ -476,7 +624,7 @@ unsigned int getSltSizingTime( HEADTYPE type )
       \author
           Aaron Swift
 *******************************************************************************/ 
-unsigned int getCompLevel( HEADTYPE type )
+unsigned int getCompLevel( HeadType_t type )
 {
     int compensation;
     if( ( type == KYOCERA753_OHM ) || ( type == KYOCERA800_OHM ) || 
@@ -531,14 +679,7 @@ unsigned char getHeadStyleType( void )
 *******************************************************************************/ 
 unsigned short getHeadStyleSize( void )
 {
-    if( env_ == RT_SERVICE_72MM )
-    { 
-        return headStyle.headSize = HEAD_DOTS_72MM;
-    }
-    else
-    {
-        return headStyle.headSize = HEAD_DOTS_80MM;
-    }      
+    return headStyle.headSize = HEAD_DOTS_80MM;      
 }
                         
 /******************************************************************************/
@@ -554,9 +695,11 @@ void setHeadTimings( void )
 {
     PrintEngine *pEngine = getPrintEngine();
     
-    if( ( pEngine->headType == ROHM_72MM_800_OHM ) || ( pEngine->headType == ROHM_80MM_650_OHM ) )       
+    if( ( pEngine->headType == ROHM_72MM_800_OHM ) || ( pEngine->headType == ROHM_80MM_650_OHM ) || 
+        ( pEngine->headType == KYOCERA753_OHM ) || ( pEngine->headType == KYOCERA800_OHM ) ||
+        ( pEngine->headType == KYOCERA849_OHM ) )       
     {
-        pEngine->sltTime = rohm80mmSLTTimes[ pEngine->contrast ];
+        pEngine->sltTime = printHeadSLTTimes[ pEngine->contrast ];
     }
 
     pEngine->sltHalfTime = pEngine->sltTime / 2;
@@ -565,53 +708,29 @@ void setHeadTimings( void )
     updatePrintTimings( );
     
     /* only allow history and current line 2loads for 5 ips printing-- ats */
-    if( ( pEngine->headType == ROHM_72MM_800_OHM ) || ( pEngine->headType == ROHM_80MM_650_OHM ) ) 
-    {    
-        pEngine->levels = 2;      
-    } 
-    else 
-    {
-        pEngine->levels = 3;
-    }
-    
+    pEngine->levels = 2;      
+   
     int currentTemperature = getPrintheadTemperatureInCelsius();
     
     float currentLineTimeTemperatureAdjusted = 0;
  
     int difference = currentTemperature - 25; // Calculate the temperature difference from 25C
 
-    // Calculate the number of 5-degree increments
+    // calculate the number of 5-degree increments
     int increments = difference / 5;
 
-    // Calculate the modification factor based on the number of increments
+    // calculate the modification factor based on the number of increments
     float modificationFactor = 1 + ((float)increments * 0.0125);
 
-    // Apply the modification factor to the original value
-    currentLineTimeTemperatureAdjusted = ((float)rohm80mmCurrentLine[ pEngine->contrast ] * modificationFactor);
-    
-    /*
-    if(currentStatus.state == ENGINE_PRINTING)
-    {
-        if(pEngine->steps < 400)
-        {
-            pEngine->histAdj[0].compType = FIRST_LEVEL_HIST;        
-            pEngine->histAdj[0].time = rohm80mmHistory[ pEngine->contrast ] - 100;
-            pEngine->histAdj[1].compType = CURRENT_LINE;    
-            pEngine->histAdj[1].time = currentLineTimeTemperatureAdjusted + 100; 
-            pEngine->pwmStartTime = rohm80mmPwmStart[ pEngine->contrast ];
-            pEngine->pwmDutyCycle = ( rohm80mmPwmDuty[ pEngine->contrast ]); 
-        }
-    }
-    else
-    {
-*/
-        pEngine->histAdj[0].compType = FIRST_LEVEL_HIST;        
-        pEngine->histAdj[0].time = rohm80mmHistory[ pEngine->contrast ];
-        pEngine->histAdj[1].compType = CURRENT_LINE;    
-        pEngine->histAdj[1].time = (unsigned short)currentLineTimeTemperatureAdjusted; 
-        pEngine->pwmStartTime = rohm80mmPwmStart[ pEngine->contrast ];
-        pEngine->pwmDutyCycle = ( rohm80mmPwmDuty[ pEngine->contrast ]);
-    //}             
+    // apply the modification factor to the original value
+    currentLineTimeTemperatureAdjusted = ((float)printHeadCurrentLine[ pEngine->contrast ] * modificationFactor);
+
+    pEngine->histAdj[0].compType = FIRST_LEVEL_HIST;        
+    pEngine->histAdj[0].time = printHeadHistory[ pEngine->contrast ];
+    pEngine->histAdj[1].compType = CURRENT_LINE;    
+    pEngine->histAdj[1].time = currentLineTimeTemperatureAdjusted; 
+    pEngine->pwmStartTime = printHeadPwmStart[ pEngine->contrast ];
+    pEngine->pwmDutyCycle = ( printHeadPwmDuty[ pEngine->contrast ]);           
 }
 
 /******************************************************************************/
@@ -629,19 +748,20 @@ void updatePrintTimings( void )
      PrintEngine *pEngine = getPrintEngine();
     
     /* printhead type is unkown until printer idle isr has started do not process anything until then */
-    if( pEngine->headType == UNKNOWN_HEAD ) 
-    {
+    if( pEngine->headType == UNKNOWN_HEAD )  {
         PRINTF("UNKNOWN HEAD DETECTED IN updatePrintTimings()\r\n");
         return;
     }
 
+    prevContrast_ = pEngine->contrast;
+    
     for( int i = 0; i < MAX_TABLE_ENTRIES; i++ ) 
     { 
-        history1Line[i] = rohm80mmHistory[ pEngine->contrast ];
+        history1Line[i] = printHeadHistory[ pEngine->contrast ];
         adjacencyTimes[i] = 0;
-        currentLineTimes[i] = rohm80mmCurrentLine[ pEngine->contrast ];
-        pwmTimes[i] = rohm80mmPwmStart[ pEngine->contrast ];
-        pwmDutyCycle[i] =  rohm80mmPwmDuty[ pEngine->contrast ];                                
+        currentLineTimes[i] = printHeadCurrentLine[ pEngine->contrast ];
+        pwmTimes[i] = printHeadPwmStart[ pEngine->contrast ];
+        pwmDutyCycle[i] =  printHeadPwmDuty[ pEngine->contrast ];                                
     }        
 }
 

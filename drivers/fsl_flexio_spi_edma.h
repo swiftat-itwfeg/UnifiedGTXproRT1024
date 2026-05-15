@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2020, 2022 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_FLEXIO_SPI_EDMA_H_
-#define _FSL_FLEXIO_SPI_EDMA_H_
+#ifndef FSL_FLEXIO_SPI_EDMA_H_
+#define FSL_FLEXIO_SPI_EDMA_H_
 
 #include "fsl_flexio_spi.h"
 #include "fsl_edma.h"
@@ -21,10 +21,10 @@
  ******************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
-/*! @brief FlexIO SPI EDMA driver version 2.2.0. */
-#define FSL_FLEXIO_SPI_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 2, 0))
-/*@}*/
+/*! @{ */
+/*! @brief FlexIO SPI EDMA driver version. */
+#define FSL_FLEXIO_SPI_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 3, 0))
+/*! @} */
 
 /*! @brief  typedef for flexio_spi_master_edma_handle_t in advance. */
 typedef struct _flexio_spi_master_edma_handle flexio_spi_master_edma_handle_t;
@@ -120,7 +120,7 @@ status_t FLEXIO_SPI_MasterTransferEDMA(FLEXIO_SPI_Type *base,
 void FLEXIO_SPI_MasterTransferAbortEDMA(FLEXIO_SPI_Type *base, flexio_spi_master_edma_handle_t *handle);
 
 /*!
- * @brief Gets the remaining bytes for FlexIO SPI eDMA transfer.
+ * @brief Gets the number of bytes transferred so far using FlexIO SPI master eDMA.
  *
  * @param base Pointer to FLEXIO_SPI_Type structure.
  * @param handle FlexIO SPI eDMA handle pointer.
@@ -182,7 +182,7 @@ static inline void FLEXIO_SPI_SlaveTransferAbortEDMA(FLEXIO_SPI_Type *base, flex
 }
 
 /*!
- * @brief Gets the remaining bytes to be transferred for FlexIO SPI eDMA.
+ * @brief Gets the number of bytes transferred so far using FlexIO SPI slave eDMA.
  *
  * @param base Pointer to FLEXIO_SPI_Type structure.
  * @param handle FlexIO SPI eDMA handle pointer.

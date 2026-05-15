@@ -2,15 +2,13 @@
 ;  @file:    startup_MIMXRT1024.s
 ;  @purpose: CMSIS Cortex-M7 Core Device Startup File
 ;            MIMXRT1024
-;  @version: 0.1
-;  @date:    2020-1-15
-;  @build:   b200515
+;  @version: 2.0
+;  @date:    2024-10-29
+;  @build:   b250521
 ; -------------------------------------------------------------------------
 ;
 ; Copyright 1997-2016 Freescale Semiconductor, Inc.
-; Copyright 2016-2020 NXP
-; All rights reserved.
-;
+; Copyright 2016-2025 NXP
 ; SPDX-License-Identifier: BSD-3-Clause
 ;
 ; The modules in this file are included in the libraries, and may be replaced
@@ -178,15 +176,15 @@ __vector_table_0x1c
         DCD     PWM1_FAULT_IRQHandler                         ;PWM1 fault or reload error interrupt
         DCD     Reserved123_IRQHandler                        ;Reserved interrupt
         DCD     FLEXSPI_IRQHandler                            ;FlexSPI0 interrupt
-        DCD     SEMC_IRQHandler                               ;Reserved interrupt
+        DCD     SEMC_IRQHandler                               ;SEMC interrupt
         DCD     USDHC1_IRQHandler                             ;USDHC1 interrupt
         DCD     USDHC2_IRQHandler                             ;USDHC2 interrupt
         DCD     Reserved128_IRQHandler                        ;Reserved interrupt
         DCD     USB_OTG1_IRQHandler                           ;USBO2 USB OTG1
         DCD     ENET_IRQHandler                               ;ENET interrupt
         DCD     ENET_1588_Timer_IRQHandler                    ;ENET_1588_Timer interrupt
-        DCD     XBAR1_IRQ_0_1_IRQHandler                      ;XBAR1 interrupt
-        DCD     XBAR1_IRQ_2_3_IRQHandler                      ;XBAR1 interrupt
+        DCD     XBAR1_IRQ_0_1_IRQHandler                      ;XBARA output signal 0, 1 interrupt
+        DCD     XBAR1_IRQ_2_3_IRQHandler                      ;XBARA output signal 2, 3 interrupt
         DCD     ADC_ETC_IRQ0_IRQHandler                       ;ADCETC IRQ0 interrupt
         DCD     ADC_ETC_IRQ1_IRQHandler                       ;ADCETC IRQ1 interrupt
         DCD     ADC_ETC_IRQ2_IRQHandler                       ;ADCETC IRQ2 interrupt
@@ -314,15 +312,7 @@ __Vectors_End
 __Vectors       EQU   __vector_table
 __Vectors_Size  EQU   __Vectors_End - __Vectors
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SOF-5720 FLEXRAM: DTCM = 64K ITCM = 32K OCRAM = 160K -- cg 01/30/2024
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-__iomux_gpr14_adr EQU 0x400AC038
-__iomux_gpr16_adr EQU 0x400AC040
-__iomux_gpr17_adr EQU 0x400AC044
-__flexram_bank_cfg EQU 0x57A5
-__flexram_itcm_size EQU 0x00000007
-__flexram_dtcm_size EQU 0x00000008
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Default interrupt handlers.
@@ -331,36 +321,8 @@ __flexram_dtcm_size EQU 0x00000008
 
         PUBWEAK Reset_Handler
         SECTION .text:CODE:REORDER:NOROOT(2)
-        
-        
-        
 Reset_Handler
         CPSID   I               ; Mask interrupts
-
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-        ;; SOF-5720  FLEXRAM: DTCM = 128K ITCM = 64K OCRAM = 64K -- ats 04/21/2023
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-        LDR R0,=__iomux_gpr17_adr       ;load IOMUXC_GPR17 register address to R0
-        MOV32 R1,__flexram_bank_cfg     ;move FlexRAM configuration value to R1
-        STR R1,[R0]
-        LDR R0,=__iomux_gpr16_adr       ;load IOMUXC_GPR16 register address to R0
-        LDR R1,[R0]                     ;load IOMUXC_GPR16 register value to R1
-        ORR R1,R1,#4                    ;set corresponding FLEXRAM_BANK_CFG_SEL bit
-        
-        STR R1,[R0]                     ;store the value to IOMUXC_GPR16 (user defined FlexRAM cfg enabled)
-        LDR R0,=__iomux_gpr14_adr       ;load IOMUXC_GPR14 register address to R0
-        LDR R1,[R0]                     ;load IOMUXC_GPR14 register value to R1
-        MOVT R1,#0X0000                 ;clear upper halfword of IOMUXC_GPR14 register
-        MOV R2,#__flexram_itcm_size
-        MOV R3,#__flexram_dtcm_size
-        LSL R2,R2,#16
-        LSL R3,R3,#20
-        ORR R1,R2,R3
-        STR R1,[R0]                     ;store the vale to IOMUXC_GPR14
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-        ;;
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
         LDR     R0, =0xE000ED08
         LDR     R1, =__vector_table
         STR     R1, [R0]

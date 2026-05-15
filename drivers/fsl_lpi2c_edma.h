@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2021 NXP
+ * Copyright 2016-2022, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_LPI2C_EDMA_H_
-#define _FSL_LPI2C_EDMA_H_
+#ifndef FSL_LPI2C_EDMA_H_
+#define FSL_LPI2C_EDMA_H_
 
 #include "fsl_lpi2c.h"
 #include "fsl_edma.h"
@@ -15,11 +15,13 @@
  * Definitions
  ******************************************************************************/
 
-/*! @name Driver version */
-/*@{*/
+/*!
+ * @name Driver version
+ * @{
+ */
 /*! @brief LPI2C EDMA driver version. */
-#define FSL_LPI2C_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 3, 0))
-/*@}*/
+#define FSL_LPI2C_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 4, 4))
+/*! @} */
 
 /*!
  * @addtogroup lpi2c_master_edma_driver
@@ -27,6 +29,7 @@
  */
 
 /* Forward declaration of the transfer descriptor and handle typedefs. */
+/*! @brief LPI2C master EDMA handle of the transfer. */
 typedef struct _lpi2c_master_edma_handle lpi2c_master_edma_handle_t;
 
 /*!
@@ -54,7 +57,7 @@ struct _lpi2c_master_edma_handle
     LPI2C_Type *base;                 /*!< LPI2C base pointer. */
     bool isBusy;                      /*!< Transfer state machine current state. */
     uint8_t nbytes;                   /*!< eDMA minor byte transfer count initially configured. */
-    uint16_t commandBuffer[10];       /*!< LPI2C command sequence. When all 10 command words are used:
+    uint16_t commandBuffer[20];       /*!< LPI2C command sequence. When all 10 command words are used:
          Start&addr&write[1 word] + subaddr[4 words] + restart&addr&read[1 word] + receive&Size[4 words] */
     lpi2c_master_transfer_t transfer; /*!< Copy of the current transfer info. */
     lpi2c_master_edma_transfer_callback_t completionCallback; /*!< Callback function pointer. */
@@ -62,6 +65,9 @@ struct _lpi2c_master_edma_handle
     edma_handle_t *rx;                                        /*!< Handle for receive DMA channel. */
     edma_handle_t *tx;                                        /*!< Handle for transmit DMA channel. */
     edma_tcd_t tcds[3]; /*!< Software TCD. Three are allocated to provide enough room to align to 32-bytes. */
+    uint32_t remainingCommand;        /* Number of the remaining commands to be copied by the interrupt. */
+    uint32_t commandIndex;            /* Head of the remaing commands. */
+    bool enableTxReadyFlag;           /* Flag to enable interrupt for copying remainig commands. */
 };
 
 /*! @} */
@@ -79,8 +85,10 @@ extern "C" {
  * @{
  */
 
-/*! @name Master DMA */
-/*@{*/
+/*!
+ * @name Master DMA
+ * @{
+ */
 
 /*!
  * @brief Create a new handle for the LPI2C master DMA APIs.
@@ -147,7 +155,7 @@ status_t LPI2C_MasterTransferGetCountEDMA(LPI2C_Type *base, lpi2c_master_edma_ha
  */
 status_t LPI2C_MasterTransferAbortEDMA(LPI2C_Type *base, lpi2c_master_edma_handle_t *handle);
 
-/*@}*/
+/*! @} */
 
 /*! @} */
 
@@ -155,4 +163,4 @@ status_t LPI2C_MasterTransferAbortEDMA(LPI2C_Type *base, lpi2c_master_edma_handl
 }
 #endif
 
-#endif /* _FSL_LPI2C_EDMA_H_ */
+#endif /* FSL_LPI2C_EDMA_H_ */

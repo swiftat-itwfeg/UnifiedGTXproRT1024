@@ -1,6 +1,13 @@
 #include "takeupMotor.h"
 #include "fsl_pit.h"
-#include "globalPrinterTask.h"
+#include "developmentSettings.h"
+#include "hobartPrinterTask.h"
+#include "averyCutter.h"
+
+#define LongLblFix  /* TFinkToDo3 Remove after changes validated */
+
+bool reportOnce = true;
+uint16_t reportOnceCounter = 0;
 
 #define STEPS_TO_PEEL 240   /* Label is about 1/8" past the peel bar when 240 steps reached. Of course, depends on print position*/
 
@@ -37,7 +44,7 @@
 
 #define TU_MOTOR_MIN_STEP_TIME_US 620   
 #define TU_MOTOR_MAX_STEP_TIME_US 3000 
-#define MAX_TU_STEP_PERIOD_CHANGE 200    
+#define MAX_TU_STEP_PERIOD_CHANGE 200     //TFinkToDo Carlos thinks this should be 60 max
 
 uint16_t loosenSteps = 0;
 
@@ -45,7 +52,8 @@ static TakeupMotor tMotor;
 
 extern PrStatusInfo     currentStatus;
 
-extern PrStatusInfo     currentStatus;
+extern uint16_t LABEL_TAKEN_THRESHOLD_LABEL;
+extern uint16_t LABEL_TAKEN_THRESHOLD_NO_LABEL;
 
 /* stepTUMotorIntr() and support functions */
 static short             TUTensionSlope = 0;     
@@ -115,8 +123,8 @@ AT_NONCACHEABLE_SECTION_INIT(static unsigned short emergencyBrakeTorqueLimit) = 
 /* The frequency of the source clock after divided. */
 #define TMR2_SOURCE_CLOCK (CLOCK_GetFreq(kCLOCK_IpgClk) / TMR2_CLOCK_SOURCE_DIVIDER)
 
-/* uSec between each of the TMR2 interrupt handler calls that make up a full TU motor step 
-static uint8_t timeBetweenStepperIntr = 20; */
+/* uSec between each of the TMR2 interrupt handler calls that make up a full TU motor step */
+//static uint8_t timeBetweenStepperIntr = 20; 
 
 /* uSec between each TU motor step */
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t TUSpeed) = 0; 
@@ -132,8 +140,8 @@ AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsToTake) = 0;
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsTaken) = 0; 
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t stepsTakenTPHIntr) = 0; 
 
-/* how many TU sensor ADC counts to tighten to 
-static uint16_t torqueThreshold = 0; */
+/* how many TU sensor ADC counts to tighten to */
+//static uint16_t torqueThreshold = 0; 
 
 /* function pointer declaration, used in takeupIntrHandler() */
 uint8_t (*tmr2Intr) (void); 
@@ -145,10 +153,10 @@ static tuControlMethodEnum tuControlState = INVALID;
 
 static uint16_t lastSpeed = 0;
 
-static bool rampDone = false;
+//static bool rampDone = false;
 static uint16_t rampTarget = 0;
-static uint16_t rampStart = 0;
-static uint16_t rampStepModifier = 1;
+//static uint16_t rampStart = 0;
+//static uint16_t rampStepModifier = 1;
 
 AT_NONCACHEABLE_SECTION_INIT(static bool takeupBusy) = false;
 AT_NONCACHEABLE_SECTION_INIT(static bool takingUpPaper) = false;
@@ -265,6 +273,71 @@ void addAndShift(int smaller[], int larger[], int smallerSize, int largerSize)
     }
 }
 
+void find_highest_points(const short* waveform, int length, int threshold_value, int bump_threshold, int width_threshold)
+{
+    int bump_start = -1;
+
+    lastDip = 0;
+    lastDipStart = 0;
+    firstDip = -1;
+    firstDipStart = -1;
+    bool firstBumpFound = false;
+
+    for (int i = 1; i < length; ++i)
+    {
+        if (waveform[i] >= threshold_value)
+        {
+            // Found a bump above the threshold
+            if (bump_start == -1)
+            {
+                bump_start = i;
+            }
+        }
+        else
+        {
+            // Leaving a bump
+            if (bump_start != -1)
+            {
+                int bump_width = i - bump_start;
+
+                if (bump_width >= width_threshold)
+                {
+                    // Find highest point in the bump
+                    int highest_index = bump_start;
+                    int highest_value = waveform[bump_start];
+
+                    for (int j = bump_start + 1; j < i; ++j)
+                    {
+                        if (waveform[j] > highest_value)
+                        {
+                            highest_value = waveform[j];
+                            highest_index = j;
+                        }
+                    }
+
+                    // Check bump height relative to start
+                    if (highest_value - waveform[bump_start] >= bump_threshold)
+                    {
+                        if (!firstBumpFound)
+                        {
+                            firstDip = highest_index;
+                            firstDipStart = bump_start;
+                            firstBumpFound = true;
+                        }
+
+                        lastDip = highest_index;
+                        lastDipStart = bump_start;
+
+                        dipIndices[numDips] = highest_index;
+                        numDips++;
+                    }
+                }
+
+                bump_start = -1;
+            }
+        }
+    }
+}
 
 void find_lowest_points(const short* waveform, int length, int threshold_value, int dip_threshold, int width_threshold) 
 {
@@ -340,58 +413,6 @@ void find_lowest_points(const short* waveform, int length, int threshold_value, 
     }
 }
 
-
-int find_lowest_points_start(const int* waveform, int length, int threshold_value) {
-    int dip_start = -1; // Variable to store the start index of a dip
-    int lowest_dip_start = -1; // Variable to store the index where the lowest dip started
-
-    // Iterate through the waveform
-    for (int i = 1; i < length; ++i) 
-    {
-        if (waveform[i] <= threshold_value) 
-        {
-            // Found a dip below the threshold
-            if (dip_start == -1) 
-            {
-                // Set the start index of the dip
-                dip_start = i;
-            }
-        } 
-        else 
-        {
-            // Check if we were in a dip
-            if (dip_start != -1) 
-            {
-                // Find the lowest point in the dip
-                int lowest_index = dip_start;
-                for (int j = dip_start + 1; j < i; ++j) 
-                {
-                    if (waveform[j] < waveform[lowest_index]) 
-                    {
-                        lowest_index = j;
-                        //printDip = lowest_index;
-                    }
-                }
-
-                // Update lowest_dip_start if this dip is lower than previous dips
-                if (lowest_dip_start == -1 || waveform[lowest_index] < waveform[lowest_dip_start]) 
-                {
-                    lowest_dip_start = dip_start;
-                    printDip = dip_start;
-                }
-
-                // Reset the dip_start for the next dip
-                dip_start = -1;
-            }
-        }
-    }
-
-    // Return the index where the lowest dip started
-    printDip = lowest_dip_start;
-    return lowest_dip_start;
-}
-
-
 int find_lowest_points_lowest(const short* waveform, int length, int threshold_value) 
 {
     int dip_start = -1; // Variable to store the start index of a dip
@@ -429,70 +450,6 @@ int find_lowest_points_lowest(const short* waveform, int length, int threshold_v
     printDip = lowest_index;
     return lowest_index;
 }
-
-
-int countDipsBelowThreshold(int waveform[], int length, int threshold) 
-{
-    int count = 0;
-    int inDip = 0; // Flag to track whether currently inside a dip
-
-    for (int i = 0; i < length; i++) 
-    {
-        if (waveform[i] < threshold) 
-        {
-            if (!inDip) 
-            {
-                inDip = 1; // Start of a new dip
-                count++;
-            }
-        } 
-        else 
-        {
-            inDip = 0; // End of dip
-        }
-    }
-    return count;
-}
-
-
-void condenseAppendAndResize(int originalArray[], int originalArrayLength, int secondArray[], int secondArrayLength) 
-{
-    // Condense the second array to the size of the first array
-    int blockSize = secondArrayLength / originalArrayLength;
-    int* condensedSecondArray = (int*)malloc(originalArrayLength * sizeof(int));
-    for (int i = 0; i < originalArrayLength; i++) 
-    {
-        int sum = 0;
-
-        for (int j = 0; j < blockSize; j++) 
-        {
-            sum += secondArray[i * blockSize + j];
-        }
-        
-        condensedSecondArray[i] = sum / blockSize;
-    }
-
-    // Append the condensed second array to the original array
-    for (int i = 0; i < originalArrayLength; i++) 
-    {
-        originalArray[originalArrayLength + i] = condensedSecondArray[i];
-    }
-
-    // Condense the combined array to the size of the original array
-    for (int i = 0; i < originalArrayLength; i++) 
-    {
-        int sum = 0;
-        for (int j = 0; j < blockSize; j++) 
-        {
-            sum += originalArray[i * blockSize + j];
-        }
-        originalArray[i] = sum / blockSize;
-    }
-
-    // Free memory allocated for the condensed second array
-    free(condensedSecondArray);
-}
-
 
 // Function to average values in an array from start to end
 void averageAndStore(short* array, int start, int end) 
@@ -577,148 +534,305 @@ void takeupIntrHandler( void )
     if( (QTMR_GetStatus(TMR2, kQTMR_Channel_2) & kQTMR_Compare1Flag) == kQTMR_Compare1Flag )
     {
         PrintEngine* engine = getPrintEngine();
-      
+        HeadType_t head = getPrintHeadType();
+        
         /* set our target speed to ramp the print roller motor intr to based on the contrast setting */
         /* peelSpeedTarget is the speed setpoint for the first STEPS_TO_PEEL steps. finalSpeedTarget is the
            speed for the rest of the label. STEPS_TO_PEEL was set so the label is about 1/8" past the peel bar */
         /** See below. peelSpeedTarget set to 1100 no matter what the contrast */
-        switch( config_.contrast_adjustment )
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
         {
-            case 0: 
-                finalSpeedTarget = 616;
-                break;
-            case 1: 
-                finalSpeedTarget = 616;
-                break;
-            case 2: 
-                finalSpeedTarget = 709;
-                break;
-            case 3: 
-                finalSpeedTarget = 862;
-                break;
-            case 4: 
-                finalSpeedTarget = 862;
-                break;
-            case 5: 
-                finalSpeedTarget = 1077;
-                break;
-            case 6: 
-                finalSpeedTarget = 1077;
-                break;
-            case 7: 
-                finalSpeedTarget = 1077;
-                break;
-            default: 
-                break;
+            switch(config_.contrast_adjustment)
+            {
+                case 0: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;   
+                    
+                    break;
+                case 1: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;   
+                    
+                    break;
+                case 2: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;     
+                    
+                    break;
+                case 3: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;   
+                    
+                    break;
+                case 4: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;
+                    
+                    break;
+                case 5: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                case 6: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                case 7: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                default: 
+                    finalSpeedTarget = 1231;
+                    peelSpeedTarget = 1400;
+                    
+                    break;
+            }
+        }
+        else
+        {
+            switch(config_.contrast_adjustment)
+            {
+                case 0: 
+                    finalSpeedTarget = 616;
+                    peelSpeedTarget = (1231-616)/2+616;  //~931
+                    
+                    break;
+                case 1: 
+                    finalSpeedTarget = 616;
+                    peelSpeedTarget = (1231-616)/2+616;
+                    
+                    break;
+                case 2: 
+                    finalSpeedTarget = 709;
+                    peelSpeedTarget = (1231-709)/2+709;  
+                    
+                    break;
+                case 3: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;   //~1051
+                    
+                    break;
+                case 4: 
+                    finalSpeedTarget = 862;
+                    peelSpeedTarget = (1231-862)/2+862;
+                    
+                    break;
+                case 5: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                case 6: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                case 7: 
+                    finalSpeedTarget = 1077;
+                    peelSpeedTarget = (1231-1077)/2+1077;
+                    
+                    break;
+                default: 
+                    finalSpeedTarget = 1231;
+                    peelSpeedTarget = 1400;
+                    
+                    break;
+            }   
         }
         
         /* Setting peelSpeedTarget to 1100uS for all contrast levels. */
         /* During testing, we've been going back and forth over a fixed peelSpeedTarget for all contrast levels and 
            a variable peelSpeedTarget based on contrast. Clean up code when a final decision has been made */
-        if( finalSpeedTarget >= 1077 )
-            peelSpeedTarget = finalSpeedTarget;
+        if(finalSpeedTarget >= 1077)
+          peelSpeedTarget = finalSpeedTarget;
         else      
-            peelSpeedTarget = 1000;     /* was 1100. get a lot more "shuddering" printing at C0 with 1100. Similar to shuddering with
+           peelSpeedTarget = 1000;     /* was 1100. get a lot more "shuddering" printing at C0 with 1100. Similar to shuddering with
                                        flood coated labels. Label sticking to PH? */
             
         /* set the ramp target based on before or after peel. Peeling at a slower speed appears
            to reduce the number of user interactions (peel problems) */
-        if( getTakingUpPaper() == true ) {
-            if( stepsTakenTPHIntr < STEPS_TO_PEEL ) {
+        if(getTakingUpPaper() == true)
+        {
+            if(stepsTakenTPHIntr < STEPS_TO_PEEL) {
                rampTarget = peelSpeedTarget;
-               GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );
+               //GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );
             }
             else {
                rampTarget = finalSpeedTarget;
-               GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, true );
+               //GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, true );
             }
-        } else { 
-          /* disable peel at slow speed when we're not taking up paper */
+        }
+        else { /* disable peel at slow speed when we're not taking up paper */
           rampTarget = finalSpeedTarget;   
         }
            
         
         /* ramp at start of print */
-        if( TPHSteps < 10 ) {
-            if( ( TPHSpeed > rampTarget ) ) {
+        if(TPHSteps < 10)
+        {
+            if((TPHSpeed > rampTarget))
+            {
                 TPHSpeed = (TPHSpeed - 20);
             }
-        } else if( TPHSteps >= 10 && TPHSteps < 20 ) {
-            if( ( TPHSpeed >= rampTarget ) ) {
+        }
+        else if(TPHSteps >= 10 && TPHSteps < 20) 
+        {
+            if((TPHSpeed >= rampTarget))
+            {
                 TPHSpeed = (TPHSpeed - 30);
             }
-        } else if( TPHSteps >= 20 ) {
-            if( ( TPHSpeed >= rampTarget ) ) {
-                TPHSpeed = ( TPHSpeed - 40 );
+        }
+        //else if(TPHSteps >= 20 && TPHSteps < 30)   /* TFinkSlowPeelToDo */
+        else if(TPHSteps >= 20) 
+        {
+            if((TPHSpeed >= rampTarget))
+            {
+                TPHSpeed = (TPHSpeed - 40);
             }          
         }
         
         /* We've "overshot" during acceleration. So set to exact target
            This is also ensures rollerMotorPercentFinalSpeed is set to '1'
            when we reach full speed.  */
-        if( ( TPHSpeed <= rampTarget ) ) {
-            TPHSpeed = rampTarget;
+        if((TPHSpeed <= rampTarget))
+        {
+           TPHSpeed = rampTarget;
         }
         
         /* limit lower bounds of TPHSpeed based on contrast setting */
-        switch( config_.contrast_adjustment )
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
         {
-            case 0: 
-                if( TPHSpeed < 616 ) {
-                    TPHSpeed = 616;
-                }
-                break;
-            case 1: 
-                if( TPHSpeed < 616 ) {
-                    TPHSpeed = 616;
-                }
-                break;
-            case 2: 
-                if( TPHSpeed < 709 ) {
-                    TPHSpeed = 709;
-                }
-                break;
-            case 3: 
-                if( TPHSpeed < 862 ) {
-                    TPHSpeed = 862;
-                }
-                break;
-            case 4: 
-                if( TPHSpeed < 862 ) {
-                    TPHSpeed = 862;
-                }
-                break;
-            case 5: 
-                if( TPHSpeed < 1077 ) {
-                    TPHSpeed = 1077;
-                }
-                break;
-            case 6: 
-                if( TPHSpeed < 1077 ) {
-                    TPHSpeed = 1077;
-                }
-                break;
-            case 7: 
-                if( TPHSpeed < 1077 ) {
-                    TPHSpeed = 1077;
-                }
-                break;
-            default: 
-                if( TPHSpeed < 1231 ) {
-                    TPHSpeed = 1231;
-                }
+            switch(config_.contrast_adjustment)
+            {
+                case 0: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 1: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 2: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 3: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 4: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 5: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                case 6: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                case 7: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                default: 
+                    if(TPHSpeed < 1231)
+                    {
+                        TPHSpeed = 1231;
+                    }
+            }
+        }
+        else
+        {
+            switch(config_.contrast_adjustment)
+            {
+                case 0: 
+                    if(TPHSpeed < 616)
+                    {
+                        TPHSpeed = 616;
+                    }
+                    break;
+                case 1: 
+                    if(TPHSpeed < 616)
+                    {
+                        TPHSpeed = 616;
+                    }
+                    break;
+                case 2: 
+                    if(TPHSpeed < 709)
+                    {
+                        TPHSpeed = 709;
+                    }
+                    break;
+                case 3: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 4: 
+                    if(TPHSpeed < 862)
+                    {
+                        TPHSpeed = 862;
+                    }
+                    break;
+                case 5: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                case 6: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                case 7: 
+                    if(TPHSpeed < 1077)
+                    {
+                        TPHSpeed = 1077;
+                    }
+                    break;
+                default: 
+                    if(TPHSpeed < 1231)
+                    {
+                        TPHSpeed = 1231;
+                    }
+            }
         }
         
+        
         /* limit upper bounds of TPHSpeed */
-        if( TPHSpeed > 1300 ) {
+        if(TPHSpeed > 1300)
+        {
             TPHSpeed = 1300;
         }
-                
+        
         /* rollerMotorPercentFinalSpeed is used to scale the takeup motor "static steps" 
            and the print line time (so we don't have compressed print */
         rollerMotorPercentFinalSpeed = (float)TPHSpeed/(float)finalSpeedTarget;
         
-
         /* step print roller motor */
         stepMainMotor();
 
@@ -733,23 +847,49 @@ void takeupIntrHandler( void )
         /* if we are 3/4 of the way done burning lines but we dont detect a label present in front of the label taken sensor
         set the JAMMED_LABEL status*/
         
-        if( TPHSteps > 450 && getLabelTaken() < 100 )
+        uint16_t jamSteps = 0;
+         
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
         {
+            jamSteps = STEPS_TO_JAM_HT_PRINTER;
+        }
+        else
+        {
+            jamSteps = STEPS_TO_JAM_GT_PRINTER;
+        }
+
+        uint16_t LTVal = getLabelTaken();
+        
+        
+        if( TPHSteps > jamSteps && TPHSteps < (jamSteps + 50) && LTVal < ((uint16_t)LABEL_TAKEN_THRESHOLD_LABEL * 0.50) && getFirstPrint() == false)
+        {
+            //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+          
             currentStatus.sensor2 |= JAMMED_LABEL;
             
-            PRINTF("LT: %d\r\n", getLabelTaken());
+            PRINTF("LT jammed: %d\r\n", LTVal);
+            PRINTF("LT jammed thresh: %d\r\n", ((uint16_t)LABEL_TAKEN_THRESHOLD_LABEL / 2));
+            
+            PRINTF("\r\n\r\n");
+            PRINTF("LABEL_JAMMED        LABEL_JAMMED\r\n");
+            PRINTF("TPH STEPS %d\r\n", TPHSteps);
+            PRINTF("TOTAL LINES TO PRINT: %d\r\n", engine->totalLinesToPrint);
+            PRINTF("NUMBER OF PRINT LINES LEFT: %d\r\n", engine->numPrintLines);
+            PRINTF("JAM AT PRINT LINE: %d\r\n", (engine->totalLinesToPrint - engine->numPrintLines));
+            PRINTF("\r\n");
+            
             
             TPHStepsThisPrint = 0;
             TPHSteps = 0;
             TPHStepsToTake = 0;
             
-            setLabelQueuePaused(false);
-            setLabelPauseBackwindPending(false);
-            setLabelPauseTimeout(0);
+            setLabelQueuePaused( false );
+            setLabelPauseBackwindPending( false );
+            setLabelPauseTimeout( 0 );
             
             setTakeupBusy( false );
             
-            setShootIndex(0);
+            setShootIndex( 0 );
 
             clearLabelImageBuffer();
             
@@ -758,10 +898,50 @@ void takeupIntrHandler( void )
             setOperation( IDLE_DIRECTIVE, &currentStatus ); 
         }
         
-    
-        /* if TPHSteps >= TPHStepsToTake, end print roller intr */
-        if(TPHSteps >= TPHStepsToTake /*&& getExpelDone() == true*/)
+        if( head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM )
         {
+            if( getUsingContinuous() == false )
+            {
+                if( pollMediaCounts() >= ( config_.backingPaper * 3 ) && reportOnce == true )
+                {
+                    //PRINTF("\r\nBB detected %d PL %d TL %d MS %d", TPHSteps, engine->numPrintLines, engine->totalLinesToPrint, pollMediaCounts());                
+                     
+                    #define THRESHOLD_4IN_PLUS       1541
+                    #define THRESHOLD_3IN_PLUS       1151
+                    #define THRESHOLD_2_375IN_PLUS    800
+
+                    uint16_t quarterSteps = getLabelSizeInQuarterSteps();
+
+                    int adjustment;
+                    bool shouldAct;
+
+                    if      (quarterSteps >= THRESHOLD_4IN_PLUS)                        { adjustment =    0; shouldAct = true;            }
+                    else if (quarterSteps >= THRESHOLD_3IN_PLUS)                        { adjustment =  -26; shouldAct = true;            }
+                    else if (quarterSteps >= THRESHOLD_2_375IN_PLUS && TPHSteps > 100)  { adjustment = -503; shouldAct = true;            }
+                    else if (quarterSteps <  THRESHOLD_2_375IN_PLUS)                    { adjustment = -234; shouldAct = true;            }
+                    else                                                                { adjustment =    0; shouldAct = false;           }
+
+                    if (shouldAct)
+                    {
+                        TPHSteps       = 0;
+                        TPHStepsToTake = ( 605 + getIndirectData( (CMD_DATA_IDS)4 ) );
+                        TPHStepsToTake = (quarterSteps >= THRESHOLD_3IN_PLUS)
+                                         ? (TPHStepsToTake * 2) + adjustment
+                                         :  TPHStepsToTake      + adjustment;
+                        reportOnce     = false;
+                    }
+                }
+            }
+        }
+
+        /* if TPHSteps >= TPHStepsToTake, end print roller intr */
+        if(TPHSteps >= TPHStepsToTake )
+        {
+            //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+            setFirstPrint(true);
+            calcLabelTakenThreshold(false);
+            setFirstPrint(false);
+            
             TPHStepsThisPrint = TPHSteps;
             TPHSteps = 0;
             TPHStepsToTake = 0;
@@ -776,7 +956,14 @@ void takeupIntrHandler( void )
         else
         {
             /* set timer period */
-            QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_2, USEC_TO_COUNT(TPHSpeed, TMR2_SOURCE_CLOCK) );
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_2, USEC_TO_COUNT((TPHSpeed / 2), TMR2_SOURCE_CLOCK) );
+            }
+            else
+            {
+                QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_2, USEC_TO_COUNT((TPHSpeed), TMR2_SOURCE_CLOCK) );
+            }
         
             /* clear compare flag */
             QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_2, kQTMR_Compare1Flag);
@@ -820,85 +1007,86 @@ static uint8_t stepTUMotorIntr( void )
  
    
    /*********  Handle Transition Between TU Control States *****************/
-   switch(tuControlState) 
-   {
-        case HOLD_TIGHTEN_STEP_SPEED:
-          if (stepsTakenTPHIntr > 5) { 
-             /* staticTUMotorStepTime = 0 if first label since head up. Don't switch to static step until PID controller has run twice  */
-             if(staticTUMotorStepTime > TU_MOTOR_MIN_STEP_TIME_US && staticTUMotorStepTime < TU_MOTOR_MAX_STEP_TIME_US && tuRunningAvgNumValidReadings >= 2) {
-                tuControlState = RAMP_TO_STATIC_STEP;
-                sendStepsTakenTPHIntrToPrintf(stepsTakenTPHIntr); 
-                toggleDebugPin10uS();
-             }  
-             else {
-                tuControlState = PID_CONTROL;
-                toggleDebugPin10uS();
-             }
-          }
+   switch( tuControlState ) {
+    case HOLD_TIGHTEN_STEP_SPEED:
+      if (stepsTakenTPHIntr > 5) { 
+         /* staticTUMotorStepTime = 0 if first label since head up. Don't switch to static step until PID controller has run twice  */
+         if(staticTUMotorStepTime > TU_MOTOR_MIN_STEP_TIME_US && staticTUMotorStepTime < TU_MOTOR_MAX_STEP_TIME_US && tuRunningAvgNumValidReadings >= 2) {
+            tuControlState = RAMP_TO_STATIC_STEP;
+            sendStepsTakenTPHIntrToPrintf(stepsTakenTPHIntr); 
+            toggleDebugPin10uS();
+         }  
+         else {
+            tuControlState = PID_CONTROL;
+            toggleDebugPin10uS();
+         }
+      }
+         break;
+      
+    case RAMP_TO_STATIC_STEP:
+      if(TUSpeed == adjustedStaticTUMotorStepTime
+         || TUSpeed >= TU_MOTOR_MAX_STEP_TIME_US) {  /* should never be > MAX_STEP_TIME */
+         tuControlState = STATIC_STEP;  
+         
+         /* Ideally we should be at "desiredTorque" as we start static step. If we're not, set
+            adjustDesiredTorqueForAccurracy, which will be used in the tightening algorithm on 
+            the next label. Changing by half the error because we want to converge on the right
+            value without oscillating. TFinkSlowPeelToDo: Checking torque value against desired torque because we don't
+            want to adjust if we have stalled! */
+         if(getTakeUpTorque() > desiredTorque-500)
+            adjustDesiredTorqueForAccurracy += (desiredTorque - getTakeUpTorque())/2;
+         
+         toggleDebugPin10uS();
+         //queuePrintStringFromISR(SWITCHED_TO_STATIC_CONTROL);
+      }
+      break;
+      
+    case STATIC_STEP:
+      {
+         bool switchStatesDueToTorqueDrop = false;
+         /* switch to PID if we're 3/4 desired torqe and past line 700 or if we're 1/4 desired torque  anywhere in the label. This 1/4 torque is the "fast recovery fix"  */
+         if (((getTakeUpTorque() < desiredTorque-(desiredTorque/4)) && (stepsTakenTPHIntr > 700)) || getTakeUpTorque() < desiredTorque/4) {                    
+            /* Switch to PID control if we're at the end of a label OR if we're printing a long label and torque has fallen. If staticTUMotorStepTime
+            is off slightly, on long labels, torque can drop over time. OK to switch to PID, since we've already peeled. */
+            switchStatesDueToTorqueDrop = true;
+            queuePrintStringFromISR(SWITCHED_TO_PID_DUE_TO_LOW_TORQUE);
+         }
+         
+         if((getNumPrintLinesLeft() < SWITCH_TO_PID_LINES_LEFT) || switchStatesDueToTorqueDrop) {   
+            
+            tuControlState = PID_CONTROL;
+            /* PID will control to the torque value at the end of STATIC_STEP UNLESS were switching due
+               to a stall. If that's the case, we want to use 90% of the original desiredTorque and catch up as fast as we can!
+               Using 90% of original desiredTorque so we don't overshoot and stall */
+            if(switchStatesDueToTorqueDrop)
+               desiredTorque = (unsigned short)(0.9*desiredTorque); 
+            else
+               desiredTorque = calculateTUTorqueSetpoint(); /* desired torque = whatever our current torque is. To get the most accurrate "average step time" */
+            
+            toggleDebugPin10uS();
+         }
+      }
+      break;
+      
+    case PID_CONTROL:
+      if(TPHIntrDone == true && TUTorqueReading > desiredTorque-20) {         
+        static char stepTUStopSamples = 0;
+        /* sample the TUTorqueReading a number of times to make sure that we are actually tight */
+        if(stepTUStopSamples >= 5) {
+           tuControlState = NORMAL_TU_MOTOR_INTR_EXIT;
+           stepTUStopSamples = 0;
+           toggleDebugPin10uS();
+        }
+        else
+          stepTUStopSamples++; 
+      }
+      else if(stepsTaken >= stepsToTake )    
+         tuControlState = ABNORMAL_TU_MOTOR_INTR_EXIT;
+      
+      break;
+      default: {
           break;
-          
-        case RAMP_TO_STATIC_STEP:
-          if(TUSpeed == adjustedStaticTUMotorStepTime
-             || TUSpeed >= TU_MOTOR_MAX_STEP_TIME_US) {  /* should never be > MAX_STEP_TIME */
-             tuControlState = STATIC_STEP;  
-             
-             /* Ideally we should be at "desiredTorque" as we start static step. If we're not, set
-                adjustDesiredTorqueForAccurracy, which will be used in the tightening algorithm on 
-                the next label. Changing by half the error because we want to converge on the right
-                value without oscillating. TFinkSlowPeelToDo: Checking torque value against desired torque because we don't
-                want to adjust if we have stalled! */
-             if(getTakeUpTorque() > desiredTorque-500)
-                adjustDesiredTorqueForAccurracy += (desiredTorque - getTakeUpTorque())/2;
-             
-             toggleDebugPin10uS();
-             //queuePrintStringFromISR(SWITCHED_TO_STATIC_CONTROL);
-          }
-          break;
-          
-        case STATIC_STEP:
-          {
-             bool switchStatesDueToTorqueDrop = false;
-             /* switch to PID if we're 3/4 desired torqe and past line 700 or if we're 1/4 desired torque  anywhere in the label. This 1/4 torque is the "fast recovery fix"  */
-             if (((getTakeUpTorque() < desiredTorque-(desiredTorque/4)) && (stepsTakenTPHIntr > 700)) || getTakeUpTorque() < desiredTorque/4) {                    
-                /* Switch to PID control if we're at the end of a label OR if we're printing a long label and torque has fallen. If staticTUMotorStepTime
-                is off slightly, on long labels, torque can drop over time. OK to switch to PID, since we've already peeled. */
-                switchStatesDueToTorqueDrop = true;
-                queuePrintStringFromISR(SWITCHED_TO_PID_DUE_TO_LOW_TORQUE);
-             }
-             
-             if((getNumPrintLinesLeft() < SWITCH_TO_PID_LINES_LEFT) || switchStatesDueToTorqueDrop) {   
-                
-                tuControlState = PID_CONTROL;
-                /* PID will control to the torque value at the end of STATIC_STEP UNLESS were switching due
-                   to a stall. If that's the case, we want to use 90% of the original desiredTorque and catch up as fast as we can!
-                   Using 90% of original desiredTorque so we don't overshoot and stall */
-                if(switchStatesDueToTorqueDrop)
-                   desiredTorque = (unsigned short)(0.9*desiredTorque); 
-                else
-                   desiredTorque = calculateTUTorqueSetpoint(); /* desired torque = whatever our current torque is. To get the most accurrate "average step time" */
-                
-                toggleDebugPin10uS();
-             }
-          }
-          break;
-          
-        case PID_CONTROL:
-          if(TPHIntrDone == true && TUTorqueReading > desiredTorque-20) {         
-            static char stepTUStopSamples = 0;
-            /* sample the TUTorqueReading a number of times to make sure that we are actually tight */
-            if(stepTUStopSamples >= 5) {
-                tuControlState = NORMAL_TU_MOTOR_INTR_EXIT;
-                stepTUStopSamples = 0;
-                toggleDebugPin10uS();
-            } else {
-                stepTUStopSamples++; 
-            }
-          } else if(stepsTaken >= stepsToTake ) 
-              tuControlState = ABNORMAL_TU_MOTOR_INTR_EXIT;          
-          break;
-          
-        default:
-         PRINTF("unknown state: %d\r\n", tuControlState );
+      }
    }
     
     /*********  ALL Control States *****************/
@@ -1008,7 +1196,22 @@ void peelLogEngine(unsigned short TUTorq)
    /* Torque is higher than it should be */
    if(TUTorq > emergencyBrakeTorqueLimit - 20)
       numHighTorqReadings++;
- 
+  
+   /** Definitions:
+     Fail to Peel typically occurs when:
+        *label completely wraps around, in which case JAMMED_LABEL is set 
+        *The label sticks to the label shelf. This causes the torque to go high, which then causes the motor to stall
+     Motor Stall 
+        *happens for unknown reason when the torque is within the expected range.
+        *Sometimes the takeup motor restarts and successfully peels and expels the label. This is a Motor Stall Recovery.
+        *Sometimes the label sticks after a motor stall (usually when the stall happens around the peel time). This
+         usually causes the torque to exceed normal limits 
+        *Sometimes the torque doesn't exceed normal limits, because the TU Motor PID controller slows the takeup to the minimum step 
+         time. This sometimes happens during a "bubble out".  
+     Motor Stall Recovery
+       *See Motor Stall
+   **/
+
   switch(peelLogState)
   {
    case START_OF_LABEL:
@@ -1153,9 +1356,9 @@ void setTUSpeed(short changeToTUSpeed){
 *******************************************************************************/
 void toggleDebugPin(void)
 {
-   GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
-   delay_uS(4);
-   GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+   //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
+   //delay_uS(4);
+   //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
 }
 
 /******************************************************************************/
@@ -1169,9 +1372,9 @@ void toggleDebugPin(void)
 *******************************************************************************/
 void toggleDebugPin10uS(void)
 {
-   GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
-   delay_uS(10);
-   GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
+   //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
+   //delay_uS(10);
+   //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );
 }
 
 /******************************************************************************/
@@ -1253,9 +1456,9 @@ void singleStepTUMotor(void)
       GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, true );
       GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, true );
 
-      delay_uS(6);  //TFink - stepper IC requirement is 1uS but Chris recommends 6 based on experience. 
-      stepsTaken++;
+      delay_uS(6); 
       
+      stepsTaken++;
       GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, false );
       GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false );
    }
@@ -1276,9 +1479,9 @@ void shutDownStepTUMotorIntr(void)
    stopTakeupIntr(); 
    powerOnMotors(); 
 
-   if(immediateAdustStaticTUSpeedDueToHighTorque > longTermAjustStaticTUSpeedDueToHighTorque)
+   if( immediateAdustStaticTUSpeedDueToHighTorque > longTermAjustStaticTUSpeedDueToHighTorque )
      longTermAjustStaticTUSpeedDueToHighTorque += (immediateAdustStaticTUSpeedDueToHighTorque/8);  //Adjust for rest of roll or until "head up"
-   sendTorqeAdjustmentsToPrintf(adjustDesiredTorqueDueToHighTorque, adjustDesiredTorqueForAccurracy, immediateAdustStaticTUSpeedDueToHighTorque,longTermAjustStaticTUSpeedDueToHighTorque);
+      
    takeupBusy = false;  //This lets the calling interrupt know stepTUMotorIntr done
    stepsToTake = 0;
    stepsTaken = 0;
@@ -1457,20 +1660,11 @@ unsigned short calculateTUTorqueSetpoint(void)
 *******************************************************************************/
 static uint8_t stepTPHMotorIntr( void )
 {
-    powerOnMotors();
-  
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, true );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, true );
-    
-    delay_uS(6);
-    
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, false );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false);
+    stepMainMotor();
     
     QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(TUSpeed, TMR2_SOURCE_CLOCK) );
     
     stepsTaken++;
-
     
     if(stepsTaken >= stepsToTake)
     { 
@@ -1503,58 +1697,229 @@ static uint8_t stepTPHMotorIntr( void )
 *******************************************************************************/
 static uint8_t stepToLtIntr( void )
 {
-    powerOnMotors();
+    HeadType_t head = getPrintHeadType();
     
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, true );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, true );
-
-    delay_uS(8);
-    
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, false );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false );
+    stepMainMotor();
 
     QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(TUSpeed, TMR2_SOURCE_CLOCK) );
     
-  
     stepsTaken++;
-    
-    LTVal = getLabelTaken();
-    
-    if(LTVal >= LABEL_TAKEN_THRESHOLD_LABEL)
+                    
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
     {
-        PRINTF("steps taken to LT: %d\r\n", stepsTaken);
+        if(getLargeGapFlag() == true)
+        {
+            LTVal = getLabelTaken();
+    
+            //PRINTF("\r\nLT VAL: %d\r\n", LTVal);
+          
+            if(LTVal >= (getLowestLabelTakenReading() + 50) && stepsTaken >= 5)
+            {
+                PRINTF("steps taken to LT threshold: %d\r\n", stepsTaken);
+              
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+            
+            if(stepsTaken >= stepsToTake)
+            { 
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+        }
+        else
+        {
+            if(1)
+            {
+                PRINTF("steps taken to LT threshold: %d\r\n", stepsTaken);
+              
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+            
+            if(stepsTaken >= stepsToTake)
+            { 
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+        }
+        
+        LTVal = getLabelTaken();
+    
+        //PRINTF("\r\nLT VAL: %d\r\n", LTVal);
+        
+        uint16_t STVal = pollMediaCounts();
+    
+        //PRINTF("\r\nST VAL: %d\r\n", STVal);
       
-        stopTPHMotorIntrGPT2();
-        stopTakeupIntr();
+        if(LTVal >= LABEL_TAKEN_THRESHOLD_LABEL)
+        {
+            PRINTF("steps taken to LT threshold: %d\r\n", stepsTaken);
+          
+            stopTPHMotorIntrGPT2();
+            stopTakeupIntr();
+            
+            stepsToTake = 0;
+            stepsTaken = 0;
+            TUSpeed = 0;
+            
+            takeupBusy = false;
+            
+            setTakeUpMotorDirection( BACKWARDM_ );
+            setMainMotorDirection( FORWARDM_ ); 
+            
+            setSizingState(SIZE);
+        }
         
-        stepsToTake = 0;
-        stepsTaken = 0;
-        TUSpeed = 0;
-        
-        takeupBusy = false;
-        
-        setTakeUpMotorDirection( BACKWARDM_ );
-        setMainMotorDirection( FORWARDM_ ); 
-        
-        setSizingState(SIZE);
+        if(stepsTaken >= stepsToTake)
+        { 
+            stopTPHMotorIntrGPT2();
+            stopTakeupIntr();
+            stepsToTake = 0;
+            stepsTaken = 0;
+            TUSpeed = 0;
+            
+            takeupBusy = false;
+            
+            setTakeUpMotorDirection( BACKWARDM_ );
+            setMainMotorDirection( FORWARDM_ ); 
+            
+            setSizingState(SIZE);
+        }
     }
+    else
+    {
+        LTVal = getLabelTaken();
     
-    if(stepsTaken >= stepsToTake)
-    { 
-        stopTPHMotorIntrGPT2();
-        stopTakeupIntr();
-        stepsToTake = 0;
-        stepsTaken = 0;
-        TUSpeed = 0;
+        //PRINTF("\r\nLT VAL: %d\r\n", LTVal);
         
-        takeupBusy = false;
+        //PRINTF("\r\nllt %d", getLowestLabelTakenReading());
         
-        setTakeUpMotorDirection( BACKWARDM_ );
-        setMainMotorDirection( FORWARDM_ ); 
-        
-        setSizingState(SIZE);
+        if(getTakingUpPaper() == true)
+        {
+            LTVal = getLabelTaken();
+          
+            if(LTVal >= (getLowestLabelTakenReading() + 50) && stepsTaken >= 5)
+            {
+                PRINTF("steps taken to LT: %d\r\n", stepsTaken);
+              
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+            
+            if(stepsTaken >= stepsToTake)
+            { 
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+        }
+        else
+        {
+            uint16_t STVal = pollMediaCounts();
+    
+            //PRINTF("\r\nST VAL: %d\r\n", STVal);
+          
+            if(1)
+            //if(STVal >= (config_.backingAndlabel * 0.90) && stepsTaken >= 2)
+            {
+                PRINTF("steps taken to ST threshold: %d\r\n", stepsTaken);
+              
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+            
+            if(stepsTaken >= stepsToTake)
+            { 
+                stopTPHMotorIntrGPT2();
+                stopTakeupIntr();
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                
+                takeupBusy = false;
+                
+                setTakeUpMotorDirection( BACKWARDM_ );
+                setMainMotorDirection( FORWARDM_ ); 
+                
+                setSizingState(SIZE);
+            }
+        }
     }
-    
     
     QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
     
@@ -1573,17 +1938,10 @@ static uint8_t stepToLtIntr( void )
 *******************************************************************************/
 static uint8_t sizeLabelIntr( void )
 {    
-    powerOnMotors();
-
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, true );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, true );
-
-    delay_uS(5);
+    HeadType_t head = getPrintHeadType();
     
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, false );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false );
+    stepMainMotor();
 
-    
     QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(TUSpeed, TMR2_SOURCE_CLOCK) );
     
     if(totalStepsTaken < SHOOT_COUNT_ARRAY_SIZE)
@@ -1592,30 +1950,36 @@ static uint8_t sizeLabelIntr( void )
         
         unfilteredShootCount = shootCounts[totalStepsTaken];
         
-        
-        if(shootCounts[totalStepsTaken] > (config_.backingAndlabel * 1.08))  
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
         {
-            shootCounts[totalStepsTaken] = (short)(config_.backingAndlabel * 1.08);
+            __NOP();
         }
+        else
+        {
+            if(shootCounts[totalStepsTaken] > (config_.backingAndlabel * 1.08))  
+            {
+                shootCounts[totalStepsTaken] = (short)(config_.backingAndlabel * 1.08);
+            }
+        }    
     }
     
     if(totalStepsTaken > AVERAGING_WINDOW_SIZE && totalStepsTaken < SHOOT_COUNT_ARRAY_SIZE)
     { 
         double desiredPercentage = LARGE_GAP_THRESHOLD;
-        
-        if(numDips >= 1)
+             
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
         {
-            //determine the length of gap between labels
-            if( (firstDip - firstDipStart) >= GAP_WIDTH_THRESHOLD || (lastDip - lastDipStart) >= GAP_WIDTH_THRESHOLD)
-            {
-                desiredPercentage = LARGE_GAP_THRESHOLD;
-            }
-            else
-            {
-                desiredPercentage = SMALL_GAP_THRESHOLD;
-            }
+            desiredPercentage = 300;
         }
-                
+        else if(head == ROHM_72MM_800_OHM || head == ROHM_80MM_650_OHM)
+        {
+            desiredPercentage = 75;
+        }
+        else
+        {
+            desiredPercentage = 75;
+        }
+        
         numDips = 0;
         
         // Call the function to average and store values
@@ -1627,14 +1991,27 @@ static uint8_t sizeLabelIntr( void )
         double result = find_percentage_of_average(shootCounts, totalStepsTaken, desiredPercentage);
         
         //Call the function to find lowest points of dips
-        if(largeGapFlag == true || largeGapFlagPersist == true)
+        if(largeGapFlag == true )
         {
-            //largeGapFlag = true;
-            find_lowest_points(shootCounts, totalStepsTaken, (int)result, LARGE_GAP_DIP_THRESHOLD, 5);
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                find_highest_points(shootCounts, totalStepsTaken, (int)result, SMALL_GAP_DIP_THRESHOLD, 60);
+            }
+            else
+            {
+                find_lowest_points(shootCounts, totalStepsTaken, (int)result, LARGE_GAP_DIP_THRESHOLD, 5);
+            } 
         }
         else
         {
-            find_lowest_points(shootCounts, totalStepsTaken, (int)result, SMALL_GAP_DIP_THRESHOLD, 5);
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                find_highest_points(shootCounts, totalStepsTaken, (int)result, SMALL_GAP_DIP_THRESHOLD, 60);
+            }
+            else
+            {
+                find_lowest_points(shootCounts, totalStepsTaken, (int)result, LARGE_GAP_DIP_THRESHOLD, 5);
+            }
         }
         
         if(numDips >= 1)
@@ -1652,18 +2029,16 @@ static uint8_t sizeLabelIntr( void )
 
         if(largeGapFlag == true)
         {
-            //PRINTF("WalMart GT RFID large gap labels detected\r\n");
-            //labelSizeInQuarterSteps = (dipIndices[1] - dipIndices[0]) - STEP_TO_NEXT_LABEL_MOD_LARGE_GAP;
             labelSizeInQuarterSteps = (dipIndices[1] - dipIndices[0]);
             labelSizeInQuarterSteps = labelSizeInQuarterSteps - calculateSizingOffset(labelSizeInQuarterSteps / 2);
+
             stepsBackToGap = ((totalStepsTaken - secondGapIndex)); //steps since second gap
         }
         else
         {
-            //PRINTF("Normal GT small gap labels detected\r\n");
-            //labelSizeInQuarterSteps = (dipIndices[1] - dipIndices[0]) - STEP_TO_NEXT_LABEL_MOD_SMALL_GAP;
             labelSizeInQuarterSteps = (dipIndices[1] - dipIndices[0]);
             labelSizeInQuarterSteps = labelSizeInQuarterSteps - calculateSizingOffset(labelSizeInQuarterSteps / 2);
+
             stepsBackToGap = (totalStepsTaken - secondGapIndex); //steps since second gap
         }
     }
@@ -1674,9 +2049,21 @@ static uint8_t sizeLabelIntr( void )
     
     if( stepsToTake == stepsTaken )
     {    
+        /*
+        PRINTF("\r\n");
+        PRINTF("shoot through counts:");
+        PRINTF("\r\n");
+        for(uint16_t ind = 0; ind < endFilterIdx; ind++)
+        {
+            PRINTF("%d,", shootCounts[ind]);
+            takeupDelayShort();
+            takeupDelayShort();
+        }
+        PRINTF("\r\n");
+        */
+        
         PRINTF("\r\n");
         PRINTF("largeGapFlag - %d\r\n", largeGapFlag);
-        PRINTF("syncBarFlag - %d\r\n", syncBarFlag);
         PRINTF("lastDip = %d        lastDipStart = %d\r\n", lastDip, lastDipStart);
         PRINTF("last gap length = %d\r\n", (lastDip - lastDipStart));
         PRINTF("firstDip = %d        firstDipStart = %d\r\n", firstDip, firstDipStart);
@@ -1709,7 +2096,6 @@ static uint8_t sizeLabelIntr( void )
         endFilterIdx = AVERAGING_WINDOW_SIZE;
         numDips = 0;
         printDip = 0;
-        //largeGapFlagPersist = false;
 
         for(uint16_t dipsIndex = 0; dipsIndex < DIPS_ARRAY_SIZE; dipsIndex++)
         {
@@ -1743,6 +2129,19 @@ static uint8_t sizeLabelIntr( void )
 
         PRINTF("continuousDetectionSteps >= 4999\r\n");
 
+        /*
+        PRINTF("\r\n");
+        PRINTF("shoot through counts:");
+        PRINTF("\r\n");
+        for(uint16_t ind = 0; ind < endFilterIdx; ind++)
+        {
+            PRINTF("%d,", shootCounts[ind]);
+            takeupDelayShort();
+            takeupDelayShort();
+        }
+        PRINTF("\r\n");
+        */
+       
         
         stopTakeupIntr();
         stopTPHMotorIntrGPT2();
@@ -1768,16 +2167,10 @@ static uint8_t sizeLabelIntr( void )
 *******************************************************************************/
 static uint8_t stepToNextLabelIntr( void )
 {
-    powerOnMotors();
-  
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, true );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, true );
+    HeadType_t head = getPrintHeadType();
+    
+    stepMainMotor();
 
-    delay_uS(8);
-    
-    GPIO_WritePinOutput( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, false );
-    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false);
-    
     QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(TUSpeed, TMR2_SOURCE_CLOCK) );
 
     stepsTaken++;
@@ -1789,6 +2182,11 @@ static uint8_t stepToNextLabelIntr( void )
     
     if(stepsTaken >= stepsToTake)
     { 
+        if(getCutterJiggling() == false)
+        {
+            calcLabelTakenThreshold(true);
+        }
+        
         stopTPHMotorIntrGPT2();
         stopTakeupIntr();
         
@@ -1804,7 +2202,6 @@ static uint8_t stepToNextLabelIntr( void )
         
         setSizingState(GO_TO_IDLE);
     }
-    
     
     QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
     
@@ -1859,7 +2256,7 @@ static uint8_t tightenStockIntr( void )
              TUSpeed = maxDecelTUSpeed;
           
           targetSpeed = TUSpeed;
-       }                   
+       }            
     }
     
 	
@@ -1992,7 +2389,7 @@ static uint8_t tightenStockTUCalIsr( void )
 }
 /******************************************************************************/
 /*!   \fn 
-        static uint8_t tightenStockMaxTUCalIsr( void )
+        static void tightenStockMaxTUCalIsr( void )
       \brief  
         Function steps TU motor until a motor stall is detected or max steps are
 		reached.
@@ -2006,7 +2403,7 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 	uint16_t current_peak;
 	uint16_t current_peak2;
 	unsigned short max_tension;
-	//static bool risingTensionDetected	= false;
+
 	
 	/* ping motor enable pin */
 	powerOnMotorsDuringCal();
@@ -2023,7 +2420,6 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 
 	QTMR_SetTimerPeriod( TMR2, kQTMR_Channel_1, USEC_TO_COUNT(tMotor.speed, TMR2_SOURCE_CLOCK) );
 
-		
 	/* record TU Tension every motor step */
 	tMotor.TUCalArray[tMotor.steps-1] = getPaperTakeUp();
 			
@@ -2040,15 +2436,16 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 		/*
 		*	Ok, we detected stall, now parse array and pick highest tension value
 		*/
+	
 		//find max index
 		current_peak = tMotor.TUCalArray[0];
-		//PRINTF("###\r\n");
 		for(index=0; index<TUCAL_ARRAY_SIZE; index++)
 		{
 			if(tMotor.TUCalArray[index] >= current_peak)
 			{
 				current_peak = tMotor.TUCalArray[index];
 			}
+		
 		}
 
 		//reverse parse array to look for peak tension
@@ -2060,6 +2457,7 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 				current_peak2 = tMotor.TUCalArray[index];
 			}	   
 		}
+
 		
 		//Normally current_peak and current_peak2 match, but if they don't, select the largest
 		if( current_peak >= current_peak2 )
@@ -2077,7 +2475,7 @@ static uint8_t tightenStockMaxTUCalIsr( void )
 	}
 	
 	
-    QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);    
+    QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag); 
     return 0;
 }
 
@@ -2155,108 +2553,6 @@ static uint8_t loosenStockIntr( void )
     
     QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
     
-    return 0;
-}
-
-
-/******************************************************************************/
-/*!   \fn 
-        static uint8_t rampMotorsIntr( void )
-      \brief  
-        This function is called in the TMR2 interrupt handler when rampMotors()
-        is called.
-      \author
-        Chris King
-*******************************************************************************/
-static uint8_t rampMotorsIntr( void )
-{       
-    rampStepMotors();
-    
-    rampStart -= rampStepModifier;
-    
-    if(rampStart <= rampTarget)
-    {
-        rampDone = true;
-        rampStart = 0;
-        rampTarget = 0;
-        
-        stopTakeupIntr();
-    }
-    else
-    {
-        QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    }
-
-    QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
-    
-    return 0;
-}
-
-
-/******************************************************************************/
-/*!   \fn 
-        static uint8_t rampMainMotorIntr( void )
-      \brief  
-        This function is called in the TMR2 interrupt handler when rampMotors()
-        is called.
-      \author
-        Chris King
-*******************************************************************************/
-static uint8_t rampMainMotorIntr( void )
-{       
-    stepMainMotor();
-    
-    rampStart -= rampStepModifier;
-    
-    if(rampStart <= rampTarget)
-    {
-        rampDone = true;
-        rampStart = 0;
-        rampTarget = 0;
-        
-        stopTakeupIntr();
-    }
-    else
-    {
-        QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    }
-    
-    QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
-
-    return 0;
-}
-
-
-/******************************************************************************/
-/*!   \fn 
-        static uint8_t rampMainMotorIntr( void )
-      \brief  
-        This function is called in the TMR2 interrupt handler when rampMotors()
-        is called.
-      \author
-        Chris King
-*******************************************************************************/
-static uint8_t rampMainMotorQuarterStepsIntr( void )
-{       
-    stepMainMotor();
-    
-    rampStart -= rampStepModifier;
-    
-    if(rampStart <= rampTarget)
-    {
-        rampDone = true;
-        rampStart = 0;
-        rampTarget = 0;
-        
-        stopTakeupIntr();
-    }
-    else
-    {
-        QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    }
-    
-    QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
-
     return 0;
 }
 
@@ -2408,14 +2704,23 @@ static uint8_t checkForPaperIntr( void )
 {
     powerOnMotors();
     
-    GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, true );
-    GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, true );
+    HeadType_t head = getPrintHeadType();
     
-    delay_uS(10);
-    
-    GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, false );
-    GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false );
-    
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+    {
+        __NOP();
+    }
+    else
+    {
+        GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, true );
+        GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, true );
+        
+        delay_uS(10);
+        
+        GPIO_WritePinOutput( TAKEUP_MOTOR_STEP_GPIO, TAKEUP_MOTOR_STEP_PIN, false );
+        GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false );
+    }
+     
     static unsigned short targetSpeed;
     static unsigned short rampStep;
     static bool checkForPaperIntrStart = true;
@@ -2441,10 +2746,9 @@ static uint8_t checkForPaperIntr( void )
     stepsTaken++;
 
     
-    if( getTakeUpTorque() >= desiredTorque )
-    {
-        PRINTF("checkForPaperIntr() - Done - True\r\n");
-      
+                    
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+    {      
         stopTakeupIntr();
         
         stepsToTake = 0;
@@ -2455,44 +2759,63 @@ static uint8_t checkForPaperIntr( void )
         checkForPaperTimerCount = 0;
         checkForPaperIntrStart = true;
         
-        if(takingUpPaper == false)
-        {
-            LowLabelStatus* lowLabelStatus = getLowLabelStatus();
-          
-            lowLabelStatus->segmentLengthMinPeeling = LOW_LABEL_MIN_PEELING_DEFAULT;
-        }
-        
-        takingUpPaper = true;
+        takingUpPaper = false;
     }
-        
-    if(takeupBusy == true)
+    else
     {
-        checkForPaperTimerCount++;
-        
-        if(checkForPaperTimerCount >= 2500)
+        if( getTakeUpTorque() >= desiredTorque )
         {
-            PRINTF("checkForPaperIntr() - Done - False\r\n");
+            //PRINTF("checkForPaperIntr() - GT PRINTER - Done - True\r\n");
           
             stopTakeupIntr();
+            
             stepsToTake = 0;
             stepsTaken = 0;
             TUSpeed = 0;
-            desiredTorque = 0;
-            takeupBusy = false;
+            desiredTorque = 0; 
+            takeupBusy = false;            
             checkForPaperTimerCount = 0;
             checkForPaperIntrStart = true;
             
-            if(takingUpPaper == true)
+            if(takingUpPaper == false)
             {
                 LowLabelStatus* lowLabelStatus = getLowLabelStatus();
               
-                lowLabelStatus->segmentLengthMinStreaming = LOW_LABEL_MIN_STREAMING_DEFAULT;
+                lowLabelStatus->segmentLengthMinPeeling = LOW_LABEL_MIN_PEELING_DEFAULT;
             }
             
-            takingUpPaper = false;
+            takingUpPaper = true;
+        }
+        
+            
+        if(takeupBusy == true)
+        {
+            checkForPaperTimerCount++;
+            
+            if(checkForPaperTimerCount >= 2500)
+            {
+                //PRINTF("checkForPaperIntr() - GT PRINTER - Done - False\r\n");
+              
+                stopTakeupIntr();
+                stepsToTake = 0;
+                stepsTaken = 0;
+                TUSpeed = 0;
+                desiredTorque = 0;
+                takeupBusy = false;
+                checkForPaperTimerCount = 0;
+                checkForPaperIntrStart = true;
+                
+                if(takingUpPaper == true)
+                {
+                    LowLabelStatus* lowLabelStatus = getLowLabelStatus();
+                  
+                    lowLabelStatus->segmentLengthMinStreaming = LOW_LABEL_MIN_STREAMING_DEFAULT;
+                }
+                
+                takingUpPaper = false;
+            }
         }
     }
-    
     
     QTMR_ClearStatusFlags(TMR2, kQTMR_Channel_1, kQTMR_CompareFlag);
     
@@ -2542,22 +2865,6 @@ static void setTmr2IntrType(TUIntrType intrType)
     else if( intrType == CHECK_FOR_PAPER )
     {
         tmr2Intr = checkForPaperIntr;
-    }
-    else if( intrType == RAMP_MOTORS )
-    {
-        tmr2Intr = rampMotorsIntr;
-    }
-    else if( intrType == RAMP_MAIN)
-    {
-        tmr2Intr = rampMainMotorIntr;
-    }
-    else if(intrType == RAMP_MAIN_QUARTER_STEPS)
-    {
-        tmr2Intr = rampMainMotorQuarterStepsIntr;
-    }
-    else if( intrType == RAMP_TAKEUP )
-    {
-        //TODO when needed 
     }
     else if( intrType == SIZE_LABELS )
     {
@@ -2678,7 +2985,15 @@ void startTPHIntr( uint16_t TPHStepsInput )
     /* init print roller motor intr parameters */
     TPHSteps = 0; // steps taken during print roller motor intr 
     
-    //TPHStepsInput++;
+    reportOnce = true;
+    reportOnceCounter = 0;
+    
+    HeadType_t head = getPrintHeadType();
+    
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+    {
+        TPHStepsInput = (TPHStepsInput * 2);
+    }
     
     if(TPHStepsInput > 0 && TPHStepsInput < 20000)
     {
@@ -2816,8 +3131,8 @@ void stepTUMotor( uint16_t steps, uint16_t speedInUs )
     TPHIntrDone = false; // is the printhead roller motor intr done?
     stepsToTake = steps; // how many steps to take before stopping the takeup motor intr
     stepsTaken = 0; // how many steps have been taken in the takeup motor intr
-    maxTension = config_.takeup_sensor_max_tension_counts; // the maximum desired tension during a print
-    minTension = config_.takeup_sensor_min_tension_counts; // the minimum desired tension during a print 
+    maxTension = config_.takeupMaxTension; // the maximum desired tension during a print
+    minTension = config_.takeupMinTension; // the minimum desired tension during a print 
      /*moved this to tightenStock(): */ //emergencyBrakeTorqueLimit = (unsigned short)((float)maxTension/MAX_TENSION_MULTIPLIER); calculating in tightenStock 3/19/25
     //TUSpeed = speedInUs; //TFink - have stepTUMotorIntr start at speed tightenStockInter ended with
     takeupBusy = true; // is the takeup motor intr done?
@@ -2861,8 +3176,8 @@ void stepTPHMotor( uint16_t steps, uint16_t speedInUs )
     stepsToTake = 0;
     stepsTaken = 0;
     
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
+    maxTension = config_.takeupMaxTension;
+    minTension = config_.takeupMinTension;
 
     setHalfStepMode(_MAIN_STEPPER);
     setHalfStepMode(_TAKEUP_STEPPER);
@@ -2893,9 +3208,6 @@ void stepTPHMotor( uint16_t steps, uint16_t speedInUs )
 void stepToLt( uint16_t steps, uint16_t speedInUs )
 { 
     PRINTF("stepToLt() - steps = %d\r\n", steps);
-    
-    PRINTF("getTUCalStatus = %d\r\n", getTUCalStatus());
-    PRINTF("getGapCalStatus = %d\r\n", getGapCalStatus());
   
     if(getTUCalStatus() == false && getGapCalStatus() == false && (currentStatus.sensor & HEAD_UP) != HEAD_UP)
     {
@@ -2904,16 +3216,25 @@ void stepToLt( uint16_t steps, uint16_t speedInUs )
         stepsToTake = 0;
         stepsTaken = 0;
         
-        maxTension = config_.takeup_sensor_max_tension_counts;
-        minTension = config_.takeup_sensor_min_tension_counts;
+        maxTension = config_.takeupMaxTension;
+        minTension = config_.takeupMinTension;
       
-        setQuarterStepMode( _MAIN_STEPPER ); 
-        setQuarterStepMode( _TAKEUP_STEPPER );
+        HeadType_t head = getPrintHeadType();
+
+        if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+        {
+            setHalfStepMode( _MAIN_STEPPER ); 
+            setHalfStepMode( _TAKEUP_STEPPER );
+        }
+        else
+        {
+            setQuarterStepMode( _MAIN_STEPPER ); 
+            setQuarterStepMode( _TAKEUP_STEPPER );
+        }
         
         setTakeUpMotorDirection( BACKWARDM_ ); 
         setMainMotorDirection( FORWARDM_ );
-       
-        
+    
         TUSpeed = speedInUs;
         stepsToTake = steps;
         takeupBusy = true;
@@ -2936,7 +3257,6 @@ void stepToLt( uint16_t steps, uint16_t speedInUs )
         setHalfStepMode(_TAKEUP_STEPPER);
         
         setStreamingLabelBackwind( 0 );
-        //setTPHStepsPastGapThisPrint( 0 );
         setTPHStepsThisPrint( 0 );
     }
 }
@@ -2959,13 +3279,21 @@ void sizeLabels( uint16_t steps, uint16_t speedInUs )
     stepsToNextLabel = 0;
     stepsBackToGap = 0;
     
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
-    
-    //largeGapFlag = false;
-    
-    setQuarterStepMode( _MAIN_STEPPER ); 
-    setQuarterStepMode( _TAKEUP_STEPPER );
+    maxTension = config_.takeupMaxTension;
+    minTension = config_.takeupMinTension;
+
+    HeadType_t head = getPrintHeadType();
+
+    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+    {
+        setHalfStepMode( _MAIN_STEPPER ); 
+        setHalfStepMode( _TAKEUP_STEPPER );
+    }
+    else
+    {
+        setQuarterStepMode( _MAIN_STEPPER ); 
+        setQuarterStepMode( _TAKEUP_STEPPER );
+    }
     
     setTakeUpMotorDirection( BACKWARDM_ ); 
     setMainMotorDirection( FORWARDM_ );
@@ -2980,10 +3308,6 @@ void sizeLabels( uint16_t steps, uint16_t speedInUs )
     stepsToNextLabel = 0;
     stepsBackToGap = 0;
     continuousDetectionSteps = 0;
-    //largeGapFlag = false;
-    //largeGapFlagPersist = false;
-    //syncBarFlag = false;
-    
     
     setTmr2IntrType( SIZE_LABELS );
     
@@ -3007,7 +3331,7 @@ void sizeLabels( uint16_t steps, uint16_t speedInUs )
 *******************************************************************************/
 void stepToNextLabel( uint16_t steps, uint16_t speedInUs )
 { 
-    PRINTF("stepToNextLabel() - steps - %d\r\n", steps);
+    //PRINTF("stepToNextLabel() - steps - %d\r\n", steps);
     
     if(steps > 1500)
     {
@@ -3019,8 +3343,8 @@ void stepToNextLabel( uint16_t steps, uint16_t speedInUs )
         stepsToTake = 0;
         stepsTaken = 0;
         
-        maxTension = config_.takeup_sensor_max_tension_counts;
-        minTension = config_.takeup_sensor_min_tension_counts;
+        maxTension = config_.takeupMaxTension;
+        minTension = config_.takeupMinTension;
         
         readyToRecordTakeupSteps = false;
         
@@ -3059,8 +3383,8 @@ void tightenStock( uint16_t tension, uint16_t speedInUs, bool continueStepping, 
     resetPeelLogStateVars(START_OF_LABEL);
    
     /* init the takeup motor intr TMR*/
-    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );  /* Debug Only */
-    GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );  /* Debug Only */
+    //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );  /* Debug Only */
+    //GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );  /* Debug Only */
     initTakeupIntr();
     
     /* This is the maximum value of the takeup torque sensor */
@@ -3116,7 +3440,7 @@ void tightenStock( uint16_t tension, uint16_t speedInUs, bool continueStepping, 
     /* block until tighten intr is done, takeupBusy is set to false inside of
     tighten intr handler */
     while(getTakeupBusy() == true){};
-    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );  /* Debug Only */
+    //GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );  /* Debug Only */
 }
 
 
@@ -3248,8 +3572,8 @@ void loosenStock( uint16_t steps, uint16_t speedInUs )
         stepsToTake = 0;
         stepsTaken = 0;
         
-        maxTension = config_.takeup_sensor_max_tension_counts;
-        minTension = config_.takeup_sensor_min_tension_counts;
+        maxTension = config_.takeupMaxTension;
+        minTension = config_.takeupMinTension;
 
         setHalfStepMode(_MAIN_STEPPER);
         setHalfStepMode(_TAKEUP_STEPPER);
@@ -3275,7 +3599,6 @@ void loosenStock( uint16_t steps, uint16_t speedInUs )
         setHalfStepMode(_TAKEUP_STEPPER);
         
         setStreamingLabelBackwind( 0 );
-        //setTPHStepsPastGapThisPrint( 0 );
         setTPHStepsThisPrint( 0 );
     }
 }
@@ -3291,14 +3614,12 @@ void loosenStock( uint16_t steps, uint16_t speedInUs )
 *******************************************************************************/
 void backwindStock( uint16_t steps, uint16_t speedInUs ) 
 {         
-    PRINTF("backwindStock() - steps = %d\r\n", steps);
-    
-    if( steps > 1000 || steps == 0)
+    if( steps > 1000 || steps == 0 )
     {
         steps = 1;
     }
   
-    if( getCutterInstalled_() == true )
+    if( getCutterInstalled() == true && getUsingContinuous() == true )
     {
         if(steps >= 150)
         {
@@ -3314,8 +3635,8 @@ void backwindStock( uint16_t steps, uint16_t speedInUs )
         stepsTaken = 0;
         loosenSteps = 0;
         
-        maxTension = config_.takeup_sensor_max_tension_counts;
-        minTension = config_.takeup_sensor_min_tension_counts;
+        maxTension = config_.takeupMaxTension;
+        minTension = config_.takeupMinTension;
         
         setStreamingLabelBackwind(0);
 
@@ -3334,8 +3655,6 @@ void backwindStock( uint16_t steps, uint16_t speedInUs )
 
         startTakeupIntr();
         toggleDebugPin10uS();
-
-        //while(getTakeupBusy() == true){};
     }
     else
     {
@@ -3343,30 +3662,15 @@ void backwindStock( uint16_t steps, uint16_t speedInUs )
         stepsTaken = 0;
         loosenSteps = 0;
         
-        maxTension = config_.takeup_sensor_max_tension_counts;
-        minTension = config_.takeup_sensor_min_tension_counts;
+        maxTension = config_.takeupMaxTension;
+        minTension = config_.takeupMinTension;
         takeupBusy = false;
         
-        //tensionCount = 0;
-        //stillFindingDesriredTension = true;
-
         setHalfStepMode(_MAIN_STEPPER);
         setHalfStepMode(_TAKEUP_STEPPER);
         
-        //setTakeUpMotorDirection( FORWARDM_ ); 
-        //setMainMotorDirection( BACKWARDM_ );
-        
-        //powerOnMotors();
-        //takeupDelayShort();
-        //powerOnMotors();
-        
-        //TUSpeed = speedInUs;
-        
-        //stepsToTake = steps;
-        //takeupBusy = true;
-        
         setStreamingLabelBackwind( 0 );
-        //setTPHStepsPastGapThisPrint( 0 );
+
         setTPHStepsThisPrint( 0 );
       
         PRINTF("backwindStock() - step count out of range - steps = %d\r\n", steps);
@@ -3385,8 +3689,8 @@ void backwindStock( uint16_t steps, uint16_t speedInUs )
 *******************************************************************************/
 void checkForPaper( uint16_t tension, uint16_t speedInUs )
 {
-    PRINTF("checkForPaper()\r\n");
-  
+    //PRINTF("checkForPaper()\r\n");
+      
     if(getTUCalStatus() == false && (currentStatus.sensor & HEAD_UP) != HEAD_UP)
     {
         /* set up TMR2 */
@@ -3442,173 +3746,6 @@ void checkForPaper( uint16_t tension, uint16_t speedInUs )
     }
 }
 
-
-/******************************************************************************/
-/*!   \fn 
-        void rampMotors( uint16_t startSpeed, uint16_t endSpeed )
-      \brief  
-        ramps both motors
-      \author
-          Chris King
-*******************************************************************************/
-void rampMotors(uint16_t startSpeed, uint16_t endSpeed)
-{
-    qtmr_config_t qtmrConfig;
-  
-    rampDone = false;
-    rampStart = startSpeed;
-    rampTarget = endSpeed;
-    
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
-    
-    setTmr2IntrType(RAMP_MOTORS);
-    
-    setHalfStepMode(_MAIN_STEPPER);
-    setHalfStepMode(_TAKEUP_STEPPER);
-
-    QTMR_GetDefaultConfig(&qtmrConfig);
-    qtmrConfig.primarySource = kQTMR_ClockDivide_128;
-
-    QTMR_Init(TMR2, kQTMR_Channel_1, &qtmrConfig);
-
-    EnableIRQ(TMR2_IRQn);
-
-    QTMR_EnableInterrupts(TMR2, kQTMR_Channel_1, kQTMR_CompareInterruptEnable);
-  
-    QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    
-    QTMR_StartTimer(TMR2, kQTMR_Channel_1, kQTMR_PriSrcRiseEdge);
-  
-    while(rampDone == false) {};
-    
-}
-
-
-/******************************************************************************/
-/*!   \fn 
-        void rampMainMotor( uint16_t startSpeed, uint16_t endSpeed )
-      \brief  
-        ramps just the TPH motor
-      \author
-          Chris King
-*******************************************************************************/
-void rampMainMotor(uint16_t startSpeed, uint16_t endSpeed)
-{
-    qtmr_config_t qtmrConfig;
-  
-    rampDone = false;
-    rampStart = startSpeed;
-    rampTarget = endSpeed;
-    
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
-    
-    setTmr2IntrType(RAMP_MAIN);
-    
-    setHalfStepMode(_MAIN_STEPPER);
-    setHalfStepMode(_TAKEUP_STEPPER);
-    
-    QTMR_GetDefaultConfig(&qtmrConfig);
-    qtmrConfig.primarySource = kQTMR_ClockDivide_128;
-
-    QTMR_Init(TMR2, kQTMR_Channel_1, &qtmrConfig);
-
-    EnableIRQ(TMR2_IRQn);
-
-    QTMR_EnableInterrupts(TMR2, kQTMR_Channel_1, kQTMR_CompareInterruptEnable);
-  
-    QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    
-    QTMR_StartTimer(TMR2, kQTMR_Channel_1, kQTMR_PriSrcRiseEdge);
-  
-    while(rampDone == false) {};
-}
-
-
-/*!   \fn 
-        void rampMainMotor( uint16_t startSpeed, uint16_t endSpeed )
-      \brief  
-        ramps just the TPH motor
-      \author
-          Chris King
-*******************************************************************************/
-void rampMainMotorQuarterSteps(uint16_t startSpeed, uint16_t endSpeed)
-{
-    qtmr_config_t qtmrConfig;
-  
-    rampDone = false;
-    rampStart = startSpeed;
-    rampTarget = endSpeed;
-    
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
-    
-    setTmr2IntrType(RAMP_MAIN_QUARTER_STEPS);
-    
-    setQuarterStepMode( _MAIN_STEPPER ); 
-    //setQuarterStepMode( _TAKEUP_STEPPER );
-    
-    QTMR_GetDefaultConfig(&qtmrConfig);
-    qtmrConfig.primarySource = kQTMR_ClockDivide_128;
-
-    QTMR_Init(TMR2, kQTMR_Channel_1, &qtmrConfig);
-
-    EnableIRQ(TMR2_IRQn);
-
-    QTMR_EnableInterrupts(TMR2, kQTMR_Channel_1, kQTMR_CompareInterruptEnable);
-  
-    QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    
-    QTMR_StartTimer(TMR2, kQTMR_Channel_1, kQTMR_PriSrcRiseEdge);
-  
-    while(rampDone == false) {};
-}
-
-/******************************************************************************/
-/*!   \fn 
-        void rampMotorsBack( uint16_t startSpeed, uint16_t endSpeed )
-      \brief  
-        ramps both motors backwards
-      \author
-          Chris King
-*******************************************************************************/
-void rampMotorsBack(uint16_t startSpeed, uint16_t endSpeed)
-{
-    qtmr_config_t qtmrConfig;
-  
-    rampDone = false;
-    rampStart = startSpeed;
-    rampTarget = endSpeed;
-    
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
-    
-    setTmr2IntrType(RAMP_MOTORS);
-    
-    setHalfStepMode(_MAIN_STEPPER);
-    setHalfStepMode(_TAKEUP_STEPPER);
-    
-    setTakeUpMotorDirection( FORWARDM_ ); 
-    setMainMotorDirection( BACKWARDM_ );
-    
-    QTMR_GetDefaultConfig(&qtmrConfig);
-    qtmrConfig.primarySource = kQTMR_ClockDivide_128;
-
-    QTMR_Init(TMR2, kQTMR_Channel_1, &qtmrConfig);
-
-    EnableIRQ(TMR2_IRQn);
-
-    QTMR_EnableInterrupts(TMR2, kQTMR_Channel_1, kQTMR_CompareInterruptEnable);
-  
-    QTMR_SetTimerPeriod(TMR2, kQTMR_Channel_1, USEC_TO_COUNT(rampStart, TMR2_SOURCE_CLOCK)); 
-    
-    QTMR_StartTimer(TMR2, kQTMR_Channel_1, kQTMR_PriSrcRiseEdge);
-  
-    while(rampDone == false) {};
-}
-
-
 /******************************************************************************/
 /*!   \fn 
         static void setTUSpeedModifier( uint16_t amountToSlowInUs)
@@ -3621,7 +3758,6 @@ void setTUSpeedModifier( uint16_t amountToSlowInUs)
 {
     TUSpeedModifier = amountToSlowInUs;
 }
-
 
 /******************************************************************************/
 /*!   \fn 
@@ -3703,7 +3839,6 @@ void setLabelSizeInQuarterSteps( uint16_t labelLength )
     labelSizeInQuarterSteps = labelLength;
 }
 
-
 /******************************************************************************/
 /*!   \fn 
         static uint16_t getStepsToNextLabel( void )
@@ -3718,7 +3853,6 @@ int getStepsToNextLabel( void )
     return stepsToNextLabel;
 }
 
-
 /******************************************************************************/
 /*!   \fn 
         static uint16_t getStepsBackToGap( void )
@@ -3731,7 +3865,6 @@ int getStepsBackToGap( void )
 {
     return stepsBackToGap;
 }
-
 
 /******************************************************************************/
 /*!   \fn 
@@ -3760,7 +3893,6 @@ void takeupDelay( void )
     }
 }
 
-
 /******************************************************************************/
 /*!   \fn 
         void takeupDelayMid( void )
@@ -3788,7 +3920,6 @@ void takeupDelayMid( void )
     }
 }
 
-
 /******************************************************************************/
 /*!   \fn 
         void takeupDelayShort( void )
@@ -3811,7 +3942,6 @@ void takeupDelayShort( void )
         __NOP();
     }
 }
-
 
 uint16_t getLastSpeed( void )
 {
@@ -3914,7 +4044,7 @@ void clearSizingVariables( void )
     firstGapIndex = 0;
     secondGapIndex = 0;
     stepsBackToGap = 0;
-
+    
     for(uint16_t dipsIndex = 0; dipsIndex < DIPS_ARRAY_SIZE; dipsIndex++)
     {
       dipIndices[dipsIndex] = 0; 

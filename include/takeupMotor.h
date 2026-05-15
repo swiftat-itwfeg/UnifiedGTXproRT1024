@@ -28,6 +28,9 @@
 #define MIN_TENSION_VALUE_AT_REST 250	/* Used during start of Cal. If less then this value, likely that */
 										/* the detector is saturated and we need to lower the current */
 
+#define STEPS_TO_JAM_HT_PRINTER         450
+#define STEPS_TO_JAM_GT_PRINTER         450
+
 typedef struct
 {
     bool                busy;                  /* takeup busy flag */
@@ -153,18 +156,12 @@ AT_QUICKACCESS_SECTION_CODE(void stopTPHIntr( void ));
 AT_QUICKACCESS_SECTION_CODE(void startPrintLineIntr( void ));
 AT_QUICKACCESS_SECTION_CODE(void stopPrintLineIntr( void ));
 
-
-
-
 AT_QUICKACCESS_SECTION_CODE(static uint8_t stepTPHMotorIntr( void )); 
 AT_QUICKACCESS_SECTION_CODE(static uint8_t sizeLabelIntr( void ));
 AT_QUICKACCESS_SECTION_CODE(static uint8_t tightenStockIntr( void )); //if setTmr2IntrType(TIGHTEN_STOCK), this function is called in takeupIntrHandler()
 AT_QUICKACCESS_SECTION_CODE(static uint8_t tightenStockTUCalIsr( void ));
 AT_QUICKACCESS_SECTION_CODE(static uint8_t tightenStockMaxTUCalIsr( void ));
 AT_QUICKACCESS_SECTION_CODE(static uint8_t loosenStockIntr( void )); //if setTmr2IntrType(LOOSEN_STOCK), this function is called in takeupIntrHandler()
-static uint8_t rampMotorsIntr( void );
-static uint8_t rampMainMotorIntr( void );
-static uint8_t rampMainMotorQuarterStepsIntr( void );
 AT_QUICKACCESS_SECTION_CODE(static uint8_t backwindIntr( void ));
 AT_QUICKACCESS_SECTION_CODE(static uint8_t checkForPaperIntr( void ));
 AT_QUICKACCESS_SECTION_CODE(static uint8_t stepToLtIntr( void ));
@@ -184,13 +181,8 @@ AT_QUICKACCESS_SECTION_CODE(void stepToLt( uint16_t steps, uint16_t speedInUs ))
 AT_QUICKACCESS_SECTION_CODE(void sizeLabels( uint16_t steps, uint16_t speedInUs ));
 AT_QUICKACCESS_SECTION_CODE(void stepToNextLabel( uint16_t steps, uint16_t speedInUs ));
 
-void rampMotors( uint16_t startSpeed, uint16_t endSpeed );
-void rampMotorsBack( uint16_t startSpeed, uint16_t endSpeed );
-void rampMainMotor( uint16_t startSpeed, uint16_t endSpeed );
-void rampMainMotorQuarterSteps(uint16_t startSpeed, uint16_t endSpeed);
-
-AT_QUICKACCESS_SECTION_CODE(void setTUSpeedModifier( uint16_t amountToSlowInUs )); //sets the amount to modify TUSpeed based on the amount of times it has been modified so far this print cycle
-AT_QUICKACCESS_SECTION_CODE(uint16_t getTUSpeedModifier( void )); //sets the amount to modify TUSpeed based on the amount of times it has been modified so far this print cycle
+void setTUSpeedModifier( uint16_t amountToSlowInUs ); //sets the amount to modify TUSpeed based on the amount of times it has been modified so far this print cycle
+uint16_t getTUSpeedModifier( void ); //sets the amount to modify TUSpeed based on the amount of times it has been modified so far this print cycle
 
 AT_QUICKACCESS_SECTION_CODE(bool getTakeupBusy( void ));
 AT_QUICKACCESS_SECTION_CODE(void setTakeupBusy( bool busy ));
@@ -205,9 +197,8 @@ AT_QUICKACCESS_SECTION_CODE(void takeupDelayShort( void ));
 AT_QUICKACCESS_SECTION_CODE(void takeupDelayMid( void ));
 
 AT_QUICKACCESS_SECTION_CODE(void find_lowest_points(const short* waveform, int length, int threshold_value, int dip_threshold, int width_threshold));
+AT_QUICKACCESS_SECTION_CODE(void find_highest_points(const short* waveform, int length, int threshold_value, int dip_threshold, int width_threshold));
 AT_QUICKACCESS_SECTION_CODE(int find_lowest_points_lowest(const short* waveform, int length, int threshold_value));
-AT_QUICKACCESS_SECTION_CODE(int find_lowest_points_start(const int* waveform, int length, int threshold_value));
-AT_QUICKACCESS_SECTION_CODE(void print_waveform_csv_single_row(const char* label, const int* waveform, int length));
 AT_QUICKACCESS_SECTION_CODE(void averageAndStore(short* array, int start, int end));
 AT_QUICKACCESS_SECTION_CODE(double find_percentage_of_average(const short* array, int length, double percentage));
 AT_QUICKACCESS_SECTION_CODE(uint16_t getLastSpeed( void ));
@@ -218,9 +209,6 @@ uint8_t* getTightenBuffer( void );
 uint8_t* getTensionSpeedBuffer( void );
 uint8_t* getTightenSpeedBuffer( void );
 AT_QUICKACCESS_SECTION_CODE(int getPrintDip( void ));
-AT_QUICKACCESS_SECTION_CODE(int countDipsBelowThreshold(int waveform[], int length, int threshold));
-AT_QUICKACCESS_SECTION_CODE(void condenseAppendAndResize(int firstArray[], int firstArrayLength, int secondArray[], int secondArrayLength));
-//int findDips(int waveform[], int length, double threshold);
 AT_QUICKACCESS_SECTION_CODE(void shiftLeft(int arr[], int n, int shiftAmount));
 AT_QUICKACCESS_SECTION_CODE(void addAndShift(int smaller[], int larger[], int smallerSize, int largerSize));
 AT_QUICKACCESS_SECTION_CODE(int calculateAverage(int array[], int length));

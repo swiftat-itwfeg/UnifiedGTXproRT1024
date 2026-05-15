@@ -79,8 +79,7 @@ void BOARD_InitPins(void) {
     inCfg.direction             = kGPIO_DigitalInput;    
     inCfg.interruptMode         = kGPIO_NoIntmode;
   
-/***************************** rev 3 signals **********************************/
-    //IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_29_FLEXPWM2_PWMB03, 0U ); //stepper enable PWM      
+/***************************** rev 3 signals **********************************/    
 
     /* printhead type pin, 80mm vs 72 */
     GPIO_PinInit( GPIO1, 15U, &inCfg );
@@ -115,7 +114,7 @@ void BOARD_InitPins(void) {
    
     
 /*************************** print head signals *******************************/
-#if 1
+
     /* print head lpspi4 clk group3 pin0 configured as lpspi4 clk */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_32_LPSPI4_SCK, 0U );
     IOMUXC_SetPinConfig(IOMUXC_GPIO_EMC_32_LPSPI4_SCK, 0x10B0U ); 
@@ -167,10 +166,8 @@ void BOARD_InitPins(void) {
     outCfg.outputLogic          = 1U;
  
 
-#endif
 /****************************** motor signals *********************************/
     
-#if 1
     /* main motor sleep group3 pin4 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_36_GPIO3_IO04, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_36_GPIO3_IO04, 0x70A0U ); 
@@ -190,16 +187,7 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_28_GPIO2_IO28, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_28_GPIO2_IO28, 0x70A0U );
     GPIO_PinInit( MAIN_MOTOR_RESET_GPIO, MAIN_MOTOR_RESET_PIN, &outCfg );
-
-    /* main motor enable group2 pin29 configured as ouput */
-    //IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_29_GPIO2_IO29, 1U );                                                
-    //IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_29_GPIO2_IO29, 0x70A0U );   
-    //GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &outCfg );
-
-    //IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_29_GPIO2_IO29, 1U);
-    //gpio_pin_config_t enableConfig = { kGPIO_DigitalOutput, 1, };
-    //GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &enableConfig );
-    
+   
     /* main motor direction group2 pin30 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_30_GPIO2_IO30, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_30_GPIO2_IO30, 0x70A0U );   
@@ -245,8 +233,7 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_24_GPIO2_IO24, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_24_GPIO2_IO24, 0x70A0U );
     GPIO_PinInit( TAKEUP_MOTOR_SLEEP_GPIO, TAKEUP_MOTOR_SLEEP_PIN, &outCfg );
-    
-#endif             
+             
 /****************************** misc signals **********************************/    
     
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_05_FLEXSPI_A_DQS, 1U );
@@ -258,11 +245,6 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B0_03_GPIO3_IO16, 0x70A0U );
     GPIO_PinInit( SERIAL_FlASH_CS_GPIO, SERIAL_FlASH_CS_PIN, &outCfg );
     
-    #ifdef RK3568_ARK_REV_1_0_MOD    
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_39_FLEXPWM2_PWMB00, 0U ); 
-    #else 
-    
-    #if 1   /* mine */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_09_XBAR1_INOUT09, 0U );                                                
     IOMUXC_GPR->GPR6 = ((IOMUXC_GPR->GPR6 &
       (~(IOMUXC_GPR_GPR6_IOMUXC_XBAR_DIR_SEL_9_MASK))) 
@@ -279,7 +261,6 @@ void BOARD_InitPins(void) {
       );
     XBARA_SetSignalsConnection( XBARA, kXBARB2_InputQtimer1Tmr0, kXBARA1_OutputIomuxXbarInout09 ); 
 
-    #else
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_09_GPIO2_IO09, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_09_GPIO2_IO09, 0x70A0U );
     
@@ -289,7 +270,6 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_11_GPIO3_IO31, 0x1088U );
     GPIO_PinInit( LABEL_TAKEN_EN_GPIO, LABEL_TAKEN_EN_PIN, &outCfg );
     outCfg.outputLogic          = 1U;    
-    #endif 
     
     outCfg.outputLogic          = 0U;
     /* label taken enable group3 pin31 configured as ouput */
@@ -297,9 +277,7 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_11_GPIO3_IO31, 0x1088U );
     GPIO_PinInit( LABEL_TAKEN_EN_GPIO, LABEL_TAKEN_EN_PIN, &outCfg );
     outCfg.outputLogic          = 1U;
-    #endif
     
-
     /* lp5521 enable group2 pin7 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_07_GPIO2_IO07, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_07_GPIO2_IO07, 0x70A0U ); //0xD0B0U
@@ -389,15 +367,11 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0x10B0U ); 
 
-   // IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0U );
-   // IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0x70A0U ); 
-
     /* weigher lpspi2 mosi group2 pin13 configured as lpspi2 mosi */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0x10B0U ); 
     
-    
-    
+        
 /***************************** comm signals ***********************************/    
 
     /* rs485 group1 pin10 configured as uart5 tx */
@@ -407,17 +381,6 @@ void BOARD_InitPins(void) {
     /* rs485 group1 pin11 configured as uart5 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_11_LPUART5_RX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_11_LPUART5_RX, 0x10B0U ); 
-#if 0
-    
-    /* can interface rx group3 pin21 configured as can rx */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_01_FLEXCAN1_RX, 0U );
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_01_FLEXCAN1_RX, 0x10B0U );
-
-    /* can interface tx group3 pin20 configured as can tx */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_00_FLEXCAN1_TX, 0U );    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_00_FLEXCAN1_TX, 0x10B0U ); 
-    
-#else 
     
     /* debug interface group3 pin21 configured as uart6 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_01_LPUART6_RX, 0U );
@@ -427,23 +390,14 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_00_LPUART6_TX, 0U );    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_00_LPUART6_TX, 0x10B0U ); 
 
-#endif    
     /* cutter group1 pin6 configured as uart1 tx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_06_LPUART1_TX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_06_LPUART1_TX, 0x10B0U ); 
     
-    //IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B0_06_GPIO1_IO06, 0U); 
-    //IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_06_GPIO1_IO06, 0x70A0U );  
-    //GPIO_PinInit( GPIO1, 6U, &outCfg2 );  //debug pin for hung
-
     /* cutter group1 pin7 configured as uart1 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_07_LPUART1_RX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_07_LPUART1_RX, 0x10B0U );
    
-    /* do not configure this output to enable the U3920 to switch the usb link! */
-    /* usb pwr enable group3 pin9 configured as usb pwr 
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_41_USB_OTG1_PWR, 0U ); */   
-
     /* usb id group3 pin8 configured as usb id */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_40_USB_OTG1_ID, 0U );       
 
@@ -502,10 +456,7 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_14_GPIO2_IO14, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_14_GPIO2_IO14, 0x70A0U ); 
     outCfg.outputLogic          = 1U;   
-    /*
-    inCfg.interruptMode         = kGPIO_IntFallingEdge;
-    GPIO_PinInit( ACCEL_INTA_GPIO, ACCEL_INTA_PIN, &inCfg ); 
-    */
+ 
     GPIO_PinInit( ACCEL_INTA_GPIO, ACCEL_INTA_PIN, &outCfg ); 
     
     /* weigher accelerometer int b group2 pin15 configured as output */
@@ -546,26 +497,26 @@ void BOARD_InitPins(void) {
     GPIO_PinInit( ACCEL_PWR_EN_GPIO, ACCEL_PWR_EN_PIN, &outCfg ); 
     GPIO_WritePinOutput( ACCEL_PWR_EN_GPIO, ACCEL_PWR_EN_PIN, false );  //Turn off. Only turn on if VM enabled
     
-    //LPSPI2 pins for CS5530
-    //CS5530 SPI clk
+    /* weigher spi clk for external cs5530 a/d */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_10_LPSPI2_SCK, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_10_LPSPI2_SCK, 0x10B0U );
   
-    //CS5530 GPIO chip select
+    
     gpio_pin_config_t csCfg; 
     csCfg.direction = kGPIO_DigitalOutput;
     csCfg.outputLogic = 0U;
     csCfg.interruptMode = kGPIO_NoIntmode;
     
+    /* weigher spi clk for external cs5530 chip select */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0x1030U ); 
     GPIO_PinInit(GPIO2, 11U, &csCfg);
   
-    //CS5530 SPI SDO
+    /* weigher spi sdo for external cs5530  */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0x10B0U );
   
-    //CS5530 SPI SDI
+    /* weigher spi sdi for external cs5530  */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0x10B0U );
       

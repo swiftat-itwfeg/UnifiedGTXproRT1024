@@ -1,12 +1,11 @@
 /*
- * Copyright  2018-2021 NXP
- * All rights reserved.
+ * Copyright  2018-2021, 2024-2025 NXP
  *
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_TEMPMON_H_
-#define _FSL_TEMPMON_H_
+#ifndef FSL_TEMPMON_H_
+#define FSL_TEMPMON_H_
 
 #include "fsl_common.h"
 
@@ -20,19 +19,27 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
+/*! @brief TEMPMON calibration data mask. */
+#define TEMPMON_HOTTEMPMASK    0xFFU
+#define TEMPMON_HOTTEMPSHIFT   0x00U
+#define TEMPMON_HOTCOUNTMASK   0xFFF00U
+#define TEMPMON_HOTCOUNTSHIFT  0X08U
+#define TEMPMON_ROOMCOUNTMASK  0xFFF00000U
+#define TEMPMON_ROOMCOUNTSHIFT 0x14U
 
 /*! @name Driver version */
-/*@{*/
-#define FSL_TEMPMON_DRIVER_VERSION (MAKE_VERSION(2, 0, 3)) /*!< Version 2.0.3 */
-/*@}*/
+/*! @{ */
+/*! @brief TEMPMON driver version. */
+#define FSL_TEMPMON_DRIVER_VERSION (MAKE_VERSION(2, 2, 1))
+/*! @} */
 
 /*! @brief TEMPMON temperature structure. */
 typedef struct _tempmon_config
 {
-    uint16_t frequency;      /*!< The temperature measure frequency.*/
-    uint32_t highAlarmTemp;  /*!< The high alarm temperature.*/
-    uint32_t panicAlarmTemp; /*!< The panic alarm temperature.*/
-    uint32_t lowAlarmTemp;   /*!< The low alarm temperature.*/
+    uint16_t frequency;    /*!< The temperature measure frequency.*/
+    int16_t highAlarmTemp;  /*!< The high alarm temperature.*/
+    int16_t panicAlarmTemp; /*!< The panic alarm temperature.*/
+    int16_t lowAlarmTemp;   /*!< The low alarm temperature.*/
 } tempmon_config_t;
 
 /*! @brief TEMPMON alarm mode. */
@@ -115,7 +122,7 @@ float TEMPMON_GetCurrentTemperature(TEMPMON_Type *base);
  * @param tempVal The alarm temperature with degrees Celsius
  * @param alarmMode The alarm mode.
  */
-void TEMPMON_SetTempAlarm(TEMPMON_Type *base, uint32_t tempVal, tempmon_alarm_mode alarmMode);
+void TEMPMON_SetTempAlarm(TEMPMON_Type *base, int16_t tempVal, tempmon_alarm_mode alarmMode);
 
 #if defined(__cplusplus)
 }
@@ -123,4 +130,4 @@ void TEMPMON_SetTempAlarm(TEMPMON_Type *base, uint32_t tempVal, tempmon_alarm_mo
 
 /*! @}*/
 
-#endif /* _FSL_TEMPMON_H_ */
+#endif /* FSL_TEMPMON_H_ */

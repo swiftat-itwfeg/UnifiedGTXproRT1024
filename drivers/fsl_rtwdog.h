@@ -1,12 +1,11 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
- * All rights reserved.
+ * Copyright 2016-2020, 2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_RTWDOG_H_
-#define _FSL_RTWDOG_H_
+#ifndef FSL_RTWDOG_H_
+#define FSL_RTWDOG_H_
 
 #include "fsl_common.h"
 
@@ -19,21 +18,21 @@
  * Definitions
  *******************************************************************************/
 /*! @name Unlock sequence */
-/*@{*/
+/*! @{ */
 #define WDOG_FIRST_WORD_OF_UNLOCK  (RTWDOG_UPDATE_KEY & 0xFFFFU)          /*!< First word of unlock sequence */
 #define WDOG_SECOND_WORD_OF_UNLOCK ((RTWDOG_UPDATE_KEY >> 16U) & 0xFFFFU) /*!< Second word of unlock sequence */
-/*@}*/
+/*! @} */
 
 /*! @name Refresh sequence */
-/*@{*/
+/*! @{ */
 #define WDOG_FIRST_WORD_OF_REFRESH  (RTWDOG_REFRESH_KEY & 0xFFFFU)          /*!< First word of refresh sequence */
 #define WDOG_SECOND_WORD_OF_REFRESH ((RTWDOG_REFRESH_KEY >> 16U) & 0xFFFFU) /*!< Second word of refresh sequence */
-/*@}*/
+/*! @} */
 /*! @name Driver version */
-/*@{*/
-/*! @brief RTWDOG driver version 2.1.2. */
-#define FSL_RTWDOG_DRIVER_VERSION (MAKE_VERSION(2, 1, 2))
-/*@}*/
+/*! @{ */
+/*! @brief RTWDOG driver version. */
+#define FSL_RTWDOG_DRIVER_VERSION (MAKE_VERSION(2, 1, 4))
+/*! @} */
 
 /*! @brief Describes RTWDOG clock source. */
 typedef enum _rtwdog_clock_source
@@ -178,7 +177,7 @@ AT_QUICKACCESS_SECTION_CODE(void RTWDOG_Init(RTWDOG_Type *base, const rtwdog_con
  */
 void RTWDOG_Deinit(RTWDOG_Type *base);
 
-/* @} */
+/*! @} */
 
 /*!
  * @name RTWDOG functional Operation
@@ -294,14 +293,26 @@ static inline void RTWDOG_EnableWindowMode(RTWDOG_Type *base, bool enable)
  * @param base          RTWDOG peripheral base address.
  * @param count         Raw count value.
  * @param clockFreqInHz The frequency of the clock source RTWDOG uses.
+ * @return Return converted time. Will return 0 if result is larger than 0xFFFFFFFF.
  */
 static inline uint32_t RTWDOG_CountToMesec(RTWDOG_Type *base, uint32_t count, uint32_t clockFreqInHz)
 {
+    assert(clockFreqInHz != 0U);
+    uint64_t time;
+
     if ((base->CS & RTWDOG_CS_PRES_MASK) != 0U)
     {
         clockFreqInHz /= 256U;
     }
-    return count * 1000U / clockFreqInHz;
+
+    time = (uint64_t)count * 1000U / (uint64_t)clockFreqInHz;
+
+    if (time > 0xFFFFFFFFU)
+    {
+        return 0;
+    }
+
+    return (uint32_t)time;
 }
 
 /*!
@@ -409,12 +420,12 @@ static inline void RTWDOG_Refresh(RTWDOG_Type *base)
  * @param base RTWDOG peripheral base address.
  * @return     Current RTWDOG counter value.
  */
-static inline uint16_t RTWDOG_GetCounterValue(RTWDOG_Type *base)
+static inline uint32_t RTWDOG_GetCounterValue(RTWDOG_Type *base)
 {
-    return (uint16_t)base->CNT;
+    return base->CNT;
 }
 
-/*@}*/
+/*! @} */
 
 #if defined(__cplusplus)
 }
@@ -422,4 +433,4 @@ static inline uint16_t RTWDOG_GetCounterValue(RTWDOG_Type *base)
 
 /*! @}*/
 
-#endif /* _FSL_RTWDOG_H_ */
+#endif /* FSL_RTWDOG_H_ */

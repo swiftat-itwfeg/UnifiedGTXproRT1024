@@ -1,4 +1,4 @@
-#include "printerTask.h"
+#include "hobartPrinterTask.h"
 #include <stdlib.h>
 #include "fsl_debug_console.h"
 #include "fsl_flexcan.h"
@@ -868,7 +868,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
             PRINTF("handlePrinterMsg(): Processing message: PR_REQ_DOT_WEAR \r\n");
             /*The test is run when we request dot wear status. This should only
               get sent if dot wear status says there are bad dots*/
-            sendDotWear( getHeadStyleSize() );
+            sendPrHeadDotStatus( getHeadStyleSize() );
             break;
         }
         case PR_ORDER_ID:

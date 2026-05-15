@@ -316,80 +316,60 @@ static void startSystemThreads()
 }
 
 /******************************************************************************/
-/*!   \fn static void startSystemThreads( void )
+/*!   \fn static PeripheralModel getPeripheralModel( void )
 
       \brief
-        This function returns what type of device we are based on logic 
-        of the model pins.
-        different configurations:
-        15 (default) = Global Scale Good
-        14 = Global Scale Better
-        13 = Global Scale Best
-        12 = Global Scale Free Standing
-        11 = Global Scale Printer Only
-        10 = Global PrePack Printer
-        9  = Global PrePack Weigher
-        8  = Reserved
-        7  = Reserved
-        6  = Reserved
-        5  = Reserved
-        4  = Reserved
-        3  = Reserved
-        2  = Reserved
-        1  = Reserved
-        0  = Reserved
+        This function returns what type of device we are based on the device 
+        properties.
 
       \author
           Aaron Swift
 *******************************************************************************/
-static PeripheralModel getPeripheralModel( void )
+static PeripheralModel getPeripheralModel( DEVICE_PROPERTIES_t *pDProperties )
 {
-    PeripheralModel model = RT_UNKNOWN;
-    unsigned char modelPins = 0;
-    /* read input pins to determine model type */
-    if( GPIO_ReadPinInput( MODEL_TYPE_A_GPIO, MODEL_TYPE_A_PIN ) ) {
-        modelPins  += 1;
-    }
-    if( GPIO_ReadPinInput( MODEL_TYPE_B_GPIO, MODEL_TYPE_B_PIN ) ) {
-        modelPins  += 2;
-    }
-    if( GPIO_ReadPinInput( MODEL_TYPE_C_GPIO, MODEL_TYPE_C_PIN ) ) {
-        modelPins  += 4;  
-    }
-    if( GPIO_ReadPinInput( MODEL_TYPE_D_GPIO, MODEL_TYPE_D_PIN ) ) {
-        modelPins  += 8;  
-    }
-      
-    
-    if( modelPins == 15 ) {
-        model = RT_GLOBAL_SCALE_GOOD;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_GOOD\r\n");
-    } else if( modelPins == 14 ) {
-        model = RT_GLOBAL_SCALE_BETTER;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_BETTER\r\n");
-    } else if( modelPins == 13 ) {
-        model = RT_GLOBAL_SCALE_BEST; 
-        PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_BEST\r\n");
-    } else if( modelPins == 12 ) {
-        model = RT_GLOBAL_FSS;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_FSS\r\n");
-    } else if( modelPins == 11 ) {
-        model = RT_GLOBAL_SCALE_PRINTER_ONLY;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_PRINTER_ONLY\r\n");
-    } else if( modelPins == 10 ) {
-        model = RT_GLOBAL_PREPACK_PRINTER;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_PREPACK_PRINTER\r\n");
-    } else if( modelPins == 9 ) {
-        model = RT_GLOBAL_SCALE_WEIGHER_ONLY;
-        PRINTF("getPeripheralModel(): RT_GLOBAL_SCALE_WEIGHER_ONLY\r\n");
-    } else if( modelPins == 8 ) {
-        model = RT_GLOBAL_PREPACK_WEIGHER; 
-        PRINTF("getPeripheralModel(): RT_GLOBAL_PREPACK_WEIGHER\r\n");
-    } else if( modelPins < 8 ) {
-        model = RT_UNKNOWN;
-        PRINTF("getPeripheralModel(): RT_UNKNOWN\r\n");
+    PeripheralModel model = GLOBAL_SCALE_UNKNOWN;
+
+    if( pDProperties->class == AVERY_WEIGHER_PRINTER ) {
+        if( pDProperties->subClass == AV_XPRO ) {
+            model = GLOBAL_SCALE_AV_XPRO;
+            PRINTF("getPeripheralModel(): GLOBAL_SCALE_AV_XPRO\r\n");           
+        } else if( pDProperties->subClass == AV_XONE ) {
+            model = GLOBAL_SCALE_AV_XONE;
+            PRINTF("getPeripheralModel(): GLOBAL_SCALE_AV_XONE\r\n");      
+        } 
+    } else if( pDProperties->class == AVERY_WEIGHER ) {
+        model = GLOBAL_SCALE_AV_WEIGHER;
+        PRINTF("getPeripheralModel(): GLOBAL_SCALE_AV_WEIGHER\r\n");           
+    } else if( pDProperties->class == AVERY_PRINTER ) {
+        model = GLOBAL_SCALE_AV_PRINTER;
+        PRINTF("getPeripheralModel(): GLOBAL_SCALE_AV_PRINTER\r\n");           
+    } else if( pDProperties->class == HOBART_WEIGHER_PRINTER ) {
+        if( pDProperties->subClass == HB_GT ) {
+            model = GLOBAL_SCALE_HB_GT;
+            PRINTF("getPeripheralModel(): GLOBAL_SCALE_HB_GT\r\n");                 
+        } else if( pDProperties->subClass == HB_DT ) {
+            model = GLOBAL_SCALE_HB_DT;
+            PRINTF("getPeripheralModel(): GLOBAL_SCALE_HB_DT\r\n");               
+        }
+    } else if( pDProperties->class == HOBART_WEIGHER ) {
+        model = GLOBAL_SCALE_HB_WEIGHER;
+        PRINTF("getPeripheralModel(): GLOBAL_SCALE_HB_WEIGHER\r\n");               
+    } else if( pDProperties->class == HOBART_PRINTER ) { 
+        model = GLOBAL_SCALE_HB_PRINTER;
+        PRINTF("getPeripheralModel(): GLOBAL_SCALE_HB_PRINTER\r\n");               
+    } else if( pDProperties->class == UN_WEIGHER_PRINTER ) { 
+        PRINTF("getPeripheralModel(): Unsupported at this time!\r\n");    
+    } else if( pDProperties->class == UN_WEIGHER ) { 
+        PRINTF("getPeripheralModel(): Unsupported at this time!\r\n");    
+    } else if( pDProperties->class == UN_PRINTER ) { 
+        PRINTF("getPeripheralModel(): Unsupported at this time!\r\n");    
     }
     
+    if( model == GLOBAL_SCALE_UNKNOWN ) {    
+        PRINTF("getPeripheralModel(): Critical error:  Unknown model!\r\n");               
+        PRINTF("getPeripheralModel(): pDProperties->class: %d\r\n", pDProperties->class);
+        PRINTF("getPeripheralModel(): pDProperties->subClass: %d\r\n", pDProperties->subClass);         
+    }
     return model;
 }
 

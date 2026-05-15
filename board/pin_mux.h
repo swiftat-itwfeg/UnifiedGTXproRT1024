@@ -52,7 +52,6 @@ void configurePinAD_B1_15AsGPIO(void);
 void configurePinAD_B1_15AsSPI3MISO(void);
 
 
-
 //#define RK3568_ARK_REV_1_0_MOD  
 /* Rev 1.0 mods: label taken led mod moved to emc_39 */ 
 #define RK3568_ARK_REV_2_0_MOD
@@ -178,9 +177,9 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #define CUTTER_UART_TX_PORT                             GPIO1
 #define CUTTER_UART_TX_PIN                              6U
 
-#define CUTTER_UART_RX_GPIO                             GPIO1
+#define CUTTER_UART_RX_GPIO                             GPIO1   
 #define CUTTER_UART_RX_PORT                             GPIO1
-#define CUTTER_UART_RX_PIN                              7U
+#define CUTTER_UART_RX_PIN                              7U              /* mux'd with printhead */
 
 /******************************************************************************/
 /********************************** printer ***********************************/   
@@ -222,6 +221,9 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #define PHEAD_DETECT_GPIO_PORT          	        GPIO1
 #define PHEAD_DETECT_GPIO_PIN                           15U
 
+#define PHD_RID0B_GPIO                                  GPIO1
+#define PHD_RID0B_PORT                                  GPIO1
+#define PHD_RID0B_PIN                                   7U
 
 /******************************************************************************/
 /********************************** motors ************************************/   
@@ -259,15 +261,9 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #define TAKEUP_MOTOR_SLEEP_PORT                         GPIO2
 #define TAKEUP_MOTOR_SLEEP_PIN                          24U
 
-   /* IOMUXC_GPIO_EMC_39_GPIO3_IO07 */
 #define TAKEUP_MOTOR_HIGH_CUR_LIMIT_GPIO                GPIO3
 #define TAKEUP_MOTOR_HIGH_CUR_LIMIT_PORT                GPIO3
 #define TAKEUP_MOTOR_HIGH_CUR_LIMIT_PIN                 7U
-
-   /* IOMUXC_GPIO_EMC_37_GPIO3_IO05 */
-#define MAIN_MOTOR_HIGH_CUR_LIMIT_GPIO                  GPIO3
-#define MAIN_MOTOR_HIGH_CUR_LIMIT_PORT                  GPIO3
-#define MAIN_MOTOR_HIGH_CUR_LIMIT_PIN                   5U
 
 #define MAIN_MOTOR_MS0_GPIO                             GPIO2
 #define MAIN_MOTOR_MS0_PORT                             GPIO2
@@ -292,6 +288,10 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #define MAIN_MOTOR_STEP_GPIO                            GPIO2
 #define MAIN_MOTOR_STEP_PORT                            GPIO2
 #define MAIN_MOTOR_STEP_PIN                             31U
+
+#define MAIN_MOTOR_HIGH_CUR_LIMIT_GPIO                  GPIO3
+#define MAIN_MOTOR_HIGH_CUR_LIMIT_PORT                  GPIO3
+#define MAIN_MOTOR_HIGH_CUR_LIMIT_PIN                   5U
 
 /******************************************************************************/
 /********************************** misc io ***********************************/   
@@ -326,6 +326,10 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #endif
 
 #endif
+
+#define PHD_RID1B_PORT                                  GPIO3   /* mux'd with below */                         
+#define PHD_RID1B_GPIO                                  GPIO3
+#define PHD_RID1B_PIN                                   31U
 
 #define LABEL_TAKEN_EN_PORT                             GPIO3                         
 #define LABEL_TAKEN_EN_GPIO                             GPIO3
@@ -382,6 +386,10 @@ void configurePinAD_B1_15AsSPI3MISO(void);
 #define STATUS_LED_GPIO                                 GPIO1
 #define STATUS_LED_PORT                                 GPIO1           
 #define STATUS_LED_PIN                                  22U  
+
+#define PHD_RID2_GPIO                                   GPIO1   /* mux'd with below */
+#define PHD_RID2_PORT                                   GPIO1
+#define PHD_RID2_PIN                                    14U
 
 /******************************************************************************/
 /********************************** sensors ***********************************/   

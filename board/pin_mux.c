@@ -23,10 +23,9 @@ processor_version: 0.0.0
 
 #include "fsl_common.h"
 #include "fsl_iomuxc.h"
-#include "fsl_gpio.h"     
+#include "fsl_gpio.h"    
+#include "fsl_xbara.h"
 #include "pin_mux.h"
-
-extern void XBARA_SetSignalsConnection(XBARA_Type *base, xbar_input_signal_t input, xbar_output_signal_t output);
 
 /* FUNCTION ************************************************************************************************************
  * 
@@ -60,13 +59,14 @@ void BOARD_InitPins(void) {
     CLOCK_SetDiv( kCLOCK_LpspiDiv, 7 );
     
     /*set clock source for lpspi2 */
-    CLOCK_SetMux(kCLOCK_LpspiMux, 2);
-    CLOCK_SetDiv(kCLOCK_LpspiDiv, 4);
+    CLOCK_SetMux( kCLOCK_LpspiMux, 2 );
+    CLOCK_SetDiv( kCLOCK_LpspiDiv, 4 );
    
     CLOCK_EnableClock( kCLOCK_Adc1 );
     CLOCK_EnableClock( kCLOCK_Adc2 );
+       
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_05_FLEXIO1_FLEXIO17, 0U );
 
-    
 /******************************************************************************/    
 /************************* rt1024-rockchip board ******************************/
 /********************* sbc-rk3568-nxp24-ark rev 1.0 ***************************/
@@ -82,7 +82,6 @@ void BOARD_InitPins(void) {
     inCfg.interruptMode         = kGPIO_NoIntmode;
   
 /***************************** rev 3 signals **********************************/
-    //IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_29_FLEXPWM2_PWMB03, 0U ); //stepper enable PWM      
 
     /* printhead type pin, 80mm vs 72 */
     GPIO_PinInit( GPIO1, 15U, &inCfg );
@@ -104,19 +103,7 @@ void BOARD_InitPins(void) {
     gpio_pin_config_t enableConfig = { kGPIO_DigitalOutput, 0 };
     GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &enableConfig );
     
-    //strobe enable
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_01_GPIO2_IO01, 0U );                                    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_01_GPIO2_IO01, 0x10B1U ); 
-    
-    
-    
-    //gpio_pin_config_t enableConfig = { kGPIO_DigitalOutput, 0, };
-    //GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &enableConfig );
-    //IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_29_GPIO2_IO29, 0x70A0U );
-    //IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_29_GPIO2_IO29, 0U);
-    
     /* IDF 1 and 2 */
-
     GPIO_PinInit(GPIO1, 7U, &inCfg);
     GPIO_PinInit(GPIO1, 8U, &inCfg);
     
@@ -136,13 +123,7 @@ void BOARD_InitPins(void) {
     /* print head lpspi4 mosi group3 pin3 configured as lpspi4 mosi ***** miso / mosi switch on schematic! ***** */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_34_LPSPI4_SDO, 0U );
     IOMUXC_SetPinConfig(IOMUXC_GPIO_EMC_34_LPSPI4_SDO, 0x10B0U ); 
-    
-    /* print head latch enable group2 pin1 configured as ouput 
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_01_GPIO2_IO01, 0U );
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_01_GPIO2_IO01, 0x70A0U ); 
-    GPIO_PinInit( PHEAD_STROBE_EN_GPIO, PHEAD_STROBE_EN_PIN, &outCfg );
-    */
-    
+        
     outCfg.outputLogic          = 1U;
     
     /* print head latch group2 pin0 configured as ouput */
@@ -150,13 +131,10 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_00_GPIO2_IO00, 0x70A0U ); 
     GPIO_PinInit( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, &outCfg );
     
-    //outCfg.outputLogic          = 1U; //these strobe pins need to be muxed based on printhead type at some point
-    
     outCfg.outputLogic          = 1U;
     
     /* print strobe a group3 pin6 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_38_GPIO3_IO06, 1U );                                                
-    //IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_38_FLEXPWM2_PWMA00, 0x10B0U ); 
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_38_GPIO3_IO06, 0x70A0U ); 
     GPIO_PinInit( PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, &outCfg );
 
@@ -172,14 +150,19 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_04_GPIO2_IO04, 0x70A0U ); 
     GPIO_PinInit( PHEAD_POWER_EN_GPIO, PHEAD_POWER_EN_PIN, &outCfg );
 
+    
+    #if 1   /* mosfet rating exceeded fix */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_05_FLEXIO1_FLEXIO17, 0U ); 
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_05_FLEXIO1_FLEXIO17, 0x10B0U );
+    #else 
     /* print head dot enable group2 pin5 configured as ouput */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_05_GPIO2_IO05, 0U );                                                
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_05_GPIO2_IO05, 0U ); 
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_05_GPIO2_IO05, 0x70A0U ); 
     GPIO_PinInit( PHEAD_DOT_ENABLE_GPIO, PHEAD_DOT_ENABLE_PIN, &outCfg );
-    
+    #endif    
+           
     outCfg.outputLogic          = 1U;
  
-
 #endif
 /****************************** motor signals *********************************/
     
@@ -204,14 +187,6 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_28_GPIO2_IO28, 0x70A0U );
     GPIO_PinInit( MAIN_MOTOR_RESET_GPIO, MAIN_MOTOR_RESET_PIN, &outCfg );
 
-    /* main motor enable group2 pin29 configured as ouput */
-    //IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_29_GPIO2_IO29, 1U );                                                
-    //IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_29_GPIO2_IO29, 0x70A0U );   
-    //GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &outCfg );
-
-    //IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_29_GPIO2_IO29, 1U);
-    //gpio_pin_config_t enableConfig = { kGPIO_DigitalOutput, 1, };
-    //GPIO_PinInit( MOTOR_EN_GPIO, MOTOR_EN_PIN, &enableConfig );
     
     /* main motor direction group2 pin30 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_30_GPIO2_IO30, 0U );                                                
@@ -223,10 +198,6 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_31_GPIO2_IO31, 0x70A0U );       
     GPIO_PinInit( MAIN_MOTOR_STEP_GPIO, MAIN_MOTOR_STEP_PIN, &outCfg );
 
-    /* "MAIN" motor current limit group3 pin5 configured as ouput */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_37_GPIO3_IO05, 0U );                                                
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_37_GPIO3_IO05, 0x70A0U );   
-    GPIO_PinInit( WGR_RESET_GPIO, WGR_RESET_PIN, &outCfg );  
     
     /* takeup motor ms0 group2 pin16 configured as ouput */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_16_GPIO2_IO16, 0U );                                                
@@ -244,7 +215,7 @@ void BOARD_InitPins(void) {
     GPIO_PinInit( TAKEUP_MOTOR_RESET_GPIO, TAKEUP_MOTOR_RESET_PIN, &outCfg );
 
     /* takeup motor enable group2 pin19 configured as ouput */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_19_GPIO2_IO19, 0U );  
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_19_GPIO2_IO19, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_19_GPIO2_IO19, 0x70A0U );
     GPIO_PinInit( TAKEUP_MOTOR_EN_GPIO, TAKEUP_MOTOR_EN_PIN, &outCfg );
 
@@ -406,9 +377,6 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0x10B0U ); 
 
-   // IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0U );
-   // IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0x70A0U ); 
-
     /* weigher lpspi2 mosi group2 pin13 configured as lpspi2 mosi */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0x10B0U ); 
@@ -424,17 +392,6 @@ void BOARD_InitPins(void) {
     /* rs485 group1 pin11 configured as uart5 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_11_LPUART5_RX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_11_LPUART5_RX, 0x10B0U ); 
-#if 0
-    
-    /* can interface rx group3 pin21 configured as can rx */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_01_FLEXCAN1_RX, 0U );
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_01_FLEXCAN1_RX, 0x10B0U );
-
-    /* can interface tx group3 pin20 configured as can tx */
-    IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_00_FLEXCAN1_TX, 0U );    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_00_FLEXCAN1_TX, 0x10B0U ); 
-    
-#else 
     
     /* debug interface group3 pin21 configured as uart6 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_01_LPUART6_RX, 0U );
@@ -444,23 +401,14 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_00_LPUART6_TX, 0U );    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_SD_B1_00_LPUART6_TX, 0x10B0U ); 
 
-#endif    
     /* cutter group1 pin6 configured as uart1 tx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_06_LPUART1_TX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_06_LPUART1_TX, 0x10B0U ); 
     
-    //IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B0_06_GPIO1_IO06, 0U); 
-    //IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_06_GPIO1_IO06, 0x70A0U );  
-    //GPIO_PinInit( GPIO1, 6U, &outCfg2 );  //debug pin for hung
-
     /* cutter group1 pin7 configured as uart1 rx */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B0_07_LPUART1_RX, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B0_07_LPUART1_RX, 0x10B0U );
    
-    /* do not configure this output to enable the U3920 to switch the usb link! */
-    /* usb pwr enable group3 pin9 configured as usb pwr 
-    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_41_USB_OTG1_PWR, 0U ); */   
-
     /* usb id group3 pin8 configured as usb id */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_40_USB_OTG1_ID, 0U );       
 
@@ -502,7 +450,12 @@ void BOARD_InitPins(void) {
 
     /* ext weigher adc clk group2 pin26 configured as pwma0  */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_26_FLEXPWM1_PWMA00, 0U );                                    
-    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_26_FLEXPWM1_PWMA00, 0x10B0U );                                  
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_26_FLEXPWM1_PWMA00, 0x10B0U );                                 
+   
+    /* ext weigher adc reset group3 pin5 configured as ouput */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_37_GPIO3_IO05, 0U );                                                
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_37_GPIO3_IO05, 0x70A0U );   
+    GPIO_PinInit( WGR_RESET_GPIO, WGR_RESET_PIN, &outCfg );   
     
     /* weigher service switch group2 pin6 configured as input */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_06_GPIO2_IO06, 0U );                                                
@@ -514,12 +467,7 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_14_GPIO2_IO14, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_14_GPIO2_IO14, 0x70A0U ); 
     outCfg.outputLogic          = 1U;   
-    /*
-    inCfg.interruptMode         = kGPIO_IntFallingEdge;
-    GPIO_PinInit( ACCEL_INTA_GPIO, ACCEL_INTA_PIN, &inCfg ); 
-    */
-    GPIO_PinInit( ACCEL_INTA_GPIO, ACCEL_INTA_PIN, &outCfg ); 
-    
+
     /* weigher accelerometer int b group2 pin15 configured as output */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_15_GPIO2_IO15, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_15_GPIO2_IO15, 0x70A0U );  
@@ -533,24 +481,50 @@ void BOARD_InitPins(void) {
     /* weigher accelerometer group2 pin3 configured as lpi2c sda */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_03_LPI2C1_SDA, 1U );                            
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_03_LPI2C1_SDA, 0xD8B0U );                           
-
-    /* weigher accelerometer group1 pin28 configured as lpspi3 clk */
+    
+    #if 0 
+    /* weigher accelerometer group1 pin28 configured as lpspi3 clk */            
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_12_LPSPI3_SCK, 0U );
-    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_12_LPSPI3_SCK, 0x10A0U );  
-
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_12_LPSPI3_SCK, 0x10A0U );  
+    #else
+    outCfg.outputLogic          = 0U;
+    /* debug */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_12_GPIO1_IO28, 0U );
+    IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_12_GPIO1_IO28, 0x70A0U );  
+    GPIO_PinInit( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, &outCfg ); 
+    GPIO_WritePinOutput( ACCEL_SPI_CLK_GPIO, ACCEL_SPI_CLK_PIN, false );     
+    #endif  
+        
+    #if 0 
     /* weigher accelerometer group1 pin30 configured as lpspi3 mosi */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_14_LPSPI3_SDO, 0U );
     IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_LPSPI3_SDO, 0x70B0U ); 
-    
+    #else
+    /* debug */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_14_GPIO1_IO30, 0U );
+    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_GPIO1_IO30, 0x70A0U );  
+    GPIO_PinInit( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, &outCfg ); 
+    GPIO_WritePinOutput( ACCEL_SPI_MOSI_GPIO, ACCEL_SPI_MOSI_PIN, false );         
+    #endif  
+        
+    #if 0    
     /* weigher accelerometer group1 pin31 configured as lpspi3 miso */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0U);    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0x10B0U );     
+    #else
+    /* debug */
+    IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0U);    
+    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0x70A0U );  
+    GPIO_PinInit( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, &outCfg ); 
+    GPIO_WritePinOutput( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, false );      
+    #endif  
      
     /* weigher accelerometer spi cs a group1 pin29 configured as output */
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_13_GPIO1_IO29, 0U );                                                
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_13_GPIO1_IO29, 0x70A0U );   
     GPIO_PinInit( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, &outCfg ); 
-    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );  //Low so serial EEP is not corrupted   
+    GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, false );  
+
 
     /* weigher accelerometer pwr enable group3 pin24 configured as output */
     IOMUXC_SetPinMux( IOMUXC_GPIO_SD_B1_03_GPIO3_IO23, 0U );                                                
@@ -558,12 +532,11 @@ void BOARD_InitPins(void) {
     GPIO_PinInit( ACCEL_PWR_EN_GPIO, ACCEL_PWR_EN_PIN, &outCfg ); 
     GPIO_WritePinOutput( ACCEL_PWR_EN_GPIO, ACCEL_PWR_EN_PIN, false );  //Turn off. Only turn on if VM enabled
     
-    //LPSPI2 pins for CS5530
-    //CS5530 SPI clk
+    /* weigher load cell cs5530 lpspi2 clk */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_10_LPSPI2_SCK, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_10_LPSPI2_SCK, 0x10B0U );
   
-    //CS5530 GPIO chip select
+    /* weigher load cell cs5530 lpspi2 cs */
     gpio_pin_config_t csCfg; 
     csCfg.direction = kGPIO_DigitalOutput;
     csCfg.outputLogic = 0U;
@@ -573,11 +546,11 @@ void BOARD_InitPins(void) {
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_11_GPIO2_IO11, 0x1030U ); 
     GPIO_PinInit(GPIO2, 11U, &csCfg);
   
-    //CS5530 SPI SDO
+    /* weigher load cell cs5530 lpspi2 sdo */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0U );
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_12_LPSPI2_SDO, 0x10B0U );
   
-    //CS5530 SPI SDI
+    /* weigher load cell cs5530 lpspi2 sdi */
     IOMUXC_SetPinMux( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0U );                                    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_EMC_13_LPSPI2_SDI, 0x10B0U );
       
@@ -585,7 +558,6 @@ void BOARD_InitPins(void) {
 /******************************************************************************/    
 /******************************************************************************/ 
 }
-
 
 /*! ****************************************************************************   
       \fn configurePinAD_B1_15AsSPI3MISO(void)
@@ -599,7 +571,7 @@ void BOARD_InitPins(void) {
           Tom Fink
 *******************************************************************************/ 
 void configurePinAD_B1_15AsSPI3MISO(void)
-{   //GPIO_EMC_35
+{  
     IOMUXC_SetPinMux( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0U);    
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_LPSPI3_SDI, 0x10B0U ); 
 }
@@ -627,7 +599,3 @@ void configurePinAD_B1_15AsGPIO(void)
     IOMUXC_SetPinConfig( IOMUXC_GPIO_AD_B1_15_GPIO1_IO31, 0x0190B0U );
     GPIO_PinInit( ACCEL_SPI_MISO_GPIO, ACCEL_SPI_MISO_PIN, &inCfg );
 }
-
-
-
-

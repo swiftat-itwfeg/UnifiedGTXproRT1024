@@ -1,11 +1,10 @@
 /*
- * Copyright 2017, 2019 NXP
- * All rights reserved.
+ * Copyright 2017, 2019, 2024 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_KPP_H_
-#define _FSL_KPP_H_
+#ifndef FSL_KPP_H_
+#define FSL_KPP_H_
 
 #include "fsl_common.h"
 
@@ -19,10 +18,10 @@
  ******************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
-/*! @brief KPP driver version 2.0.0. */
-#define FSL_KPP_DRIVER_VERSION (MAKE_VERSION(2, 0, 0))
-/*@}*/
+/*! @{ */
+/*! @brief KPP driver version. */
+#define FSL_KPP_DRIVER_VERSION (MAKE_VERSION(2, 0, 1))
+/*! @} */
 
 #define KPP_KEYPAD_COLUMNNUM_MAX (8U)
 #define KPP_KEYPAD_ROWNUM_MAX    (8U)
@@ -85,7 +84,7 @@ void KPP_Init(KPP_Type *base, kpp_config_t *configure);
  */
 void KPP_Deinit(KPP_Type *base);
 
-/* @} */
+/*! @} */
 
 /*!
  * @name KPP Basic Operation
@@ -169,7 +168,7 @@ static inline void KPP_SetSynchronizeChain(KPP_Type *base, uint16_t mask)
  */
 void KPP_keyPressScanning(KPP_Type *base, uint8_t *data, uint32_t clockSrc_Hz);
 
-/* @} */
+/*! @} */
 
 #if defined(__cplusplus)
 }
@@ -177,4 +176,4 @@ void KPP_keyPressScanning(KPP_Type *base, uint8_t *data, uint32_t clockSrc_Hz);
 
 /*! @}*/
 
-#endif /* _FSL_KPP_H_*/
+#endif /* FSL_KPP_H_*/

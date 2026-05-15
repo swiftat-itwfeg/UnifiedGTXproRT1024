@@ -1,7 +1,9 @@
 /*
 ** ###################################################################
 **     Processors:          MIMXRT1024CAG4A
+**                          MIMXRT1024CAG4B
 **                          MIMXRT1024DAG5A
+**                          MIMXRT1024DAG5B
 **
 **     Compilers:           Freescale C/C++ for Embedded ARM
 **                          GNU C Compiler
@@ -9,9 +11,9 @@
 **                          Keil ARM C/C++ Compiler
 **                          MCUXpresso Compiler
 **
-**     Reference manual:    IMXRT1024RM Rev.0, 09/2020 | IMXRT102xSRM Rev.0
-**     Version:             rev. 0.1, 2020-01-15
-**     Build:               b201016
+**     Reference manual:    IMXRT1024RM Rev.1, 02/2021 | IMXRT102XSRM Rev.0
+**     Version:             rev. 2.0, 2024-10-29
+**     Build:               b250521
 **
 **     Abstract:
 **         Provides a system configuration function and a global variable that
@@ -19,25 +21,32 @@
 **         the oscillator (PLL) that is part of the microcontroller device.
 **
 **     Copyright 2016 Freescale Semiconductor, Inc.
-**     Copyright 2016-2020 NXP
-**     All rights reserved.
-**
+**     Copyright 2016-2025 NXP
 **     SPDX-License-Identifier: BSD-3-Clause
 **
 **     http:                 www.nxp.com
 **     mail:                 support@nxp.com
 **
 **     Revisions:
-**     - rev. 0.1 (2020-01-15)
+**     - rev. 0.1 (2017-11-06)
 **         Initial version.
+**     - rev. 1.0 (2018-11-27)
+**         Update header files to align with IMXRT1020RM Rev.1.
+**     - rev. 1.1 (2019-04-29)
+**         Add SET/CLR/TOG register group to register CTRL, STAT, CHANNELCTRL, CH0STAT, CH0OPTS, CH1STAT, CH1OPTS, CH2STAT, CH2OPTS, CH3STAT, CH3OPTS of DCP module.
+**     - rev. 1.2 (2021-08-10)
+**         Update header files to align with IMXRT1020RM Rev.2.
+**     - rev. 2.0 (2024-10-29)
+**         Change the device header file from single flat file to multiple files based on peripherals,
+**         each peripheral with dedicated header file located in periphN folder.
 **
 ** ###################################################################
 */
 
 /*!
  * @file MIMXRT1024
- * @version 0.1
- * @date 2020-01-15
+ * @version 1.0
+ * @date 210525
  * @brief Device specific configuration file for MIMXRT1024 (implementation file)
  *
  * Provides a system configuration function and a global variable that contains
@@ -92,7 +101,15 @@ void SystemInit (void) {
     /* Re-Configure FLEXSPI NOR via ROM API, for details please refer to the init function of ROM FLEXSPI NOR flash
        driver which is in fsl_romapi.h and fsl_romapi.c in the devices\${soc}\drivers directory of SDK package */
     uint8_t flexspi_nor_config[512];
-    memcpy((void *)flexspi_nor_config, (void *)FLASH_CONFIG_ADDRESS, sizeof(flexspi_nor_config));
+    uint8_t * srcAddr, * dstAddr;
+    dstAddr = flexspi_nor_config;
+    srcAddr = (uint8_t *)FLASH_CONFIG_ADDRESS;
+    uint16_t i= sizeof(flexspi_nor_config);
+    while (i--)
+    {
+      *dstAddr++ = *srcAddr++;
+    }
+    
     flexspi_nor_config[12] = 1U;  /* kFLEXSPIReadSampleClk_LoopbackFromDqsPad */
     flexspi_nor_config[70] = 7U;  /* kFLEXSPISerialClk_133MHz */
 
@@ -138,11 +155,6 @@ void SystemInit (void) {
 #if defined(__ICACHE_PRESENT) && __ICACHE_PRESENT
     if (SCB_CCR_IC_Msk != (SCB_CCR_IC_Msk & SCB->CCR)) {
         SCB_EnableICache();
-    }
-#endif
-#if defined(__DCACHE_PRESENT) && __DCACHE_PRESENT
-    if (SCB_CCR_DC_Msk != (SCB_CCR_DC_Msk & SCB->CCR)) {
-        SCB_EnableDCache();
     }
 #endif
 

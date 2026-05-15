@@ -1,7 +1,6 @@
 /*! *********************************************************************************
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
  * Copyright 2016-2017, 2019 NXP
- * All rights reserved.
  *
  *
  * This is the source file for the OS Abstraction layer for freertos.
@@ -35,7 +34,7 @@
 #define __WEAK_FUNC __attribute__((weak))
 #endif
 
-#define millisecToTicks(millisec) (((millisec)*configTICK_RATE_HZ + 999U) / 1000U)
+#define millisecToTicks(millisec) (((millisec) * (uint32_t)(configTICK_RATE_HZ) + 999U) / 1000U)
 
 #ifdef DEBUG_ASSERT
 #define OS_ASSERT(condition) \
@@ -50,6 +49,11 @@
 #define MSEC_TO_TICK(msec) \
     (((uint32_t)(msec) + 500uL / (uint32_t)configTICK_RATE_HZ) * (uint32_t)configTICK_RATE_HZ / 1000uL)
 #define TICKS_TO_MSEC(tick) ((uint32_t)((uint64_t)(tick)*1000uL / (uint64_t)configTICK_RATE_HZ))
+
+#define OSA_MEM_MAGIC_NUMBER (12345U)
+#define OSA_MEM_SIZE_ALIGN(var, alignbytes) \
+    ((unsigned int)((var) + ((alignbytes)-1U)) & (unsigned int)(~(unsigned int)((alignbytes)-1U)))
+
 /************************************************************************************
 *************************************************************************************
 * Private type definitions
@@ -63,8 +67,8 @@ typedef struct osa_freertos_task
 
 typedef struct _osa_event_struct
 {
-    EventGroupHandle_t handle; /* The event handle */
-    uint8_t autoClear;         /*!< Auto clear or manual clear   */
+    EventGroupHandle_t eventHandle; /* The event handle */
+    uint8_t autoClear;              /*!< Auto clear or manual clear   */
 } osa_event_struct_t;
 
 /*! @brief State structure for bm osa manager. */
@@ -80,6 +84,13 @@ typedef struct _osa_state
     int32_t basePriorityNesting;
     uint32_t interruptDisableCount;
 } osa_state_t;
+
+/*! @brief Definition structure contains allocated memory information.*/
+typedef struct _osa_mem_align_control_block
+{
+    uint16_t identifier; /*!< Identifier for the memory control block. */
+    uint16_t offset;     /*!< offset from aligned address to real address */
+} osa_mem_align_cb_t;
 
 /*! *********************************************************************************
 *************************************************************************************
@@ -101,6 +112,20 @@ void startup_task(void *argument);
 const uint8_t gUseRtos_c = USE_RTOS; /* USE_RTOS = 0 for BareMetal and 1 for OS */
 
 static osa_state_t s_osaState = {0};
+
+/* Allocate the memory for the heap. */
+#if (defined(FSL_OSA_ALLOCATED_HEAP) && (FSL_OSA_ALLOCATED_HEAP > 0U))
+#if defined(configAPPLICATION_ALLOCATED_HEAP) && (configAPPLICATION_ALLOCATED_HEAP)
+#if defined(DATA_SECTION_IS_CACHEABLE) && (DATA_SECTION_IS_CACHEABLE)
+extern uint8_t ucHeap[configTOTAL_HEAP_SIZE];
+AT_NONCACHEABLE_SECTION_ALIGN(uint8_t ucHeap[configTOTAL_HEAP_SIZE], 4);
+#else
+extern uint8_t ucHeap[configTOTAL_HEAP_SIZE];
+SDK_ALIGN(uint8_t ucHeap[configTOTAL_HEAP_SIZE], 4);
+#endif /* DATA_SECTION_IS_CACHEABLE */
+#endif /* configAPPLICATION_ALLOCATED_HEAP */
+#endif /* FSL_OSA_ALLOCATED_HEAP */
+
 /*! *********************************************************************************
 *************************************************************************************
 * Private memory declarations
@@ -118,16 +143,21 @@ static osa_state_t s_osaState = {0};
  * Description   : Reserves the requested amount of memory in bytes.
  *
  *END**************************************************************************/
-void *OSA_MemoryAllocate(uint32_t length)
+void *OSA_MemoryAllocate(uint32_t memLength)
 {
-    void *p = (void *)pvPortMalloc(length);
+#if defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0)
+
+    void *p = (void *)pvPortMalloc(memLength);
 
     if (NULL != p)
     {
-        (void)memset(p, 0, length);
+        (void)memset(p, 0, memLength);
     }
 
     return p;
+#else
+    return NULL;
+#endif
 }
 
 /*FUNCTION**********************************************************************
@@ -138,7 +168,70 @@ void *OSA_MemoryAllocate(uint32_t length)
  *END**************************************************************************/
 void OSA_MemoryFree(void *p)
 {
+#if defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0)
     vPortFree(p);
+#endif
+}
+
+void *OSA_MemoryAllocateAlign(uint32_t memLength, uint32_t alignbytes)
+{
+    osa_mem_align_cb_t *p_cb = NULL;
+    uint32_t alignedsize;
+
+    /* Check overflow. */
+    alignedsize = (uint32_t)(unsigned int)OSA_MEM_SIZE_ALIGN(memLength, alignbytes);
+    if (alignedsize < memLength)
+    {
+        return NULL;
+    }
+
+    if (alignedsize > 0xFFFFFFFFU - alignbytes - sizeof(osa_mem_align_cb_t))
+    {
+        return NULL;
+    }
+
+    alignedsize += alignbytes + (uint32_t)sizeof(osa_mem_align_cb_t);
+
+    union
+    {
+        void *pointer_value;
+        uintptr_t unsigned_value;
+    } p_align_addr, p_addr;
+
+    p_addr.pointer_value = OSA_MemoryAllocate(alignedsize);
+
+    if (p_addr.pointer_value == NULL)
+    {
+        return NULL;
+    }
+
+    p_align_addr.unsigned_value = OSA_MEM_SIZE_ALIGN(p_addr.unsigned_value + sizeof(osa_mem_align_cb_t), alignbytes);
+
+    p_cb             = (osa_mem_align_cb_t *)(p_align_addr.unsigned_value - 4U);
+    p_cb->identifier = OSA_MEM_MAGIC_NUMBER;
+    p_cb->offset     = (uint16_t)(p_align_addr.unsigned_value - p_addr.unsigned_value);
+
+    return p_align_addr.pointer_value;
+}
+
+void OSA_MemoryFreeAlign(void *p)
+{
+    union
+    {
+        void *pointer_value;
+        uintptr_t unsigned_value;
+    } p_free;
+    p_free.pointer_value     = p;
+    osa_mem_align_cb_t *p_cb = (osa_mem_align_cb_t *)(p_free.unsigned_value - 4U);
+
+    if (p_cb->identifier != OSA_MEM_MAGIC_NUMBER)
+    {
+        return;
+    }
+
+    p_free.unsigned_value = p_free.unsigned_value - p_cb->offset;
+
+    OSA_MemoryFree(p_free.pointer_value);
 }
 
 void OSA_EnterCritical(uint32_t *sr)
@@ -218,10 +311,9 @@ osa_task_handle_t OSA_TaskGetCurrentHandle(void)
  *
  *END**************************************************************************/
 #if (defined(FSL_OSA_TASK_ENABLE) && (FSL_OSA_TASK_ENABLE > 0U))
-osa_status_t OSA_TaskYield(void)
+void OSA_TaskYield(void)
 {
     taskYIELD();
-    return KOSA_StatusSuccess;
 }
 #endif
 
@@ -236,7 +328,7 @@ osa_task_priority_t OSA_TaskGetPriority(osa_task_handle_t taskHandle)
 {
     assert(NULL != taskHandle);
     osa_freertos_task_t *ptask = (osa_freertos_task_t *)taskHandle;
-    return (osa_task_priority_t)(PRIORITY_RTOS_TO_OSA(uxTaskPriorityGet(ptask->taskHandle)));
+    return (osa_task_priority_t)(PRIORITY_RTOS_TO_OSA((uxTaskPriorityGet(ptask->taskHandle))));
 }
 #endif
 
@@ -251,7 +343,7 @@ osa_status_t OSA_TaskSetPriority(osa_task_handle_t taskHandle, osa_task_priority
 {
     assert(NULL != taskHandle);
     osa_freertos_task_t *ptask = (osa_freertos_task_t *)taskHandle;
-    vTaskPrioritySet((task_handler_t)ptask->taskHandle, PRIORITY_OSA_TO_RTOS(taskPriority));
+    vTaskPrioritySet((task_handler_t)ptask->taskHandle, PRIORITY_OSA_TO_RTOS(((uint32_t)taskPriority)));
     return KOSA_StatusSuccess;
 }
 #endif
@@ -268,26 +360,60 @@ osa_status_t OSA_TaskSetPriority(osa_task_handle_t taskHandle, osa_task_priority
 #if (defined(FSL_OSA_TASK_ENABLE) && (FSL_OSA_TASK_ENABLE > 0U))
 osa_status_t OSA_TaskCreate(osa_task_handle_t taskHandle, const osa_task_def_t *thread_def, osa_task_param_t task_param)
 {
+    osa_status_t status = KOSA_StatusError;
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_freertos_task_t) + sizeof(StaticTask_t)) <= OSA_TASK_HANDLE_SIZE);
+#else
     assert(sizeof(osa_freertos_task_t) == OSA_TASK_HANDLE_SIZE);
+#endif
     assert(NULL != taskHandle);
+#if defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0)
     TaskHandle_t pxCreatedTask;
+#endif
     osa_freertos_task_t *ptask = (osa_freertos_task_t *)taskHandle;
-
-    if (xTaskCreate((TaskFunction_t)thread_def->pthread, /* pointer to the task */
-                    (char const *)thread_def->tname,     /* task name for kernel awareness debugging */
-                    (configSTACK_DEPTH_TYPE)thread_def->stacksize / sizeof(portSTACK_TYPE), /* task stack size */
-                    (task_param_t)task_param,                    /* optional task startup argument */
-                    PRIORITY_OSA_TO_RTOS(thread_def->tpriority), /* initial priority */
-                    &pxCreatedTask                               /* optional task handle to create */
-                    ) == pdPASS)
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    TaskHandle_t xHandle = NULL;
+#endif
+    OSA_InterruptDisable();
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    xHandle =
+        xTaskCreateStatic((TaskFunction_t)thread_def->pthread, /* pointer to the task */
+                          (const char *)thread_def->tname,     /* task name for kernel awareness debugging */
+                          (uint32_t)((uint16_t)thread_def->stacksize / sizeof(portSTACK_TYPE)), /* task stack size */
+                          (task_param_t)task_param,                      /* optional task startup argument */
+                          PRIORITY_OSA_TO_RTOS((thread_def->tpriority)), /* initial priority */
+                          (StackType_t *)thread_def->tstack,             /*Array to use as the task's stack*/
+                          (StaticTask_t *)((uint8_t *)(taskHandle) +
+                                           sizeof(osa_freertos_task_t))  /*Variable to hold the task's data structure*/
+        );
+    if (xHandle != NULL)
+    {
+        ptask->taskHandle = xHandle;
+        (void)LIST_AddTail(&s_osaState.taskList, (list_element_handle_t) & (ptask->link));
+        status = KOSA_StatusSuccess;
+    }
+#else
+    if (xTaskCreate(
+            (TaskFunction_t)thread_def->pthread, /* pointer to the task */
+            (char const *)thread_def->tname,     /* task name for kernel awareness debugging */
+            (configSTACK_DEPTH_TYPE)((uint16_t)thread_def->stacksize / sizeof(portSTACK_TYPE)), /* task stack size */
+            (task_param_t)task_param,                      /* optional task startup argument */
+            PRIORITY_OSA_TO_RTOS((thread_def->tpriority)), /* initial priority */
+            &pxCreatedTask                                 /* optional task handle to create */
+            ) == pdPASS)
     {
         ptask->taskHandle = pxCreatedTask;
-        OSA_InterruptDisable();
+
         (void)LIST_AddTail(&s_osaState.taskList, (list_element_handle_t) & (ptask->link));
-        OSA_InterruptEnable();
-        return KOSA_StatusSuccess;
+
+        status = KOSA_StatusSuccess;
     }
-    return KOSA_StatusError;
+#endif
+    OSA_InterruptEnable();
+    return status;
 }
 #endif
 
@@ -305,17 +431,18 @@ osa_status_t OSA_TaskDestroy(osa_task_handle_t taskHandle)
     assert(NULL != taskHandle);
     osa_freertos_task_t *ptask = (osa_freertos_task_t *)taskHandle;
     osa_status_t status;
-    uint16_t oldPriority;
+    UBaseType_t oldPriority;
+
     /*Change priority to avoid context switches*/
-    oldPriority = OSA_TaskGetPriority(OSA_TaskGetCurrentHandle());
-    (void)OSA_TaskSetPriority(OSA_TaskGetCurrentHandle(), OSA_PRIORITY_REAL_TIME);
+    oldPriority = uxTaskPriorityGet(xTaskGetCurrentTaskHandle());
+    vTaskPrioritySet(xTaskGetCurrentTaskHandle(), (configMAX_PRIORITIES - 1));
 #if INCLUDE_vTaskDelete /* vTaskDelete() enabled */
     vTaskDelete((task_handler_t)ptask->taskHandle);
     status = KOSA_StatusSuccess;
 #else
     status = KOSA_StatusError; /* vTaskDelete() not available */
 #endif
-    (void)OSA_TaskSetPriority(OSA_TaskGetCurrentHandle(), oldPriority);
+    vTaskPrioritySet(xTaskGetCurrentTaskHandle(), oldPriority);
     OSA_InterruptDisable();
     (void)LIST_RemoveElement(taskHandle);
     OSA_InterruptEnable();
@@ -354,6 +481,22 @@ uint32_t OSA_TimeGetMsec(void)
 
     return TICKS_TO_MSEC(ticks);
 }
+
+/*FUNCTION**********************************************************************
+ *
+ * Function Name : OSA_SemaphorePrecreate
+ * Description   : This function is used to pre-create a semaphore.
+ * Return         : KOSA_StatusSuccess
+ *
+ *END**************************************************************************/
+
+osa_status_t OSA_SemaphorePrecreate(osa_semaphore_handle_t semaphoreHandle, osa_task_ptr_t taskHandler)
+{
+    semaphoreHandle = semaphoreHandle;
+    taskHandler     = taskHandler;
+    return KOSA_StatusSuccess;
+}
+
 /*FUNCTION**********************************************************************
  *
  * Function Name : OSA_SemaphoreCreate
@@ -363,7 +506,12 @@ uint32_t OSA_TimeGetMsec(void)
  *END**************************************************************************/
 osa_status_t OSA_SemaphoreCreate(osa_semaphore_handle_t semaphoreHandle, uint32_t initValue)
 {
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_semaphore_handle_t) + sizeof(StaticQueue_t)) == OSA_SEM_HANDLE_SIZE);
+#else
     assert(sizeof(osa_semaphore_handle_t) == OSA_SEM_HANDLE_SIZE);
+#endif
     assert(NULL != semaphoreHandle);
 
     union
@@ -371,8 +519,50 @@ osa_status_t OSA_SemaphoreCreate(osa_semaphore_handle_t semaphoreHandle, uint32_
         QueueHandle_t sem;
         uint32_t semhandle;
     } xSemaHandle;
-
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    xSemaHandle.sem = xSemaphoreCreateCountingStatic(
+        0xFF, initValue, (StaticQueue_t *)(void *)((uint8_t *)semaphoreHandle + sizeof(osa_semaphore_handle_t)));
+#else
     xSemaHandle.sem = xSemaphoreCreateCounting(0xFF, initValue);
+#endif
+    if (NULL != xSemaHandle.sem)
+    {
+        *(uint32_t *)semaphoreHandle = xSemaHandle.semhandle;
+        return KOSA_StatusSuccess;
+    }
+    return KOSA_StatusError;
+}
+
+/*FUNCTION**********************************************************************
+ *
+ * Function Name : OSA_SemaphoreCreateBinary
+ * Description   : This function is used to create a binary semaphore.
+ * Return        : Semaphore handle of the new binary semaphore, or NULL if failed.
+ *
+ *END**************************************************************************/
+osa_status_t OSA_SemaphoreCreateBinary(osa_semaphore_handle_t semaphoreHandle)
+{
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_semaphore_handle_t) + sizeof(StaticQueue_t)) == OSA_SEM_HANDLE_SIZE);
+#else
+    assert(sizeof(osa_semaphore_handle_t) == OSA_SEM_HANDLE_SIZE);
+#endif
+    assert(NULL != semaphoreHandle);
+
+    union
+    {
+        QueueHandle_t sem;
+        uint32_t semhandle;
+    } xSemaHandle;
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    xSemaHandle.sem = xSemaphoreCreateBinaryStatic(
+        (StaticQueue_t *)(void *)((uint8_t *)semaphoreHandle + sizeof(osa_semaphore_handle_t)));
+#else
+    xSemaHandle.sem = xSemaphoreCreateBinary();
+#endif
     if (NULL != xSemaHandle.sem)
     {
         *(uint32_t *)semaphoreHandle = xSemaHandle.semhandle;
@@ -426,7 +616,7 @@ osa_status_t OSA_SemaphoreWait(osa_semaphore_handle_t semaphoreHandle, uint32_t 
         timeoutTicks = MSEC_TO_TICK(millisec);
     }
 
-    if (pdFALSE == xSemaphoreTake(sem, timeoutTicks))
+    if (((BaseType_t)0) == (BaseType_t)xSemaphoreTake(sem, timeoutTicks))
     {
         return KOSA_StatusTimeout; /* timeout */
     }
@@ -453,11 +643,11 @@ osa_status_t OSA_SemaphorePost(osa_semaphore_handle_t semaphoreHandle)
 
     if (0U != __get_IPSR())
     {
-        portBASE_TYPE taskToWake = pdFALSE;
+        portBASE_TYPE taskToWake = (portBASE_TYPE)pdFALSE;
 
-        if (pdTRUE == xSemaphoreGiveFromISR(sem, &taskToWake))
+        if (((BaseType_t)1) == (BaseType_t)xSemaphoreGiveFromISR(sem, &taskToWake))
         {
-            portYIELD_FROM_ISR((taskToWake));
+            portYIELD_FROM_ISR(((bool)(taskToWake)));
             status = KOSA_StatusSuccess;
         }
         else
@@ -467,7 +657,7 @@ osa_status_t OSA_SemaphorePost(osa_semaphore_handle_t semaphoreHandle)
     }
     else
     {
-        if (pdTRUE == xSemaphoreGive(sem))
+        if (((BaseType_t)1) == (BaseType_t)xSemaphoreGive(sem))
         {
             status = KOSA_StatusSuccess; /* sync object given */
         }
@@ -488,7 +678,12 @@ osa_status_t OSA_SemaphorePost(osa_semaphore_handle_t semaphoreHandle)
  *END**************************************************************************/
 osa_status_t OSA_MutexCreate(osa_mutex_handle_t mutexHandle)
 {
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_mutex_handle_t) + sizeof(StaticQueue_t)) == OSA_MUTEX_HANDLE_SIZE);
+#else
     assert(sizeof(osa_mutex_handle_t) == OSA_MUTEX_HANDLE_SIZE);
+#endif
     assert(NULL != mutexHandle);
 
     union
@@ -496,8 +691,13 @@ osa_status_t OSA_MutexCreate(osa_mutex_handle_t mutexHandle)
         QueueHandle_t mutex;
         uint32_t pmutexHandle;
     } xMutexHandle;
-
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    xMutexHandle.mutex = xSemaphoreCreateRecursiveMutexStatic(
+        (StaticQueue_t *)(void *)((uint8_t *)mutexHandle + sizeof(osa_mutex_handle_t)));
+#else
     xMutexHandle.mutex = xSemaphoreCreateRecursiveMutex();
+#endif
     if (NULL != xMutexHandle.mutex)
     {
         *(uint32_t *)mutexHandle = xMutexHandle.pmutexHandle;
@@ -532,7 +732,7 @@ osa_status_t OSA_MutexLock(osa_mutex_handle_t mutexHandle, uint32_t millisec)
         timeoutTicks = MSEC_TO_TICK(millisec);
     }
 
-    if (pdFALSE == xSemaphoreTakeRecursive(mutex, timeoutTicks))
+    if (((BaseType_t)0) == (BaseType_t)xSemaphoreTakeRecursive(mutex, timeoutTicks))
     {
         return KOSA_StatusTimeout; /* timeout */
     }
@@ -553,7 +753,7 @@ osa_status_t OSA_MutexUnlock(osa_mutex_handle_t mutexHandle)
     assert(NULL != mutexHandle);
     QueueHandle_t mutex = (QueueHandle_t)(void *)(uint32_t *)(*(uint32_t *)mutexHandle);
 
-    if (pdFALSE == xSemaphoreGiveRecursive(mutex))
+    if (((BaseType_t)0) == (BaseType_t)xSemaphoreGiveRecursive(mutex))
     {
         return KOSA_StatusError;
     }
@@ -581,6 +781,21 @@ osa_status_t OSA_MutexDestroy(osa_mutex_handle_t mutexHandle)
 
 /*FUNCTION**********************************************************************
  *
+ * Function Name : OSA_EventPrecreate
+ * Description   : This function is used to pre-create a event.
+ * Return         : KOSA_StatusSuccess
+ *
+ *END**************************************************************************/
+
+osa_status_t OSA_EventPrecreate(osa_event_handle_t eventHandle, osa_task_ptr_t taskHandler)
+{
+    eventHandle = eventHandle;
+    taskHandler = taskHandler;
+    return KOSA_StatusSuccess;
+}
+
+/*FUNCTION**********************************************************************
+ *
  * Function Name : OSA_EventCreate
  * Description   : This function is used to create a event object.
  * Return        : Event handle of the new event, or NULL if failed.
@@ -589,10 +804,22 @@ osa_status_t OSA_MutexDestroy(osa_mutex_handle_t mutexHandle)
 osa_status_t OSA_EventCreate(osa_event_handle_t eventHandle, uint8_t autoClear)
 {
     assert(NULL != eventHandle);
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_event_struct_t) + sizeof(StaticEventGroup_t)) <= OSA_EVENT_HANDLE_SIZE);
+#else
+    assert(sizeof(osa_event_struct_t) == OSA_EVENT_HANDLE_SIZE);
+#endif
     osa_event_struct_t *pEventStruct = (osa_event_struct_t *)eventHandle;
 
-    pEventStruct->handle = xEventGroupCreate();
-    if (NULL != pEventStruct->handle)
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    pEventStruct->eventHandle =
+        xEventGroupCreateStatic((StaticEventGroup_t *)(void *)((uint8_t *)(eventHandle) + sizeof(osa_event_struct_t)));
+#else
+    pEventStruct->eventHandle = xEventGroupCreate();
+#endif
+    if (NULL != pEventStruct->eventHandle)
     {
         pEventStruct->autoClear = autoClear;
     }
@@ -612,29 +839,29 @@ osa_status_t OSA_EventCreate(osa_event_handle_t eventHandle, uint8_t autoClear)
  *END**************************************************************************/
 osa_status_t OSA_EventSet(osa_event_handle_t eventHandle, osa_event_flags_t flagsToSet)
 {
-    portBASE_TYPE taskToWake = pdFALSE;
+    portBASE_TYPE taskToWake = (portBASE_TYPE)pdFALSE;
     BaseType_t result;
     assert(NULL != eventHandle);
     osa_event_struct_t *pEventStruct = (osa_event_struct_t *)eventHandle;
 
-    if (NULL == pEventStruct->handle)
+    if (NULL == pEventStruct->eventHandle)
     {
         return KOSA_StatusError;
     }
     if (0U != __get_IPSR())
     {
 #if (configUSE_TRACE_FACILITY == 1)
-        result = xEventGroupSetBitsFromISR(pEventStruct->handle, (event_flags_t)flagsToSet, &taskToWake);
+        result = xEventGroupSetBitsFromISR(pEventStruct->eventHandle, (event_flags_t)flagsToSet, &taskToWake);
 #else
-        result = xEventGroupSetBitsFromISR((void *)pEventStruct->handle, (event_flags_t)flagsToSet, &taskToWake);
+        result = xEventGroupSetBitsFromISR((void *)pEventStruct->eventHandle, (event_flags_t)flagsToSet, &taskToWake);
 #endif
         assert(pdPASS == result);
         (void)result;
-        portYIELD_FROM_ISR((taskToWake));
+        portYIELD_FROM_ISR(((bool)(taskToWake)));
     }
     else
     {
-        (void)xEventGroupSetBits(pEventStruct->handle, (event_flags_t)flagsToSet);
+        (void)xEventGroupSetBits(pEventStruct->eventHandle, (event_flags_t)flagsToSet);
     }
 
     (void)result;
@@ -653,7 +880,7 @@ osa_status_t OSA_EventClear(osa_event_handle_t eventHandle, osa_event_flags_t fl
     assert(NULL != eventHandle);
     osa_event_struct_t *pEventStruct = (osa_event_struct_t *)eventHandle;
 
-    if (NULL == pEventStruct->handle)
+    if (NULL == pEventStruct->eventHandle)
     {
         return KOSA_StatusError;
     }
@@ -661,14 +888,14 @@ osa_status_t OSA_EventClear(osa_event_handle_t eventHandle, osa_event_flags_t fl
     if (0U != __get_IPSR())
     {
 #if (configUSE_TRACE_FACILITY == 1)
-        (void)xEventGroupClearBitsFromISR(pEventStruct->handle, (event_flags_t)flagsToClear);
+        (void)xEventGroupClearBitsFromISR(pEventStruct->eventHandle, (event_flags_t)flagsToClear);
 #else
-        (void)xEventGroupClearBitsFromISR((void *)pEventStruct->handle, (event_flags_t)flagsToClear);
+        (void)xEventGroupClearBitsFromISR((void *)pEventStruct->eventHandle, (event_flags_t)flagsToClear);
 #endif
     }
     else
     {
-        (void)xEventGroupClearBits(pEventStruct->handle, (event_flags_t)flagsToClear);
+        (void)xEventGroupClearBits(pEventStruct->eventHandle, (event_flags_t)flagsToClear);
     }
     return KOSA_StatusSuccess;
 }
@@ -688,7 +915,7 @@ osa_status_t OSA_EventGet(osa_event_handle_t eventHandle, osa_event_flags_t flag
     osa_event_struct_t *pEventStruct = (osa_event_struct_t *)eventHandle;
     EventBits_t eventFlags;
 
-    if (NULL == pEventStruct->handle)
+    if (NULL == pEventStruct->eventHandle)
     {
         return KOSA_StatusError;
     }
@@ -700,11 +927,11 @@ osa_status_t OSA_EventGet(osa_event_handle_t eventHandle, osa_event_flags_t flag
 
     if (0U != __get_IPSR())
     {
-        eventFlags = xEventGroupGetBitsFromISR(pEventStruct->handle);
+        eventFlags = xEventGroupGetBitsFromISR(pEventStruct->eventHandle);
     }
     else
     {
-        eventFlags = xEventGroupGetBits(pEventStruct->handle);
+        eventFlags = xEventGroupGetBits(pEventStruct->eventHandle);
     }
 
     *pFlagsOfEvent = (osa_event_flags_t)eventFlags & flagsMask;
@@ -741,7 +968,7 @@ osa_status_t OSA_EventWait(osa_event_handle_t eventHandle,
 
     /* Clean FreeRTOS cotrol flags */
     flagsToWait = flagsToWait & 0x00FFFFFFU;
-    if (NULL == pEventStruct->handle)
+    if (NULL == pEventStruct->eventHandle)
     {
         return KOSA_StatusError;
     }
@@ -753,13 +980,13 @@ osa_status_t OSA_EventWait(osa_event_handle_t eventHandle,
     }
     else
     {
-        timeoutTicks = millisec / portTICK_PERIOD_MS;
+        timeoutTicks = millisecToTicks(millisec);
     }
 
     clearMode = (pEventStruct->autoClear != 0U) ? pdTRUE : pdFALSE;
 
-    flagsSave = xEventGroupWaitBits(pEventStruct->handle, (event_flags_t)flagsToWait, clearMode, (BaseType_t)waitAll,
-                                    timeoutTicks);
+    flagsSave = xEventGroupWaitBits(pEventStruct->eventHandle, (event_flags_t)flagsToWait, clearMode,
+                                    (BaseType_t)waitAll, timeoutTicks);
 
     flagsSave &= (event_flags_t)flagsToWait;
     if (NULL != pSetFlags)
@@ -790,11 +1017,11 @@ osa_status_t OSA_EventDestroy(osa_event_handle_t eventHandle)
     assert(NULL != eventHandle);
     osa_event_struct_t *pEventStruct = (osa_event_struct_t *)eventHandle;
 
-    if (NULL == pEventStruct->handle)
+    if (NULL == pEventStruct->eventHandle)
     {
         return KOSA_StatusError;
     }
-    vEventGroupDelete(pEventStruct->handle);
+    vEventGroupDelete(pEventStruct->eventHandle);
     return KOSA_StatusSuccess;
 }
 
@@ -808,7 +1035,12 @@ osa_status_t OSA_EventDestroy(osa_event_handle_t eventHandle)
  *END**************************************************************************/
 osa_status_t OSA_MsgQCreate(osa_msgq_handle_t msgqHandle, uint32_t msgNo, uint32_t msgSize)
 {
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    assert((sizeof(osa_msgq_handle_t) + sizeof(StaticQueue_t)) == OSA_MSGQ_HANDLE_SIZE);
+#else
     assert(sizeof(osa_msgq_handle_t) == OSA_MSGQ_HANDLE_SIZE);
+#endif
     assert(NULL != msgqHandle);
 
     union
@@ -818,7 +1050,14 @@ osa_status_t OSA_MsgQCreate(osa_msgq_handle_t msgqHandle, uint32_t msgNo, uint32
     } xMsgqHandle;
 
     /* Create the message queue where the number and size is specified by msgNo and msgSize */
+#if (defined(configSUPPORT_STATIC_ALLOCATION) && (configSUPPORT_STATIC_ALLOCATION > 0U)) && \
+    !((defined(configSUPPORT_DYNAMIC_ALLOCATION) && (configSUPPORT_DYNAMIC_ALLOCATION > 0U)))
+    xMsgqHandle.msgq = xQueueCreateStatic(
+        msgNo, msgSize, (uint8_t *)((uint8_t *)msgqHandle + sizeof(osa_msgq_handle_t) + sizeof(StaticQueue_t)),
+        (StaticQueue_t *)(void *)((uint8_t *)msgqHandle + sizeof(osa_msgq_handle_t)));
+#else
     xMsgqHandle.msgq = xQueueCreate(msgNo, msgSize);
+#endif
     if (NULL != xMsgqHandle.msgq)
     {
         *(uint32_t *)msgqHandle = xMsgqHandle.pmsgqHandle;
@@ -838,14 +1077,14 @@ osa_status_t OSA_MsgQPut(osa_msgq_handle_t msgqHandle, osa_msg_handle_t pMessage
 {
     osa_status_t osaStatus;
     assert(NULL != msgqHandle);
-    portBASE_TYPE taskToWake = pdFALSE;
+    portBASE_TYPE taskToWake = (portBASE_TYPE)pdFALSE;
     QueueHandle_t handler    = (QueueHandle_t)(void *)(uint32_t *)(*(uint32_t *)msgqHandle);
 
     if (0U != __get_IPSR())
     {
-        if (pdTRUE == xQueueSendToBackFromISR(handler, pMessage, &taskToWake))
+        if (((BaseType_t)1) == (BaseType_t)xQueueSendToBackFromISR(handler, pMessage, &taskToWake))
         {
-            portYIELD_FROM_ISR((taskToWake));
+            portYIELD_FROM_ISR(((bool)(taskToWake)));
             osaStatus = KOSA_StatusSuccess;
         }
         else
@@ -1017,6 +1256,30 @@ void OSA_DisableIRQGlobal(void)
 
 /*FUNCTION**********************************************************************
  *
+ * Function Name : OSA_DisableScheduler
+ * Description   : Disable the scheduling of any task
+ * This function will disable the scheduling of any task
+ *
+ *END**************************************************************************/
+void OSA_DisableScheduler(void)
+{
+    vTaskSuspendAll();
+}
+
+/*FUNCTION**********************************************************************
+ *
+ * Function Name : OSA_EnableScheduler
+ * Description   : Enable the scheduling of any task
+ * This function will enable the scheduling of any task
+ *
+ *END**************************************************************************/
+void OSA_EnableScheduler(void)
+{
+    (void)xTaskResumeAll();
+}
+
+/*FUNCTION**********************************************************************
+ *
  * Function Name : OSA_InstallIntHandler
  * Description   : This function is used to install interrupt handler.
  *
@@ -1027,7 +1290,7 @@ void OSA_InstallIntHandler(uint32_t IRQNumber, void (*handler)(void))
     _Pragma("diag_suppress = Pm138")
 #endif
 #if defined(ENABLE_RAM_VECTOR_TABLE)
-        (void) InstallIRQHandler((IRQn_Type)IRQNumber, (uint32_t) * (uint32_t *)&handler);
+        (void) InstallIRQHandler((IRQn_Type)IRQNumber, (uint32_t)handler);
 #endif /* ENABLE_RAM_VECTOR_TABLE. */
 #if defined(__IAR_SYSTEMS_ICC__)
     _Pragma("diag_remark = PM138")
@@ -1086,3 +1349,33 @@ void OSA_Start(void)
     vTaskStartScheduler();
 }
 #endif
+
+/**
+ * Warning: Needs to be implemented
+ */
+#if (defined(FSL_OSA_TASK_ENABLE) && (FSL_OSA_TASK_ENABLE > 0U))
+osa_status_t OSA_TaskNotifyGet(osa_notify_time_ms_t waitTime_ms)
+{
+    return KOSA_StatusError;
+}
+#endif
+
+/**
+ * Warning: Needs to be implemented
+ */
+#if (defined(FSL_OSA_TASK_ENABLE) && (FSL_OSA_TASK_ENABLE > 0U))
+osa_status_t OSA_TaskNotifyPost(osa_task_handle_t taskHandle)
+{
+    return KOSA_StatusError;
+}
+#endif
+
+/**
+ * Warning: Needs to be implemented
+ */
+osa_semaphore_count_t OSA_SemaphoreGetCount(osa_semaphore_handle_t semaphoreHandle)
+{
+    assert(false);
+
+    return 0;
+}

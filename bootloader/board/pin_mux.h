@@ -52,7 +52,6 @@ void configurePinAD_B1_15AsGPIO(void);
 void configurePinAD_B1_15AsSPI3MISO(void);
 
 
-
 //#define RK3568_ARK_REV_1_0_MOD  
 /* Rev 1.0 mods: label taken led mod moved to emc_39 */ 
 #define RK3568_ARK_REV_2_0_MOD

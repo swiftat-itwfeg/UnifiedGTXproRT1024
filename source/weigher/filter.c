@@ -1,3 +1,4 @@
+#if 0
 #include "filter.h"
 #include "stdlib.h"
 
@@ -41,7 +42,7 @@ void filter( FilterData *object, short reading )
         }
     }
 }
-
+#endif
    
 #if 0
 /******************************************************************************/

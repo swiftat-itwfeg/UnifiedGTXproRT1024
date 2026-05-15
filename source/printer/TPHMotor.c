@@ -27,7 +27,7 @@ static uint16_t tensionModifier = 0;
 AT_NONCACHEABLE_SECTION_INIT(static uint16_t lastTUStepsDuringSize) = 0;
 
 AT_NONCACHEABLE_SECTION_INIT(static bool measureOnce_) = false;
-
+static bool firstTakeupMeasure_ = false;
 
 extern Pr_Config config_;
 extern PrStatusInfo currentStatus;
@@ -365,6 +365,8 @@ uint8_t lineTimerIntr( void )
     static bool pwmStartTime_ = false, pwmSltTime_ = false;
     PrintEngine *engine  = getPrintEngine();
 
+    HeadType_t head = getPrintHeadType();
+    
     /* latch hist/adj load and burn, start pwm to hold line temperature */
     /** kGPT_OutputCompare1Flag  = History or pwmStartTime **/
     if( ( GPT_GetStatusFlags( LINE_PRINTER_TIMER_BASE, kGPT_OutputCompare1Flag ) & kGPT_OutputCompare1Flag ) == kGPT_OutputCompare1Flag ) 
@@ -380,25 +382,34 @@ uint8_t lineTimerIntr( void )
                     this should give us around ~150Us pulse width. */ 
                 GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, true ); //true
             }
-
-            /* enable the strobe*/            
-
-            //GPIO_WritePinOutput( PHEAD_STROBE_EN_GPIO, PHEAD_STROBE_EN_PIN, false );  
             
-            GPIO_WritePinOutput(PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, true);  
-            GPIO_WritePinOutput(PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, true);
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                strobeForceLow();
+            }
+            else
+            {
+                GPIO_WritePinOutput(PHEAD_STROBE_A_GPIO, PHEAD_STROBE_A_PIN, true);  
+                GPIO_WritePinOutput(PHEAD_STROBE_B_GPIO, PHEAD_STROBE_B_PIN, true);
+            }
             
             /* get the current line loaded in the head but don't latch until current line time */
             lineTimerBurn(); 
 
             /* setup for pwm start time */
             GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel1, engine->pwmStartTime );
+            
             pwmStartTime_ = true;
         } 
         else 
         {
             /* PWM'ing the strobe pins doesn't seem to offer much benefit with current hardware*/
-            //lineTimerStrobe();
+            GPIO_WritePinOutput( ACCEL_SPI_CS_GPIO, ACCEL_SPI_CS_PIN, true );
+            
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                strobeReleaseToPWM(engine->pwmDutyCycle);
+            }
             
             /* latch control during current line. 
                data latch was set low above, lets set it back high now. 
@@ -421,12 +432,12 @@ uint8_t lineTimerIntr( void )
             /* current line data is transfered to the head, assert the data latch LOW*/ 
             GPIO_WritePinOutput( PHEAD_LATCH_GPIO, PHEAD_LATCH_PIN, false );    //false
             /* setup for end of slt time */
-             GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel2, engine->sltTime );
+            GPT_SetOutputCompareValue( GPT2, kGPT_OutputCompare_Channel2, engine->sltTime );
 
-             /* calc history line */
-             historyAdjacency();  
+            /* calc history line */
+            historyAdjacency();  
              
-             pwmSltTime_ = true;
+            pwmSltTime_ = true;
         } 
         else 
         { 
@@ -479,8 +490,8 @@ void startTPHMotorIntrGPT2( uint16_t steps, uint32_t speed )
     stepsToTake = steps;
     TPHSpeed = speed;
 
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
+    maxTension = config_.takeupMaxTension;
+    minTension = config_.takeupMinTension;
     
     /* initialize timer compare interrupts */    
     gpt_config_t gptConfig;
@@ -530,8 +541,8 @@ void startTUMotorIntrGPT2( uint16_t steps, uint32_t speed )
     TUFlopFlag = false;
     measureOnce_ = true;
 
-    maxTension = config_.takeup_sensor_max_tension_counts;
-    minTension = config_.takeup_sensor_min_tension_counts;
+    maxTension = config_.takeupMaxTension;
+    minTension = config_.takeupMinTension;
 
     /* initialize timer compare interrupts */    
     gpt_config_t gptConfig;

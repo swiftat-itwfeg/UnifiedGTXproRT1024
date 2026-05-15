@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2017-2021, NXP
+ * Copyright 2017-2023, NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -285,25 +285,24 @@ void SNVS_LP_SRTC_Init(SNVS_Type *base, const snvs_lp_srtc_config_t *config)
 {
     assert(config != NULL);
 
-#if (!(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && \
-     defined(SNVS_LP_CLOCKS))
-    uint32_t instance = SNVS_LP_GetInstance(base);
-    CLOCK_EnableClock(s_snvsLpClock[instance]);
-#endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
-
-    int pin;
+    SNVS_LP_Init(base);
 
     if (config->srtcCalEnable)
     {
-        base->LPCR = SNVS_LPCR_LPCALB_VAL_MASK & (config->srtcCalValue << SNVS_LPCR_LPCALB_VAL_SHIFT);
+        base->LPCR = (base->LPCR & ~SNVS_LPCR_LPCALB_VAL_MASK) | SNVS_LPCR_LPCALB_VAL(config->srtcCalValue);
         base->LPCR |= SNVS_LPCR_LPCALB_EN_MASK;
     }
+
+#if defined(FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER) && (FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER > 0)
+
+    int pin;
 
     for (pin = (int32_t)kSNVS_ExternalTamper1; pin <= (int32_t)SNVS_LP_MAX_TAMPER; pin++)
     {
         SNVS_LP_DisableExternalTamper(SNVS, (snvs_lp_external_tamper_t)pin);
         SNVS_LP_ClearExternalTamperStatus(SNVS, (snvs_lp_external_tamper_t)pin);
     }
+#endif /* defined(FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER) && (FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER > 0) */
 }
 
 /*!
@@ -315,11 +314,7 @@ void SNVS_LP_SRTC_Deinit(SNVS_Type *base)
 {
     base->LPCR &= ~SNVS_LPCR_SRTC_ENV_MASK;
 
-#if (!(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && \
-     defined(SNVS_LP_CLOCKS))
-    uint32_t instance = SNVS_LP_GetInstance(base);
-    CLOCK_DisableClock(s_snvsLpClock[instance]);
-#endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
+    SNVS_LP_Deinit(base);
 }
 
 /*!
@@ -598,6 +593,8 @@ void SNVS_LP_TamperPinRx_GetDefaultConfig(tamper_active_rx_config_t *config)
     config->activeTamper = kSNVS_ActiveTamper1;
 }
 #endif /* FSL_FEATURE_SNVS_HAS_ACTIVE_TAMPERS */
+
+#if defined(FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER) && (FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER > 0)
 
 /*!
  * brief Enables the specified SNVS external tamper.
@@ -959,6 +956,8 @@ void SNVS_LP_ClearAllExternalTamperStatus(SNVS_Type *base)
     }
 }
 
+#endif /* (!(defined(FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER) && (FSL_FEATURE_SNVS_HAS_MULTIPLE_TAMPER > 0)) */
+
 #if defined(FSL_FEATURE_SNVS_HAS_ACTIVE_TAMPERS) && (FSL_FEATURE_SNVS_HAS_ACTIVE_TAMPERS > 0)
 /*!
  * brief Enable active tamper tx external pad
@@ -1050,7 +1049,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 1 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET1RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET1RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDCR |= SNVS_LPTDCR_ET1_EN_MASK;
@@ -1069,7 +1068,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 2 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET2RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET2RCTL(config.activeTamper);
 
             /* enable tamper pin */
             SNVS->LPTDCR |= SNVS_LPTDCR_ET2_EN_MASK;
@@ -1086,7 +1085,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 3 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET3RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET3RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET3_EN_MASK;
@@ -1102,7 +1101,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 4 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET4RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET4RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET4_EN_MASK;
@@ -1118,7 +1117,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 5 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET5RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET5RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET5_EN_MASK;
@@ -1134,7 +1133,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 6 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET6RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET6RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET6_EN_MASK;
@@ -1150,7 +1149,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 7 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET7RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET7RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET7_EN_MASK;
@@ -1166,7 +1165,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 8 */
-            base->LPATRC1R = SNVS_LPATRC1R_ET8RCTL(config.activeTamper);
+            base->LPATRC1R |= SNVS_LPATRC1R_ET8RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET8_EN_MASK;
@@ -1182,7 +1181,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 9 */
-            base->LPATRC1R = SNVS_LPATRC2R_ET9RCTL(config.activeTamper);
+            base->LPATRC2R |= SNVS_LPATRC2R_ET9RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET9_EN_MASK;
@@ -1198,7 +1197,7 @@ status_t SNVS_LP_EnableRxActiveTamper(SNVS_Type *base, snvs_lp_external_tamper_t
             }
 
             /* Route TX to external tamper 10 */
-            base->LPATRC1R = SNVS_LPATRC2R_ET10RCTL(config.activeTamper);
+            base->LPATRC2R |= SNVS_LPATRC2R_ET10RCTL(config.activeTamper);
 
             /* enable tamper pin */
             base->LPTDC2R |= SNVS_LPTDC2R_ET10_EN_MASK;

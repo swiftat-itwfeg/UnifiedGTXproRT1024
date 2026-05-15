@@ -21,7 +21,7 @@
 
 /*! @brief Enable or disable exception handling log (1 - enable, 0 - disable) */
 #ifndef EXCEPTION_HANDLING_LOG_ENABLE
-#define EXCEPTION_HANDLING_LOG_ENABLE (1U)
+#define EXCEPTION_HANDLING_LOG_ENABLE (0U)
 #endif
 
 /*******************************************************************************

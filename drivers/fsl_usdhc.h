@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021 NXP
+ * Copyright 2016-2021, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _FSL_USDHC_H_
-#define _FSL_USDHC_H_
+#ifndef FSL_USDHC_H_
+#define FSL_USDHC_H_
 
 #include "fsl_common.h"
 
@@ -20,10 +20,10 @@
  *****************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
-/*! @brief Driver version 2.8.0. */
-#define FSL_USDHC_DRIVER_VERSION (MAKE_VERSION(2U, 8U, 0U))
-/*@}*/
+/*! @{ */
+/*! @brief Driver version 2.8.5. */
+#define FSL_USDHC_DRIVER_VERSION (MAKE_VERSION(2U, 8U, 5U))
+/*! @} */
 
 /*! @brief Maximum block count can be set one time */
 #define USDHC_MAX_BLOCK_COUNT (USDHC_BLK_ATT_BLKCNT_MASK >> USDHC_BLK_ATT_BLKCNT_SHIFT)
@@ -60,7 +60,9 @@ enum
     kUSDHC_SupportSuspendResumeFlag = USDHC_HOST_CTRL_CAP_SRS_MASK,   /*!< Support suspend/resume. */
     kUSDHC_SupportV330Flag          = USDHC_HOST_CTRL_CAP_VS33_MASK,  /*!< Support voltage 3.3V. */
     kUSDHC_SupportV300Flag          = USDHC_HOST_CTRL_CAP_VS30_MASK,  /*!< Support voltage 3.0V. */
+#if !(defined(FSL_FEATURE_USDHC_HAS_NO_VS18) && FSL_FEATURE_USDHC_HAS_NO_VS18)
     kUSDHC_SupportV180Flag          = USDHC_HOST_CTRL_CAP_VS18_MASK,  /*!< Support voltage 1.8V. */
+#endif
     kUSDHC_Support4BitFlag          = (USDHC_HOST_CTRL_CAP_MBL_SHIFT << 0U),
     /*!< Flag in HTCAPBLT_MBL's position, supporting 4-bit mode. */
     kUSDHC_Support8BitFlag = (USDHC_HOST_CTRL_CAP_MBL_SHIFT << 1U),
@@ -585,7 +587,11 @@ typedef uint32_t usdhc_adma1_descriptor_t;
 typedef struct _usdhc_adma2_descriptor
 {
     uint32_t attribute;      /*!< The control and status field. */
+#if INTPTR_MAX == INT64_MAX
+    uint32_t address;        /*!< The address field. */
+#else
     const uint32_t *address; /*!< The address field. */
+#endif
 } usdhc_adma2_descriptor_t;
 
 /*!
@@ -824,7 +830,7 @@ void USDHC_Deinit(USDHC_Type *base);
  */
 bool USDHC_Reset(USDHC_Type *base, uint32_t mask, uint32_t timeout);
 
-/* @} */
+/*! @} */
 
 /*!
  * @name DMA Control
@@ -912,7 +918,7 @@ static inline void USDHC_EnableInternalDMA(USDHC_Type *base, bool enable)
     }
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Interrupts
@@ -963,7 +969,7 @@ static inline void USDHC_DisableInterruptSignal(USDHC_Type *base, uint32_t mask)
     base->INT_SIGNAL_EN &= ~mask;
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Status
@@ -1040,7 +1046,7 @@ static inline uint32_t USDHC_GetPresentStatusFlags(USDHC_Type *base)
     return base->PRES_STATE;
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Bus Operations
@@ -1303,6 +1309,7 @@ static inline void USDHC_SetForceEvent(USDHC_Type *base, uint32_t mask)
     base->FORCE_EVENT = mask;
 }
 
+#if !(defined(FSL_FEATURE_USDHC_HAS_NO_VOLTAGE_SELECT) && (FSL_FEATURE_USDHC_HAS_NO_VOLTAGE_SELECT))
 /*!
  * @brief Selects the USDHC output voltage.
  *
@@ -1320,6 +1327,7 @@ static inline void UDSHC_SelectVoltage(USDHC_Type *base, bool en18v)
         base->VEND_SPEC &= ~USDHC_VEND_SPEC_VSELECT_MASK;
     }
 }
+#endif
 
 #if defined(FSL_FEATURE_USDHC_HAS_SDR50_MODE) && (FSL_FEATURE_USDHC_HAS_SDR50_MODE)
 /*!
@@ -1589,7 +1597,7 @@ void USDHC_SetDataConfig(USDHC_Type *base,
                          usdhc_transfer_direction_t dataDirection,
                          uint32_t blockCount,
                          uint32_t blockSize);
-/* @} */
+/*! @} */
 
 /*!
  * @name Transactional functions
@@ -1691,11 +1699,11 @@ status_t USDHC_TransferBlocking(USDHC_Type *base, usdhc_adma_config_t *dmaConfig
  */
 void USDHC_TransferHandleIRQ(USDHC_Type *base, usdhc_handle_t *handle);
 
-/* @} */
+/*! @} */
 
 #if defined(__cplusplus)
 }
 #endif
 /*! @} */
 
-#endif /* _FSL_USDHC_H_*/
+#endif /* FSL_USDHC_H_*/

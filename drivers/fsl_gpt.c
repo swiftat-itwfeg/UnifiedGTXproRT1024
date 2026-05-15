@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2024 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -20,13 +20,12 @@
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
 /*! @brief Pointers to GPT bases for each instance. */
 static GPT_Type *const s_gptBases[] = GPT_BASE_PTRS;
 
-#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
 /*! @brief Pointers to GPT clocks for each instance. */
 static const clock_ip_name_t s_gptClocks[] = GPT_CLOCKS;
-#endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
 /*******************************************************************************
  * Code
@@ -38,7 +37,7 @@ static uint32_t GPT_GetInstance(GPT_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0U; instance < ARRAY_SIZE(s_gptBases); instance++)
     {
-        if (s_gptBases[instance] == base)
+        if (MSDK_REG_SECURE_ADDR(s_gptBases[instance]) == MSDK_REG_SECURE_ADDR(base))
         {
             break;
         }
@@ -48,6 +47,7 @@ static uint32_t GPT_GetInstance(GPT_Type *base)
 
     return instance;
 }
+#endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
 /*!
  * brief Initialize GPT to reset state and initialize running mode.
@@ -73,7 +73,15 @@ void GPT_Init(GPT_Type *base, const gpt_config_t *initConfig)
         (initConfig->enableRunInDoze ? GPT_CR_DOZEEN_MASK : 0UL) |
         (initConfig->enableRunInDbg ? GPT_CR_DBGEN_MASK : 0UL) | (initConfig->enableMode ? GPT_CR_ENMOD_MASK : 0UL);
 
-    GPT_SetClockSource(base, initConfig->clockSource);
+    /* Set the GPT clock source. */
+    if (initConfig->clockSource == kGPT_ClockSource_Osc)
+    {
+        base->CR = (base->CR & ~GPT_CR_CLKSRC_MASK) | GPT_CR_EN_24M_MASK | GPT_CR_CLKSRC(initConfig->clockSource);
+    }
+    else
+    {
+        base->CR = (base->CR & ~(GPT_CR_CLKSRC_MASK | GPT_CR_EN_24M_MASK)) | GPT_CR_CLKSRC(initConfig->clockSource);
+    }
     GPT_SetClockDivider(base, initConfig->divider);
 }
 

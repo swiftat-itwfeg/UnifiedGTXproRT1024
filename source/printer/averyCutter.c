@@ -1,6 +1,12 @@
 #include "averyCutter.h"
 #include "semphr.h"
 #include "fsl_debug_console.h"
+//#include "globalPrinterTask.h"
+#include "takeupMotor.h"
+#include "idleTask.h"
+#include "vendor.h"
+#include "translator.h"
+#include "queueManager.h"
 
 
 SemaphoreHandle_t       pCutDoneSemaphore       = NULL;
@@ -9,14 +15,21 @@ static TaskHandle_t     cHandle_                = NULL;
 static QueueHandle_t    pMsgQHandle_            = NULL;
 static QueueHandle_t    pIPMsgQueue             = NULL;
 static bool             suspend_                = false;
+static bool             cutterDetected          = false;
+static bool             cutPending              = false;
+static bool             statusPending           = false;
+uint16_t                cutterStatusCounter     = 0;
+uint16_t                cutterStatusTimeOutCounter = 0;
 
-static bool             cutterHome              = true;
+extern Pr_Config config_;
 
-
+#define TFinkOyaneCutterToDo
+#define TFinkOyaneCutter
 
 AT_NONCACHEABLE_SECTION_ALIGN( lpuart_handle_t cutterHandle_, 4U ); 
 AT_NONCACHEABLE_SECTION_ALIGN( unsigned char uartTxBfr[ MAX_MESSGAE_SIZE ], 4U );
 AT_NONCACHEABLE_SECTION_ALIGN( unsigned char uartRxBfr[ MAX_MESSGAE_SIZE ], 4U );
+AT_NONCACHEABLE_SECTION_ALIGN( unsigned char uartRxBfr2[ MAX_MESSGAE_SIZE ], 4U );
 AT_NONCACHEABLE_SECTION_ALIGN( static CutterMgr cutterMgr_, 4U );
 
 const unsigned short crc16[CRC_TABLE_SIZE] = 
@@ -65,8 +78,8 @@ const unsigned short crc16[CRC_TABLE_SIZE] =
                                 0x4100, 0x81C1, 0x8081, 0x4040 };
 
 
-const TickType_t                lightSleep = 100 / portTICK_PERIOD_MS;
-const TickType_t                deepSleep = 1000 / portTICK_PERIOD_MS;
+const TickType_t                lightSleep = 500 / portTICK_PERIOD_MS;
+const TickType_t                deepSleep = 2000 / portTICK_PERIOD_MS;
 
 
 SemaphoreHandle_t               cMutex_;
@@ -104,7 +117,7 @@ BaseType_t createAveryCutterTask( QueueHandle_t msgQueue,
     if( ( pMsgQHandle_ != NULL ) && ( pIPMsgQueue != NULL ) ) {
         /* create printer task thread */
         result = xTaskCreate( averyCutterTask,  "CutterTask", configMINIMAL_STACK_SIZE,
-                                            NULL, 1, &cHandle_ );
+                                            NULL, cutter_task_PRIORITY, &cHandle_ );
     } else {
         PRINTF("createAveryCutterTask(): Failed to create Cutter task. Queue is null!\r\n" );
     }
@@ -127,16 +140,16 @@ bool initCutter( void )
     /* reset the manager */
     memset( (void *)&cutterMgr_, 0, sizeof(cutterMgr_) );
     
-    cutterMgr_.version.productName[20] = '\0';
+    cutterMgr_.version.productName[19] = '\0';
     cutterMgr_.version.firmware[12] = '\0';
-    cutterMgr_.version.issueDate[8] = '\0';
-    cutterMgr_.version.date[11] = '\0';   
+    cutterMgr_.version.issueDate[16] = '\0';
+    cutterMgr_.version.date[11] = '\0'; 
+    cutterMgr_.version.time[8] = '\0';
     
     /* clear the mgs buffers */
     memset( (void *)&uartTxBfr[0], 0, MAX_MESSGAE_SIZE );
     memset( (void *)&uartRxBfr[0], 0xff, MAX_MESSGAE_SIZE );
  
-    
     /* create mutex for interface */
     vSemaphoreCreateBinary( cMutex_ )
     //cMutex_ = xSemaphoreCreateMutex(); 
@@ -145,7 +158,7 @@ bool initCutter( void )
         if( openCutterInterface( CUTTER_UART_BAUD ) ) {                                    
             status = true;
             
-            PRINTF("initCutter() - true\r\n");
+            //PRINTF("initCutter() - true\r\n");
         }
     } else {
         PRINTF("initCutter(): Failed to create mutex!\r\n" );
@@ -169,11 +182,13 @@ bool sendACCut( CutterMgr *pMgr, ACCutPaper *pMsg )
     lpuart_transfer_t xfer;
     bool sent = false;
     
+    //PRINTF("sendACCut(): send cut msg\r\n");
+    
     if( cMutex_ ) {
         /* wait for mutex */
         if( xSemaphoreTake( cMutex_, ( TickType_t )portMAX_DELAY ) == pdTRUE ) {
             pMgr->txReady = false;       
-            buildCutterMsg( AC_CUT_, &msg, pMsg->distance, pMsg->speed );
+            buildCutterMsg( AC_CUT_, &msg, 0, pMsg->speed );
             stuffTxBuffer( (unsigned char *)&msg, (unsigned char)( HEADER_SIZE + sizeof(ACCutPaper) ) );
             
             /* append crc and ext */
@@ -182,6 +197,7 @@ bool sendACCut( CutterMgr *pMgr, ACCutPaper *pMsg )
             /* fill out transfer info */           
             xfer.data = &uartTxBfr[0];
             xfer.dataSize = ( sizeof(ACHeader) + sizeof(ACCutPaper) + 5 );
+            
             /* send the command */
             status_t result = LPUART_TransferSendNonBlocking( LPUART1, &cutterHandle_, &xfer );
             if( result != kStatus_Success ) {
@@ -232,6 +248,76 @@ bool sendACReqStatus( CutterMgr *pMgr )
             /* fill out transfer info */           
             xfer.data = &uartTxBfr[0];
             xfer.dataSize = (size_t)( getMessageSize( msg.header.command ) + 6 ); /* crc + ext */
+            
+
+#if 0
+            uint16_t totalSize = xfer.dataSize;
+            
+            PRINTF("\r\n========= RAW TX BUFFER =========\r\n");
+
+            for (uint16_t i = 0; i < totalSize; i++)
+            {
+                PRINTF("%02X ", uartTxBfr[i]);
+            }
+            PRINTF("\r\n=================================\r\n");
+
+            /* ---------------- DECODE ---------------- */
+
+            uint8_t *buf = uartTxBfr;
+
+            PRINTF("\r\n========= DECODED PACKET =========\r\n");
+
+            /* STX */
+            PRINTF("STX        : 0x%02X\r\n", buf[0]);
+
+            /* Basic header fields */
+            PRINTF("Slave ID   : %c\r\n", buf[1]);
+            PRINTF("Command    : %c\r\n", buf[2]);
+            PRINTF("Type       : %c\r\n", buf[3]);
+            PRINTF("CR         : %c\r\n", buf[4]);
+
+            /* Config (4 ASCII hex chars) */
+            PRINTF("Config     : %c%c%c%c\r\n",
+                   buf[5], buf[6], buf[7], buf[8]);
+
+            /* Length (4 ASCII hex chars) */
+            PRINTF("Length     : %c%c%c%c\r\n",
+                   buf[9], buf[10], buf[11], buf[12]);
+
+            /* Convert ASCII hex length manually (no helper function) */
+            uint16_t lengthVal = 0;
+            for (int i = 9; i < 13; i++)
+            {
+                lengthVal <<= 4;
+
+                if (buf[i] >= '0' && buf[i] <= '9')
+                    lengthVal |= (buf[i] - '0');
+                else if (buf[i] >= 'A' && buf[i] <= 'F')
+                    lengthVal |= (buf[i] - 'A' + 10);
+            }
+
+            PRINTF("Length (dec): %d\r\n", lengthVal);
+
+            /* If Cut command, decode speed */
+            if (buf[2] == 'C')
+            {
+                PRINTF("Speed      : %c\r\n", buf[13]);
+            }
+
+            /* CRC (last 5 bytes are CRC[4] + ETX[1]) */
+            uint16_t crcIndex = totalSize - 5;
+
+            PRINTF("CRC (ASCII): %c%c%c%c\r\n",
+                   buf[crcIndex],
+                   buf[crcIndex + 1],
+                   buf[crcIndex + 2],
+                   buf[crcIndex + 3]);
+
+            /* ETX */
+            PRINTF("ETX        : 0x%02X\r\n", buf[totalSize - 1]);
+
+            PRINTF("==================================\r\n\r\n");
+#endif
             /* send the command */
             status_t result = LPUART_TransferSendNonBlocking( LPUART1, &cutterHandle_, &xfer );
             if( result != kStatus_Success ) {
@@ -284,6 +370,76 @@ bool sendACReqVersion( CutterMgr *pMgr, ACRVersion *pMsg )
             /* fill out transfer info */           
             xfer.data = &uartTxBfr[0];
             xfer.dataSize = (size_t)( getMessageSize( msg.header.command ) + 6 ); /* crc + ext */
+            
+#if 0
+            uint16_t totalSize = xfer.dataSize;
+            
+            PRINTF("\r\n========= RAW TX BUFFER =========\r\n");
+
+            for (uint16_t i = 0; i < totalSize; i++)
+            {
+                PRINTF("%02X ", uartTxBfr[i]);
+            }
+            PRINTF("\r\n=================================\r\n");
+
+            /* ---------------- DECODE ---------------- */
+
+            uint8_t *buf = uartTxBfr;
+
+            PRINTF("\r\n========= DECODED PACKET =========\r\n");
+
+            /* STX */
+            PRINTF("STX        : 0x%02X\r\n", buf[0]);
+
+            /* Basic header fields */
+            PRINTF("Slave ID   : %c\r\n", buf[1]);
+            PRINTF("Command    : %c\r\n", buf[2]);
+            PRINTF("Type       : %c\r\n", buf[3]);
+            PRINTF("CR         : %c\r\n", buf[4]);
+
+            /* Config (4 ASCII hex chars) */
+            PRINTF("Config     : %c%c%c%c\r\n",
+                   buf[5], buf[6], buf[7], buf[8]);
+
+            /* Length (4 ASCII hex chars) */
+            PRINTF("Length     : %c%c%c%c\r\n",
+                   buf[9], buf[10], buf[11], buf[12]);
+
+            /* Convert ASCII hex length manually (no helper function) */
+            uint16_t lengthVal = 0;
+            for (int i = 9; i < 13; i++)
+            {
+                lengthVal <<= 4;
+
+                if (buf[i] >= '0' && buf[i] <= '9')
+                    lengthVal |= (buf[i] - '0');
+                else if (buf[i] >= 'A' && buf[i] <= 'F')
+                    lengthVal |= (buf[i] - 'A' + 10);
+            }
+
+            PRINTF("Length (dec): %d\r\n", lengthVal);
+
+            /* If Cut command, decode speed */
+            if (buf[2] == 'C')
+            {
+                PRINTF("Speed      : %c\r\n", buf[13]);
+            }
+
+            /* CRC (last 5 bytes are CRC[4] + ETX[1]) */
+            uint16_t crcIndex = totalSize - 5;
+
+            PRINTF("CRC (ASCII): %c%c%c%c\r\n",
+                   buf[crcIndex],
+                   buf[crcIndex + 1],
+                   buf[crcIndex + 2],
+                   buf[crcIndex + 3]);
+
+            /* ETX */
+            PRINTF("ETX        : 0x%02X\r\n", buf[totalSize - 1]);
+
+            PRINTF("==================================\r\n\r\n");
+#endif
+            
             /* send the command */
             status_t result = LPUART_TransferSendNonBlocking( LPUART1, &cutterHandle_, &xfer );
             if( result != kStatus_Success ) {
@@ -444,7 +600,12 @@ bool sendACReadProfile( CutterMgr *pMgr, ACReadProfile *pMsg )
        
       \author
           Aaron Swift
-*******************************************************************************/                
+*******************************************************************************/                               
+void enterTestMode(void)
+{
+   sendACTestMode(&cutterMgr_);
+}
+
 bool sendACTestMode( CutterMgr *pMgr )
 {
     ACutterMsgs msg;
@@ -495,6 +656,7 @@ bool sendACReset( CutterMgr *pMgr )
     ACutterMsgs msg;
     lpuart_transfer_t xfer;
     bool sent = false;
+    
     
     if( cMutex_ ) {
         /* wait for mutex */
@@ -579,210 +741,319 @@ static void averyCutterTask( void *pvParameters )
     version.index = 0;
     
     PRINTF("averyCutterTask(): Thread running...\r\n" ); 
-    while( !suspend_ ) {
+    while( !suspend_ ) 
+    {
+        #if 1
+        static ACTSTATES previousState = AC_ERROR_;    
+        
+        if(actState_ != previousState) 
+        {
+           previousState = actState_;
+           //PRINTF("Cutter State_ = : %d\r\n", actState_);
+        }       
+        #endif
+        
         switch( actState_ )
         {
-            case AC_INIT_INTERFACE_: {
+            case AC_INIT_INTERFACE_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING init\r\n");
                 /* open interface to cutter mechanism */
-                if( initCutter() ) {
+                if( initCutter() ) 
+                {
                     /* set initialization sequence flag */
                     cutterMgr_.initSeq = true;
+                    
                     /* request the cutter status */
-                    if( sendACReqStatus( &cutterMgr_ ) ) { 
-                        receiveCutterMsg( DEFAULT_MSG_RX_SIZE_ );  
+                    if( sendACReqStatus( &cutterMgr_ ) ) 
+                    { 
+                        receiveCutterMsg( DEFAULT_MSG_RX_SIZE_ );
                         actState_ = AC_INIT_DEVICE_STATUS_;
-                    } else {
+                    } 
+                    else 
+                    {
                         PRINTF("averyCutterTask(): sendACReqStatus() failed!\r\n" ); 
                     }
-                } else {
+                } 
+                else 
+                {
                     PRINTF("averyCutterTask(): initCutter() failed!\r\n" ); 
                 }
+                
                 break;
             }
-            case AC_INIT_DEVICE_STATUS_: {
+            case AC_INIT_DEVICE_STATUS_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING device_status\r\n");
+              
+                cutterStatusTimeOutCounter++;
                 
-                if( cutterMgr_.msgReady ) {
-                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                   
-                                       
-                    if( (1 /*cutterMgr_.error == AC_ERR_NONE_ ) || ( cutterMgr_.error == AC_ERR_DOOR_OPEN_ */) ) {                                              
-                        /* status is good request version info from device */
-                        if( sendACReqVersion( &cutterMgr_, &version ) ) {                            
-                            receiveCutterMsg( getVersionRxMsgSize( version.index ) );       
-                            cutterMgr_.initSeq = false;
-                            actState_ = AC_INIT_DEVICE_RX_VERSION_;
-                        } else {
-                            PRINTF("averyCutterTask(): sendACReqVersion() failed!\r\n" ); 
-                        }
-                    } else {
-                        /* crtitical errors */
-                        if( ( cutterMgr_.error == AC_ERR_POWER_FAILURE_ ) ||                        
-                            ( cutterMgr_.error == AC_ERR_MSG_FAILURE_ ) ) {                            
-                                PRINTF("averyCutterTask(): initCutter() Critical Error!\r\n" );
-                                actState_ = AC_ERROR_;
-                            } else {
-                                /* blade not home, home and continue with intialization */
-                                actState_ = AC_PROCESS_HOME_;
-                            }
+                #define CUTTER_STATUS_TIME_OUT 50000
+                
+                if(cutterStatusTimeOutCounter > CUTTER_STATUS_TIME_OUT)
+                {
+                    setCutterInstalled(false);
+                  
+                    if( cHandle_ != NULL )
+                    {
+                        PrSysInfo info;
+                        info.msgType = PR_SYS_INFO;
+                        info.pid = getProductId();
+                        info.id = config_.instance;        
+
+                        info.printhead_size = HEAD_DOTS_80MM;
+                        info.buffer_size = PRINTER_BUFFER_SIZE_80MM;    
+
+                        info.transfer_size = 512;
+                        info.headType = getPrintHeadType();
+                        info.cutterInstalled = getCutterDetected();
+                        
+                        config_.cutterEnabled = false;
+                        
+                        info.cutterEnabled = config_.cutterEnabled;
+                        info.configValid = true;   
+                        
+                        
+                        //sendPrSysInfo( &info );
+                        
+                        //createGlobalPrinterTask( RT_PRINTER_SERVICE_SCALE_80MM, (QueueHandle_t)getPrinterQueueHandle() );
+                      
+                        PRINTF("\r\nCutter not detected - cutter tasked deleted");
+                        vTaskDelete( cHandle_ );
                     }
                 }
-                break;
-            }
-            case AC_INIT_DEVICE_TX_VERSION_: {
-                if( sendACReqVersion( &cutterMgr_, &version ) ) {                         
-                    actState_ = AC_INIT_DEVICE_RX_VERSION_;
-                } else {
-                    PRINTF("averyCutterTask(): sendACReqVersion() failed!\r\n" ); 
+              
+                if( cutterMgr_.msgReady ) 
+                {
+                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                   
+                    cutterMgr_.initSeq = false;
+                    setCutterInstalled(true);
+                    cutterStatusTimeOutCounter = 0;
+                    actState_ = AC_INIT_DEVICE_TX_VERSION_;
+                    
+                    PrSysInfo info;
+                    info.msgType = PR_SYS_INFO;
+                    info.pid = getProductId();
+                    info.id = config_.instance;        
+
+                    info.printhead_size = HEAD_DOTS_80MM;
+                    info.buffer_size = PRINTER_BUFFER_SIZE_80MM;    
+
+                    info.transfer_size = 512;
+                    info.headType = getPrintHeadType();
+                    info.cutterInstalled = getCutterDetected();
+                    
+                    config_.cutterEnabled = true;
+                    
+                    info.cutterEnabled = config_.cutterEnabled;
+                    info.configValid = true;   
+                    
+                    
+                    //sendPrSysInfo( &info );
+                    
+                    //createGlobalPrinterTask( RT_PRINTER_SERVICE_SCALE_80MM, (QueueHandle_t)getPrinterQueueHandle() );
+                    
+                    PRINTF("\r\nCutter detected\r\n\r\n");
                 }
+                
                 break;
             }
-            case AC_INIT_DEVICE_RX_VERSION_: {
-                
-                if( cutterMgr_.msgReady ) {
-                    version.index++;
-                    if( version.index != MAX_VERSION_INDEX ) {
-                        receiveCutterMsg( getVersionRxMsgSize( version.index ) );                           
+            case AC_INIT_DEVICE_TX_VERSION_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING tx_version\r\n");
+                if( sendACReqVersion( &cutterMgr_, &version ) ) 
+                { 
+                    if( version.index != MAX_VERSION_INDEX ) 
+                    {
+                        //PRINTF("\r\n!= MAX VERSION INDEX - INDEX = %d\r\n", version.index);
+                        receiveCutterMsg( getVersionRxMsgSize( version.index ) );
+                        
+                        version.index++;
                     }
                     
+                    actState_ = AC_INIT_DEVICE_RX_VERSION_;
+                } 
+                else 
+                {
+                    PRINTF("averyCutterTask(): sendACReqVersion() failed!\r\n" ); 
+                }
+                
+                break;
+            }
+            case AC_INIT_DEVICE_RX_VERSION_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING rx_version\r\n");
+                if( cutterMgr_.msgReady ) 
+                {
                     handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                                       
                     
                     /* do we have all version info? */
-                    if( version.index == MAX_VERSION_INDEX ) {
+                    if( version.index == MAX_VERSION_INDEX ) 
+                    {
                         version.index = 0;
-                        /* wait for door to close */
-                        if( cutterMgr_.error == AC_ERR_DOOR_OPEN_ ) {
-                            actState_ = AC_INIT_SEND_DOOR_STATUS_;
-                            vTaskDelay( lightSleep );
-                        } else {
-                            /* tell the printer that we are ready to process cmds */
-                            ICutterGeneric imsg;
-                            imsg.msgType = _I_CUTTER_READY_FOR_CMD;
-                            BaseType_t result = xQueueSend( pIPMsgQueue, (void *)&imsg, 0 );
-                            if( result != pdPASS ) {
-                                PRINTF("printerTask(): Failed to post Cutter message!\r\n" );       
-                            }                            
-                            actState_ = AC_WAIT_FOR_COMMAND_;
-                             /* add to cycle cutter 
-                            actState_ = AC_PROCESS_CUT_; */
-                        }                        
-                    } else {
+
+                        /* tell the printer that we are ready to process cmds */
+                        ICutterGeneric imsg;
+                        imsg.msgType = _I_CUTTER_READY_FOR_CMD;
+                        
+                        BaseType_t result = xQueueSend( pIPMsgQueue, (void *)&imsg, 0 );
+                        
+                        if( result != pdPASS ) 
+                        {
+                            PRINTF("printerTask(): Failed to post Cutter message!\r\n" );       
+                        }                            
+                        
+                        actState_ = AC_WAIT_FOR_COMMAND_;                          
+                    } 
+                    else 
+                    {
                         /* get the next */                        
                         actState_ = AC_INIT_DEVICE_TX_VERSION_;
                     }
                 }                
                 break;
             }
-            case AC_INIT_SEND_DOOR_STATUS_: {
-                if( sendACReqStatus( &cutterMgr_ ) ) { 
-                    receiveCutterMsg( DEFAULT_MSG_RX_SIZE_ );  
-                    actState_ = AC_INIT_WAIT_DOOR_STATUS_;
-                }                
+            case AC_INIT_SEND_DOOR_STATUS_: 
+            {            
                 break;
             }
             
-            case AC_INIT_WAIT_DOOR_STATUS_: {
-                if( cutterMgr_.msgReady ) {
-                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );
-                    /* if we have homed the blade then get version info */
-                    if( cutterMgr_.error == AC_ERR_NONE_ ) {
-                        receiveCutterMsg( getVersionRxMsgSize( version.index ) );       
-                        actState_ = AC_WAIT_FOR_COMMAND_;
-                    } else {
-                        /* wait 100mS before sending next request */
-                        vTaskDelay( lightSleep ); 
-                        actState_ = AC_INIT_SEND_DOOR_STATUS_; 
-                    }
+            case AC_INIT_WAIT_DOOR_STATUS_: 
+            {
+                break;
+            }
+            case AC_WAIT_FOR_COMMAND_: 
+            {
+                if(cutterMgr_.initSeq == true)
+                {
+                    cutterMgr_.initSeq = false;
                 }
-                break;
-            }
-            
-            case AC_WAIT_FOR_COMMAND_: {
+                
+                if( pMsgQHandle_ != NULL ) 
+                {                  
+                    ICutterGeneric cMsg;
+                    ICMessages cMsg2;
+                    
+                    int numMgs = uxQueueMessagesWaitingFromISR( pMsgQHandle_ );
+                    
+                    if( numMgs ) 
+                    {
+                        if( xQueueReceiveFromISR( pMsgQHandle_, &cMsg, 0 ) ) 
+                        {             
+                            cMsg2.generic.msgType = cMsg.msgType;
+                            
+                            //PRINTF("\r\nC msg type %d", cMsg2.generic.msgType);
+                            
+                            handleInternalMessage(&cMsg2);
+                        } 
+                    }
+                } 
+                
+                if( cutPending == true )
+                {
+                    cutPending = false;
+                    
+                    actState_ = AC_PROCESS_CUT_;
+                }
+                
                 break;
             }            
-            case AC_PROCESS_CUT_ : {
+            case AC_PROCESS_CUT_ : 
+            {
+                //PRINTF("\r\naveryCutterTask(): initiate CUT");
                 ACCutPaper steps;
-                steps.distance = 80;
                 steps.speed = 9;            
-                
-                cutterHome = false;
-                
-                if( sendACCut( &cutterMgr_, &steps ) )  {
-                    receiveCutterMsg( PAPER_CUT_RX_STEPS_MSG_SIZE_ );                    
+                if( sendACCut( &cutterMgr_, &steps ) )  
+                {
+                    receiveCutterMsg( PAPER_CUT_RX_STEPS_MSG_SIZE_ ); 
                     actState_ = AC_PROCESS_CUT_RESPONSE_;
-                } else {
+                } 
+                else 
+                {
                     PRINTF("averyCutterTask(): Failed to send cut command!\r\n" );
-                }                
+                }  
+                
                 break;
             }
             
-            case AC_PROCESS_CUT_RESPONSE_: {
-                if( cutterMgr_.msgReady ) {
-                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                            
-                    /* have the cutter performed the cut */
-                    if( cutterMgr_.error == AC_ERR_BLADE_NOT_HOME_ ) {
-                        actState_ = AC_PROCESS_HOME_;
-                        PRINTF("AC_PROCESS_CUT_RESPONSE_ averyCutterTask(): Cutter has cut!\r\n" );
-                    } else {
-                        PRINTF("AC_PROCESS_CUT_RESPONSE_ averyCutterTask(): Cutter failed to cut!\r\n" );
-                        
-                        ICMessages msg2;
-                        msg2.generic.msgType = _I_CUTTER_HOME_CMD;
-
-                        handleInternalMessage(&msg2);
-                    }
+            case AC_PROCESS_CUT_RESPONSE_: 
+            {
+                //PRINTF("averyCutterTask():  ac_process_cut_response\r\n");
+                if( cutterMgr_.msgReady ) 
+                {   
+                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );  
                 }
+                
                 break;
             }
-            
-            case AC_PROCESS_HOME_: {
+            case AC_PROCESS_HOME_: 
+            {
+                //PRINTF("ac_process_home\r\n");
                 ACHome home;
                 home.speed = 9;
-                /* home.speed = 4; real slow */ 
-                
-            
-                if( sendACHome( &cutterMgr_, &home ) ) {
+ 
+                if( sendACHome( &cutterMgr_, &home ) ) 
+                {
                     receiveCutterMsg( RETURN_HOME_RX_MSG_SIZE_  ); 
-                    actState_ = AC_PROCESS_HOME_RESPONSE_;   
-                    
-                    //PRINTF("CUTTER AC_PROCESS_HOME\r\n");
-                } else {
+                    actState_ = AC_PROCESS_HOME_RESPONSE_;                    
+                } 
+                else 
+                {
                     PRINTF("averyCutterTask(): Failed to send home command!\r\n" );
-                }                
+                } 
+                
+                break;
+            }         
+            case AC_PROCESS_HOME_RESPONSE_: 
+            {
+               //PRINTF("averyCutterTask() ac_process_home_response\r\n");
+                if( cutterMgr_.msgReady ) 
+                {
+                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                 
+                }  
+                
                 break;
             }
-            
-            case AC_PROCESS_HOME_RESPONSE_: {
-                if( cutterMgr_.msgReady ) {
-                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );
-                    if( cutterMgr_.error == AC_ERR_NONE_ ) {
-                        /* if we need to home cutter while in init */
-                        if( cutterMgr_.initSeq ) {
-                            actState_ =  AC_INIT_DEVICE_RX_VERSION_;
-                            
-                            PRINTF("AC_PROCESS_HOME_RESPONSE_ init\r\n");
-                            
-                            cutterHome = true;
-                        } else {
-                            vTaskDelay( pdMS_TO_TICKS(300) );
-                            
-                            actState_ =  AC_WAIT_FOR_COMMAND_;                            
-                            cutterHome = true;
-                            
-                            PRINTF("AC_PROCESS_HOME_RESPONSE_ wait for command\r\n");
-                        }
-                    }                    
-                }                                
-                break;
-            }
-
-            case AC_ERROR_: {
+            case AC_ERROR_: 
+            {
+                PRINTF("CUTTER TASK RUNNING error\r\n");
+                /* TO DO: replace with task deletion */
                 /* sleep for a second */
                 vTaskDelay( deepSleep );
                 break;
             }
-            default: {
-                PRINTF("unknown command %d\r\n", actState_ );
+            case AC_TX_DEVICE_STATUS_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING TX device_status\r\n");
+                /* request the cutter status */
+                if( sendACReqStatus( &cutterMgr_ ) ) 
+                { 
+                    receiveCutterMsg( DEFAULT_MSG_RX_SIZE_ );
+                    actState_ = AC_RX_DEVICE_STATUS_;
+                } 
+                else 
+                {
+                    PRINTF("averyCutterTask(): sendACReqStatus() failed!\r\n" ); 
+                }
+                
+                break;
             }
-            
+            case AC_RX_DEVICE_STATUS_: 
+            {
+                //PRINTF("CUTTER TASK RUNNING RX device_status\r\n");
+                if( cutterMgr_.msgReady ) 
+                {    
+                    handleCutterMessage( &cutterMgr_, &uartRxBfr[0] );                    
+                }
+                
+                break;
+            }
+        }
+        
+        /* TFinkOyaneCutter */
+        static bool PrSysInfoMsgSent = false;
+        if(cutterDetected == true && PrSysInfoMsgSent == false) {   
+           PrSysInfoMsgSent = true;
         }
         taskYIELD();
     }
@@ -799,27 +1070,56 @@ static void averyCutterTask( void *pvParameters )
           Aaron Swift
 *******************************************************************************/      
 void handleInternalMessage( ICMessages *pMsg )
-{
+{  
+    //PRINTF("\r\nhandleInternalMessage");
+  
     switch( pMsg->generic.msgType ) 
     {
-        case _I_CUTTER_CUT_CMD: {
-            actState_ = AC_PROCESS_CUT_;
-            PRINTF("_I_CUTTER_CUT_CMD\r\n");
+        case _I_CUTTER_CUT_CMD: 
+        {
+            if(actState_ == AC_WAIT_FOR_COMMAND_)
+            {
+                actState_ = AC_PROCESS_CUT_;
+            }
+            else
+            {
+                PRINTF("\r\n!= AC_WAIT_FOR_COMMAND_ %d", actState_);
+                cutPending = true;
+            }
+              
             break;
         }
-        case _I_CUTTER_HOME_CMD: {
-            actState_ = AC_PROCESS_HOME_;
+        case _I_CUTTER_HOME_CMD: 
+        {
+            if(actState_ == AC_WAIT_FOR_COMMAND_)
+            {
+                actState_ = AC_PROCESS_HOME_;
+            }
+          
             break;
         }
-        case _I_CUTTER_REQ_STATUS: {
+        case _I_CUTTER_REQ_STATUS: 
+        {
+            if(actState_ == AC_WAIT_FOR_COMMAND_)
+            {
+                actState_ = AC_TX_DEVICE_STATUS_;
+            }
+            else
+            {
+                PRINTF("\r\n!= AC_WAIT_FOR_COMMAND_ %d", actState_);
+                statusPending = true;
+            }
+            
+            
+            break;
+        }
+        case _I_CUTTER_REQ_VERSION: 
+        {
 
             break;
         }
-        case _I_CUTTER_REQ_VERSION: {
-
-            break;
-        }
-        default: {
+        default: 
+        {
             break;
         }
     }
@@ -842,12 +1142,35 @@ static bool receiveCutterMsg( unsigned char rxSize  )
     xfer.rxData = &uartRxBfr[0];
     xfer.dataSize = rxSize;
     
-
     result = LPUART_TransferReceiveNonBlocking( LPUART1, &cutterHandle_, &xfer, &rxBytes );
+  
+    //result = LPUART_ReadBlocking(LPUART1, uartRxBfr, rxSize);
+    
+    
+    //result = LPUART_ReadBlocking(LPUART1, &uartRxBfr[0], rxSize);
+
+    //PRINTF("result = %d\r\n", result);
+    
+    
     if( result == kStatus_LPUART_RxBusy ) {
         PRINTF("receiveCutterMsg(): Receiver is busy!\r\n" );
-    } else {
+    }
+    else if(result == kStatus_LPUART_RxIdle)
+    {
+        PRINTF("receiveCutterMsg(): Receiver is idle!!\r\n" );
+    }
+    else if(result == kStatus_Success)
+    {
+        //PRINTF("receiveCutterMsg(): Receiver Success!!\r\n" );
+        //cutterMgr_.msgReady = true;
+    }
+    else if(result == kStatus_LPUART_RxHardwareOverrun)
+    {
+        PRINTF("receiveCutterMsg(): kStatus_LPUART_RxHardwareOverrun\r\n" );
+    }
+    else {
         ready = true;
+        PRINTF("receiveCutterMsg(): No success, idle, or busy\r\n");
     }
     return ready;
 }
@@ -864,6 +1187,7 @@ static bool receiveCutterMsg( unsigned char rxSize  )
 static size_t getVersionRxMsgSize( unsigned char index )
 {
     size_t size = 0;
+    //PRINTF("\r\nversion index: %d", index);
     if( index == 0 ) 
         size = READ_VERSION0_RX_MSG_SIZE_;
     if( index == 1 ) 
@@ -896,7 +1220,6 @@ static void stuffTxBuffer( unsigned char *pMsg, unsigned char size )
     }
 }
 
-#pragma diag_suppress=Pe1422,Pa039
 /******************************************************************************/
 /*!   \fn static void buildCutterMsg( ACCCMDS cmd, ACutterMsgs *pMsg, 
                                       unsigned short arg1, unsigned short arg2 )
@@ -918,23 +1241,26 @@ static void buildCutterMsg( ACCCMDS cmd, ACutterMsgs *pMsg, unsigned short arg1,
     /* all outgoing messages */
     pMsg->header.cr             = 'C';
     
-    for( int i = 0; i < sizeof(long); i++ ) { 
-        *pChar++                = '0';
+    if( cmd == AC_CUT_ || cmd == AC_HOME_ ||cmd == AC_VERSION_ || cmd == AC_REQ_STATUS_ )
+    {
+        memcpy(pChar, "0001", 4);
+        pChar += 4;
     }
-                    
+    else
+    {
+        for( int i = 0; i < sizeof(long); i++ ) 
+        { 
+            *pChar++                = '0';
+        }
+    }
+                
     switch( cmd ) 
     {
         case AC_CUT_: {
             pMsg->header.type               = 'U';
             pMsg->header.command            = CUTTER_CUT_PAPER;
             pMsg->header.length             = PAPER_CUT_MSG_SIZE;
-            
-            /* bounds check our data */
-            if( arg1 <= MAX_DISTANCE ) {
-                hexToAscii( (unsigned char *)&pMsg->body.cut.distance, (unsigned char)arg1 ); 
-            } else {
-                PRINTF( "buildCutterMsg(): AC_CUT_ distance argument is out of bounds %d\r\n", arg1);
-            }              
+                         
             if( arg2 <= MAX_SPEED ) {
                 arg2 <<= 4;
                 hexToAscii( (unsigned char *)&pMsg->body.cut.speed, (unsigned char)arg2  ); 
@@ -1015,7 +1341,6 @@ static void buildCutterMsg( ACCCMDS cmd, ACutterMsgs *pMsg, unsigned short arg1,
         }
     }
 }
-#pragma diag_default=Pe1422,Pa039
 
 /******************************************************************************/
 /*!   \fn static void prepTransmitBfr( unsigned char *pBfr, unsigned char length )
@@ -1112,63 +1437,204 @@ static unsigned char asciiToChar( unsigned char *pChar )
 *******************************************************************************/                
 static void handleCutterMessage( CutterMgr *pMgr, unsigned char *pBfr )
 {
+#if 0
+    PRINTF("\r\ncutterMsg() - ");
+    
+    for(uint16_t rxCounter = 0; rxCounter < 100; rxCounter++)
+    {
+      PRINTF("%02X ", uartRxBfr[rxCounter]);
+    }
+    
+    
+    PRINTF("\r\n");
+    
+    uint8_t *p = uartRxBfr;
+
+    // STX 
+    PRINTF("STX        : 0x%02X\r\n", p[0]);
+
+    /* Slave ID */
+    PRINTF("Slave ID   : %c\r\n", p[1]);
+
+    /* Command */
+    PRINTF("Command    : %c\r\n", p[2]);
+
+    /* Type */
+    PRINTF("Type       : %c (%s)\r\n",
+           p[3],
+           (p[3] == 'U') ? "Update" :
+           (p[3] == 'Q') ? "Enquiry" : "Unknown");
+
+    /* CR */
+    PRINTF("CR         : %c (%s)\r\n",
+           p[4],
+           (p[4] == 'R') ? "Response" :
+           (p[4] == 'C') ? "Command" : "Unknown");
+
+    /* Status / Config word (ASCII hex) */
+    char statusStr[5] = { p[5], p[6], p[7], p[8], 0 };
+    uint16_t status = (uint16_t)strtol(statusStr, NULL, 16);
+
+    PRINTF("Status     : %s (0x%04X)\r\n", statusStr, status);
+    PRINTF("Status bits:\r\n");
+
+    /* Bit 0 */
+    PRINTF("  Bit 0  Power Fail                 : %s\r\n",
+           (status & (1 << 0)) ? "SET" : "clear");
+
+    /* Bit 1 */
+    PRINTF("  Bit 1  Message Error              : %s\r\n",
+           (status & (1 << 1)) ? "SET" : "clear");
+
+    /* Bit 2 */
+    PRINTF("  Bit 2  Reboot Flag                : %s\r\n",
+           (status & (1 << 2)) ? "SET" : "clear");
+
+    /* Bit 3 */
+    PRINTF("  Bit 3  Blade Safe                 : %s\r\n",
+           (status & (1 << 3)) ? "SET (blade home)" : "clear");
+
+    /* Bit 4�6 (unused) */
+    PRINTF("  Bit 4  Unused                     : %s\r\n",
+           (status & (1 << 4)) ? "SET" : "clear");
+    PRINTF("  Bit 5  Unused                     : %s\r\n",
+           (status & (1 << 5)) ? "SET" : "clear");
+    PRINTF("  Bit 6  Unused                     : %s\r\n",
+           (status & (1 << 6)) ? "SET" : "clear");
+
+    /* Bit 7 */
+    PRINTF("  Bit 7  Timeout Error              : %s\r\n",
+           (status & (1 << 7)) ? "SET (cut timeout)" : "clear");
+
+    /* Bit 8�11 (unused) */
+    PRINTF("  Bit 8  Unused                     : %s\r\n",
+           (status & (1 << 8)) ? "SET" : "clear");
+    PRINTF("  Bit 9  Unused                     : %s\r\n",
+           (status & (1 << 9)) ? "SET" : "clear");
+    PRINTF("  Bit 10 Unused                     : %s\r\n",
+           (status & (1 << 10)) ? "SET" : "clear");
+    PRINTF("  Bit 11 Unused                     : %s\r\n",
+           (status & (1 << 11)) ? "SET" : "clear");
+
+    /* Bit 12�13 (unused) */
+    PRINTF("  Bit 12 Unused                     : %s\r\n",
+           (status & (1 << 12)) ? "SET" : "clear");
+    PRINTF("  Bit 13 Unused                     : %s\r\n",
+           (status & (1 << 13)) ? "SET" : "clear");
+
+    /* Bit 14 */
+    PRINTF("  Bit 14 Door Open - backwards      : %s\r\n",
+           (status & (1 << 14)) ? "SET (door closed)" : "clear");
+
+    /* Bit 15 (unused) */
+    PRINTF("  Bit 15 Saddle - backwards         : %s\r\n",
+           (status & (1 << 15)) ? "SET (saddle closed)" : "clear");
+
+    /* Length */
+    char lenStr[5] = { p[9], p[10], p[11], p[12], 0 };
+    uint16_t msgLen = (uint16_t)strtol(lenStr, NULL, 16);
+
+    PRINTF("Length     : %s (%u bytes total)\r\n", lenStr, msgLen);
+
+    /* Payload (if any) */
+    uint16_t payloadLen = msgLen - 18; /* 13 header + 4 CRC + ETX */
+    if (payloadLen > 0)
+    {
+        PRINTF("Payload    : ");
+        for (uint16_t i = 0; i < payloadLen; i++)
+        {
+            uint8_t c = p[13 + i];
+            PRINTF("%c", (c >= 32 && c <= 126) ? c : '.');
+        }
+        PRINTF("\r\n");
+    }
+    else
+    {
+        PRINTF("Payload    : <none>\r\n");
+    }
+
+    /* CRC */
+    uint16_t crcIndex = msgLen - 5;
+    char crcStr[5] = {
+        p[crcIndex],
+        p[crcIndex + 1],
+        p[crcIndex + 2],
+        p[crcIndex + 3],
+        0
+    };
+
+    PRINTF("CRC        : %s\r\n", crcStr);
+
+    /* ETX */
+    PRINTF("ETX        : 0x%02X\r\n", p[msgLen - 1]);
+
+    PRINTF("-------------------------------------------\r\n");
+#endif
+  
     ACHeader header;   
     if( parseMsgHeader( &header, pBfr ) ){
+       
+        /* TFinkOyaneCutter parseMsgHeader returned true so cutter is attached */
+       cutterDetected = true;
+       
         /* index to the body of the message */
         pBfr += ( DEFAULT_MSG_SIZE_ + 1);
         switch( header.command )
         {
+            
             case 'c': {
-                PRINTF( "handleCutterMessage(): Cut c message %d\r\n", header.length );
+                //PRINTF( "handleCutterMessage(): Cut c message %d\r\n", header.length );
+                actState_ =  AC_WAIT_FOR_COMMAND_;
                 break;
             }
             case 'h': {
-                PRINTF( "handleCutterMessage(): Home message %d\r\n", header.length );
-                if( pMgr->error == AC_ERR_NONE_ ) {
-                    PRINTF( "Cutter blade is home!\r\n");
-                } else if( pMgr->error == AC_ERR_BLADE_NOT_HOME_ ) {
-                    PRINTF( "Error: Cutter blade failed to home!\r\n");
-                } else {
-                
-                }
+                //PRINTF( "handleCutterMessage(): Home h message %d\r\n", header.length );
                 break;
             }
             case 'k': {
-                PRINTF( "handleCutterMessage(): Cut k message %d\r\n", header.length );
+                //PRINTF( "handleCutterMessage(): Cut k message %d\r\n", header.length );
                 break;
             }
             case 'p': {
-                PRINTF( "handleCutterMessage(): Profile message %d\r\n", header.length );
+                //PRINTF( "handleCutterMessage(): Profile message %d\r\n", header.length );
                 break;
             }
             case 'r': {
-                PRINTF( "handleCutterMessage(): Reset message %d\r\n", header.length );
+                //PRINTF( "handleCutterMessage(): Reset message %d\r\n", header.length );
                 break;
             }
             case 's': {
-                PRINTF( "handleCutterMessage(): Status message %d\r\n", header.length ); 
+                //PRINTF( "\r\nhandleCutterMessage(): Status message %d\r\n", header.length ); 
                 showDeviceStatus( pMgr->deviceStatus );
+                actState_ =  AC_WAIT_FOR_COMMAND_;
                 break;
             }
             case 't': {
-                PRINTF( "handleCutterMessage(): Test mode message %d\r\n", header.length ); 
+                //PRINTF( "handleCutterMessage(): Test mode message %d\r\n", header.length ); 
                 break;
             }
             case 'v': {
-                PRINTF( "handleCutterMessage(): Version message %d\r\n", header.length );                
+                //PRINTF( "handleCutterMessage(): Version message %d\r\n", header.length );  
                 
                 /* parse the version message based on message length */
                 if( header.length == READ_VERSION0_RX_MSG_SIZE_ ) {
                     parseVerPoductMsg( pMgr, pBfr );
+                    //showCutterVersion( pMgr );
                 } else if( header.length == READ_VERSION1_RX_MSG_SIZE_ ) {
                     parseVerFirmNumbMsg( pMgr, pBfr );
+                    //showCutterVersion( pMgr );
                 } else if( header.length == READ_VERSION2_RX_MSG_SIZE_ ) {
                     parseVerIssueMsg( pMgr, pBfr );
+                    //showCutterVersion( pMgr );
                 } else if( header.length == READ_VERSION3_RX_MSG_SIZE_ ) {
                     parseVerDateMsg( pMgr, pBfr );
+                    //showCutterVersion( pMgr );
+                }else if( header.length == READ_VERSION4_RX_MSG_SIZE_ ) {
+                    parseVerTimeMsg( pMgr, pBfr );
                     showCutterVersion( pMgr );
-                } else {
-                    PRINTF( "handleCutterMessage(): Unknown version msg! %d\r\n", header.length );
+                }
+                else {
+                    //PRINTF( "handleCutterMessage(): Unknown version msg! %d\r\n", header.length );
                 }
                 break;
             }
@@ -1178,13 +1644,15 @@ static void handleCutterMessage( CutterMgr *pMgr, unsigned char *pBfr )
 
         }
     }
+    
     /* clear our msg flag */
     pMgr->msgReady = false;
+    
     /* finished with message, clear our message buffer */
-    memset( &uartRxBfr[0], 0xff, MAX_MESSGAE_SIZE );   
+    memset( &uartRxBfr[0], 0xff, MAX_MESSGAE_SIZE );
+    memset( &uartTxBfr[0], 0x00, MAX_MESSGAE_SIZE );
 }
 
-#pragma diag_suppress=Pe1422
 /******************************************************************************/
 /*!   \fn static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
                                      
@@ -1193,7 +1661,7 @@ static void handleCutterMessage( CutterMgr *pMgr, unsigned char *pBfr )
                
       \author
           Aaron Swift
-*******************************************************************************/   
+*******************************************************************************/                
 static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
 {   
     bool valid = false;
@@ -1207,7 +1675,8 @@ static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
     pHeader->type       = *pMsg++;    
     pHeader->cr         = *pMsg++;    
     
-    //unsigned char c = asciiToChar( pMsg++ );
+    
+#ifdef TFinkOyaneCutter
     unsigned char c = *pMsg++ - '30'; 
     *pMsg++;
     *pMsg++;
@@ -1219,6 +1688,26 @@ static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
     pHeader->config = c;
     pHeader->config <<= 12;
     pHeader->config |= x;
+#else
+    unsigned char x;
+    unsigned short i;
+    pHeader->config = 0;
+    
+    for(i = 0; i < 4; i++)
+    {
+       x  = *pMsg++; 
+       if(x > 0x40)
+          x = x - 0x37;   /* handle 'A' through 'F' */
+       else
+          x = x - 0x30;   /* handle '0' through '9' */
+       
+       pHeader->config |= x;   /* note config (transmitted message) = status (received message) */
+       if(i < 3)
+         pHeader->config <<= 4;
+    } 
+    
+    pHeader->config |= 0x8000;  /*TFinkOyaneCutterToDo! delete - test only */
+#endif
     
     parseHeaderStatus( &cutterMgr_, pHeader );
     
@@ -1230,7 +1719,6 @@ static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
     }
     return valid;
 }
-#pragma diag_default=Pe1422
 
 /******************************************************************************/
 /*!   \fn static void parseHeaderStatus( CutterMgr *pMgr, ACHeader *pHeader )
@@ -1242,16 +1730,20 @@ static bool parseMsgHeader( ACHeader *pHeader, unsigned char *pMsg )
           Aaron Swift
 *******************************************************************************/                
 static void parseHeaderStatus( CutterMgr *pMgr, ACHeader *pHeader )
-{
+{  /* TFinkOyaneCutterToDo This code sets pMgr-error to the first error it
+      encounters. Is the purpose to prioritize failures? So the most important 
+      failure is handled first? */
     /* set any errors recorded in the status */
     if( ( pHeader->config & AC_POWER_FAILURE ) == AC_POWER_FAILURE ) {
-        pMgr->error = AC_ERR_POWER_FAILURE_;    
+        pMgr->error = AC_ERR_POWER_FAILURE_; 
+        PRINTF("\r\nAC_POWER_FAILURE");
     } else {
         if( pMgr->error == AC_ERR_POWER_FAILURE_ )
             pMgr->error = AC_ERR_NONE_;
     }
     
     if( ( pHeader->config & AC_MSG_FAILURE ) == AC_MSG_FAILURE ) {
+        PRINTF("\r\nAC_MSG_FAILURE");
         if( pMgr->error == AC_ERR_NONE_ )
             pMgr->error = AC_ERR_MSG_FAILURE_;
     } else {
@@ -1259,15 +1751,19 @@ static void parseHeaderStatus( CutterMgr *pMgr, ACHeader *pHeader )
             pMgr->error = AC_ERR_NONE_;    
     }
     
+    /*
     if( ( pHeader->config & AC_BLADE_HOME ) != AC_BLADE_HOME ) {
+        //PRINTF("\r\n3");
         if( pMgr->error == AC_ERR_NONE_ )
             pMgr->error = AC_ERR_BLADE_NOT_HOME_;
     } else {
         if( pMgr->error == AC_ERR_BLADE_NOT_HOME_ )
             pMgr->error = AC_ERR_NONE_;        
     }
+    */
     
-    if( ( pHeader->config & AC_TIME_OUT_ERROR ) == AC_TIME_OUT_ERROR ) {        
+    if( ( pHeader->config & AC_TIME_OUT_ERROR ) == AC_TIME_OUT_ERROR ) { 
+        PRINTF("\r\nAC_TIME_OUT_ERROR");
         if( pMgr->error == AC_ERR_NONE_ )
             pMgr->error = AC_ERR_TIMEOUT_;
     } else {
@@ -1275,21 +1771,47 @@ static void parseHeaderStatus( CutterMgr *pMgr, ACHeader *pHeader )
             pMgr->error = AC_ERR_NONE_;            
     }
     
+    /* TFinkToDoOyaneCutter  As of 6/6/25, door closed is a '1', which is opposite of the original cutter and 
+            is opposite of AC_DOOR_OPEN */
+    /*
     if( ( pHeader->config & AC_DOOR_OPEN ) == AC_DOOR_OPEN ) {
+        //PRINTF("\r\n5");
         if( pMgr->error == AC_ERR_NONE_ )
             pMgr->error = AC_ERR_DOOR_OPEN_;
     } else {
         if( pMgr->error == AC_ERR_DOOR_OPEN_ )
             pMgr->error = AC_ERR_NONE_;                
     }
-
+    
+    if( ( pHeader->config & AC_SADDLE_OPEN ) == AC_SADDLE_OPEN ) {
+        //PRINTF("\r\n6");
+        if( pMgr->error == AC_ERR_NONE_ )
+            pMgr->error = AC_ERR_SADDLE_OPEN_;
+    } else {
+        if( pMgr->error == AC_ERR_SADDLE_OPEN_ )
+            pMgr->error = AC_ERR_NONE_;                
+    }
+    */
+    
     pMgr->deviceStatus = (unsigned short)pHeader->config;
     
     /* if we have errors then show */
-    if( pMgr->error != AC_ERR_NONE_ ) {        
-        showDeviceStatus( pMgr->deviceStatus );
-    } else {
-        PRINTF("Cutter status:  ready\r\n");    
+    if( pMgr->error != AC_ERR_NONE_ ) 
+    {  
+        PRINTF("parseHeaderStatus(): CUTTER ERROR\r\n");
+               
+        //showDeviceStatus( pMgr->deviceStatus );
+        
+        openCutterInterface( CUTTER_UART_BAUD );
+        
+        //pMgr->error = AC_ERR_NONE_;
+        
+        vTaskDelay( lightSleep );
+        //vTaskDelay( deepSleep );
+    } 
+    else 
+    {
+        //PRINTF("Cutter status:  ready\r\n");    
     }
     
     /* determine our platten type */
@@ -1370,6 +1892,24 @@ static void parseVerDateMsg( CutterMgr *pMgr, unsigned char *pMsg )
 {
     memcpy( &pMgr->version.date[0], pMsg, MAX_DATE_SIZE );     
 }
+                              
+/******************************************************************************/
+/*!   \fn static void parseVerTimeMsg( CutterMgr *pMgr, unsigned char *pMsg )
+
+      \brief
+        This function parses the time portion of the version message and 
+        updates the cutter manager. 
+      \note
+        This function assumes the message buffer has been indexed to the start 
+        of the body of the message. 
+       
+      \author
+          Chris King
+*******************************************************************************/                        
+static void parseVerTimeMsg( CutterMgr *pMgr, unsigned char *pMsg )
+{
+    memcpy( &pMgr->version.time[0], pMsg, MAX_TIME_SIZE );     
+}
         
 /******************************************************************************/
 /*!   \fn static void showDeviceStatus( unsigned short status )
@@ -1382,31 +1922,68 @@ static void parseVerDateMsg( CutterMgr *pMgr, unsigned char *pMsg )
 *******************************************************************************/                
 static void showDeviceStatus( unsigned short status )
 {
-    PRINTF("showDeviceStatus(): cutter status 0x%02x\r\n", status );
+    if(status != 0x3008)
+    {
+        PRINTF("showDeviceStatus(): cutter status 0x%02x\r\n", status );
+    }
+    
+    //PRINTF("showDeviceStatus(): cutter status 0x%02x\r\n", status );
+    
+    //PRINTF("\r\nAC %d", pMsgQHandle_);
+    
+    /*
     if( ( status & AC_POWER_FAILURE ) == AC_POWER_FAILURE ) 
+    {
         PRINTF("Cutter Error: ac power failure\r\n");
+    }
     
     if( ( status & AC_MSG_FAILURE ) == AC_MSG_FAILURE )
+    {
         PRINTF("Cutter Error: message failure\r\n");
+    }
     
     if( ( status & AC_REBOOT_FLAG ) == AC_REBOOT_FLAG ) 
+    {
         PRINTF("Cutter Warning: boot flag\r\n");
+    }
     
-    if( ( status & AC_BLADE_HOME ) == AC_BLADE_HOME ) 
+    if( ( status & AC_BLADE_HOME ) == AC_BLADE_HOME )
+    {
         PRINTF("Cutter Blade: is home\r\n");
+    }
+    else
+    {
+        PRINTF("Cutter Blade: is NOT home\r\n");
+    }
     
-    if( ( status & AC_TIME_OUT_ERROR ) == AC_TIME_OUT_ERROR ) 
+    if( ( status & AC_TIME_OUT_ERROR ) == AC_TIME_OUT_ERROR )
+    {
         PRINTF("Cutter Error: cutter timeout\r\n");
-        
-    if( ( status & PLATTEN_FULL_TYPE ) == PLATTEN_FULL_TYPE ) {
-        PRINTF("Cutter Platten Type: full\r\n");
-    } else {
-        PRINTF("Cutter Platten Type: slotted \r\n");
     }
             
-    if( ( status & AC_DOOR_OPEN ) == AC_DOOR_OPEN ) {
-        PRINTF("Cutter Error: door is open\r\n");
+    if( ( status & AC_DOOR_OPEN ) != AC_DOOR_OPEN ) 
+    {   //TFinkOyaneCutterToDo - ask rob to change bit to 1 when door is open 
+        PRINTF("Cutter door: door is closed\r\n");
     } 
+    else
+    {
+        PRINTF("Cutter Error: door is open\r\n");
+    }
+    
+    if( ( status & AC_SADDLE_OPEN ) != AC_SADDLE_OPEN ) 
+    {    // TFinkOyaneCutterToDo - ask rob to change bit to 1 when door is open 
+        PRINTF("Cutter saddle: saddle is closed\r\n");
+    } 
+    else
+    {
+        PRINTF("Cutter Error: saddle is open\r\n");
+    }
+    */
+    
+    getCutterHome();
+    getCutterSaddleInterlock();
+    getCutterDoorInterlock();
+    getCutterJammed();
 }
 
 /******************************************************************************/
@@ -1423,7 +2000,8 @@ static void showCutterVersion( CutterMgr *pMgr )
     PRINTF("Cutter product name: %s\r\n", &(pMgr->version.productName[0]) );    
     PRINTF("Cutter model: %s\r\n", &(pMgr->version.firmware[0]) );    
     PRINTF("Cutter firmware version: %s\r\n", &(pMgr->version.issueDate[0]) );    
-    PRINTF("Cutter issue date: %s\r\n", &(pMgr->version.date[0]) );    
+    PRINTF("Cutter issue date: %s\r\n", &(pMgr->version.date[0]) ); 
+    PRINTF("Cutter issue time: %s\r\n", &(pMgr->version.time[0]) );
 }
 
 /******************************************************************************/
@@ -1455,7 +2033,12 @@ static bool openCutterInterface( unsigned short baud )
     } else {
         PRINTF("openCutterInterface(): Could not open interface!\r\n" );   
     }
-    NVIC_SetPriority( LPUART1_IRQn, 5 );
+    NVIC_SetPriority( LPUART1_IRQn, 2 );
+    
+    //#define UART_RX_BFR_SIZE 128
+    
+    //LPUART_TransferStartRingBuffer(LPUART1, &cutterHandle_, uartRxBfr, UART_RX_BFR_SIZE);
+    
     return status;        
 }
 
@@ -1494,20 +2077,47 @@ void uart1Callback( LPUART_Type *base, lpuart_handle_t *pHandle,
         xSemaphoreGiveFromISR( cMutex_, &reschedule );
         
         portYIELD_FROM_ISR( reschedule );
-    } else if( status == kStatus_LPUART_RxIdle ) {
+    } 
+    if (status == kStatus_LPUART_RxIdle)
+    {
         cutterMgr_.msgReady = true;
-
-    } else if( ( status != kStatus_LPUART_TxBusy ) || 
+    }
+    else if( ( status != kStatus_LPUART_TxBusy ) || 
               ( status != kStatus_LPUART_RxBusy ) ) {
 #if 1                  
+        if( status == kLPUART_RxDataRegFullFlag )
+        {
+            PRINTF("uart1Callback() kLPUART_RxDataRegFullFlag : Error: %d!\r\n", status );
+        }        
+                  
         if( status == kStatus_LPUART_Error  )
+        {
             PRINTF("uart1Callback(): Error: %d!\r\n", status );
-        if( status == kStatus_LPUART_Error  )
-            PRINTF("uart1Callback(): Error: %d!\r\n", status );            
+        }
+          
         if( status == kStatus_LPUART_RxRingBufferOverrun  )
-            PRINTF("uart1Callback(): kStatus_LPUART_RxRingBufferOverrun: %d!\r\n", status );            
+        {
+            PRINTF("uart1Callback(): Error: %d!\r\n", status );
+        }
+        
         if( status == kStatus_LPUART_RxHardwareOverrun  )
-            PRINTF("uart1Callback(): kStatus_LPUART_RxHardwareOverrun: %d!\r\n", status );            
+        {
+            PRINTF("uart1Callback(): kStatus_LPUART_RxHardwareOverrun: %d!\r\n", status );
+            PRINTF("\r\n\r\nRESET CUTTER INTERFACE\r\n\r\n");
+            openCutterInterface( CUTTER_UART_BAUD );
+            
+            if( actState_ == AC_CUT_ || actState_ == AC_PROCESS_CUT_ || actState_ == AC_PROCESS_CUT_RESPONSE_)
+            {
+                cutPending = true;
+                actState_ = AC_WAIT_FOR_COMMAND_;
+            }
+            else if( actState_ == AC_TX_DEVICE_STATUS_ || actState_ == AC_RX_DEVICE_STATUS_ )
+            {
+                //statusPending = true;
+                actState_ = AC_WAIT_FOR_COMMAND_;
+            }
+        }
+        
         if( status == kStatus_LPUART_NoiseError  )
             PRINTF("uart1Callback(): kStatus_LPUART_NoiseError: %d!\r\n", status );            
         if( status == kStatus_LPUART_FramingError  )
@@ -1534,14 +2144,196 @@ void uart1Callback( LPUART_Type *base, lpuart_handle_t *pHandle,
 static unsigned short calcCrc16( unsigned char *pBlob, unsigned short length )
 {
     unsigned short checkSum = 0;
+    unsigned char index = 0;
     while( length-- ) {              
         /* reverse order checksum */
         checkSum = ( checkSum >> 8 )^crc16[ (unsigned char)( checkSum^ *pBlob++ ) ];    
     }
     return checkSum;       
 }
-    
+
+static uint16_t asciiHexToU16(char *ascii)
+{
+    uint16_t value = 0;
+    for(int i = 0; i < 4; i++)
+    {
+        value <<= 4;
+        if(ascii[i] >= '0' && ascii[i] <= '9')
+            value |= (ascii[i] - '0');
+        else if(ascii[i] >= 'A' && ascii[i] <= 'F')
+            value |= (ascii[i] - 'A' + 10);
+    }
+    return value;
+}
+
 bool getCutterHome( void )
 {
-    return cutterHome;
+    //PRINTF("\r\ngetCutterHome() %d", ( ( cutterMgr_.deviceStatus & AC_BLADE_HOME ) == AC_BLADE_HOME ));
+  
+    return ( ( ( cutterMgr_.deviceStatus & AC_BLADE_HOME ) == AC_BLADE_HOME ) );
 }
+                                  
+bool getCutterSaddleInterlock( void )
+{
+    //PRINTF("\r\ncutter status 0x%02x\r\n", cutterMgr_.deviceStatus );
+  
+    if(getCutterHome() == true)
+    {
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_OPEN )
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_INTERLOCKS_OPEN 0x%02x", AC_INTERLOCKS_OPEN);
+            return false;
+        }
+        
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_CLOSED )
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_INTERLOCKS_CLOSED 0x%02x", AC_INTERLOCKS_CLOSED);
+            return true;
+        }
+       
+        if(( ( ( cutterMgr_.deviceStatus & AC_SADDLE_OPEN_DOOR_CLOSED ) == AC_SADDLE_OPEN_DOOR_CLOSED ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_SADDLE_OPEN_DOOR_CLOSED");
+            return false;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN_SADDLE_CLOSED) == AC_DOOR_OPEN_SADDLE_CLOSED ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_DOOR_OPEN_SADDLE_CLOSED");
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_SADDLE_OPEN ) == AC_SADDLE_OPEN ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_SADDLE_OPEN");
+            return false;
+        }
+    }
+    else
+    {
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_OPEN_BNH )
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_INTERLOCKS_OPEN 0x%02x", AC_INTERLOCKS_OPEN_BNH );
+            return false;
+        }
+        
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_CLOSED_BNH )
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_INTERLOCKS_CLOSED 0x%02x", AC_INTERLOCKS_CLOSED_BNH );
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_SADDLE_OPEN_DOOR_CLOSED_BNH ) == AC_SADDLE_OPEN_DOOR_CLOSED_BNH ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_SADDLE_OPEN_DOOR_CLOSED");
+            return false;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN_SADDLE_CLOSED_BNH ) == AC_DOOR_OPEN_SADDLE_CLOSED_BNH ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_DOOR_OPEN_SADDLE_CLOSED");
+            return true;
+        } 
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN ) == AC_DOOR_OPEN ) ))
+        {
+            //PRINTF("\r\ngetCutterSaddleInterlock() AC_DOOR_OPEN");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool getCutterDoorInterlock( void )
+{
+    //PRINTF("\r\ncutter status 0x%02x\r\n", cutterMgr_.deviceStatus );
+  
+    if(getCutterHome() == true)
+    {
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_OPEN )
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_INTERLOCKS_OPEN 0x%02x", AC_INTERLOCKS_OPEN );
+            return false;
+        }
+        
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_CLOSED )
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_INTERLOCKS_CLOSED 0x%02x", AC_INTERLOCKS_CLOSED );
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_SADDLE_OPEN_DOOR_CLOSED ) == AC_SADDLE_OPEN_DOOR_CLOSED ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_SADDLE_OPEN_DOOR_CLOSED");
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN_SADDLE_CLOSED ) == AC_DOOR_OPEN_SADDLE_CLOSED ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_DOOR_OPEN_SADDLE_CLOSED");
+            return false;
+        } 
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN ) == AC_DOOR_OPEN ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_DOOR_OPEN");
+            return false;
+        }
+    }
+    else
+    {
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_OPEN_BNH )
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_INTERLOCKS_OPEN 0x%02x", AC_INTERLOCKS_OPEN_BNH );
+            return false;
+        }
+        
+        if( cutterMgr_.deviceStatus == AC_INTERLOCKS_CLOSED_BNH )
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_INTERLOCKS_CLOSED 0x%02x", AC_INTERLOCKS_CLOSED_BNH );
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_SADDLE_OPEN_DOOR_CLOSED_BNH ) == AC_SADDLE_OPEN_DOOR_CLOSED_BNH ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_SADDLE_OPEN_DOOR_CLOSED");
+            return true;
+        }
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN_SADDLE_CLOSED_BNH ) == AC_DOOR_OPEN_SADDLE_CLOSED_BNH ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_DOOR_OPEN_SADDLE_CLOSED");
+            return false;
+        } 
+        
+        if(( ( ( cutterMgr_.deviceStatus & AC_DOOR_OPEN ) == AC_DOOR_OPEN ) ))
+        {
+            //PRINTF("\r\ngetCutterDoorInterlock() AC_DOOR_OPEN");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool getCutterJammed( void )
+{
+    return false;
+}
+
+bool getCutterDetected( void )
+{
+    return cutterDetected;
+}
+
+uint8_t getCutterState( void )
+{
+    return actState_;
+}
+
+QueueHandle_t getCutterQHandle( void )
+{
+    return pMsgQHandle_;
+}
+    

@@ -1,0 +1,2112 @@
+###############################################################################
+#
+# IAR ELF Linker V9.32.1.338/W64 for ARM                  31/Mar/2026  15:08:35
+# Copyright 2007-2022 IAR Systems AB.
+#
+#    Output file  =
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Exe\globalScaleBootloader.out
+#    Map file     =
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\List\globalScaleBootloader.map
+#    Command line =
+#        -f
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Exe\globalScaleBootloader.out.rsp
+#        (C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board\board.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\bootTask.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board\clock_config.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\croutine.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board\dcd.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\event_groups.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\xip\evkmimxrt1024_flexspi_nor_config.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common\uart\fsl_adapter_lpuart.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_adc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_adc_etc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_aipstz.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_aoi.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\fsl_assert.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_bee.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_cache.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_clock.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_cmp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_common.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_common_arm.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\exceptions\fsl_component_exception_handling.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\list\fsl_component_generic_list.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common\fsl_component_serial_manager.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common\fsl_component_serial_port_uart.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_dcdc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_dcp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\fsl_debug_console.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_dmamux.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_enc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_enet.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_ewm.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexcan.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_camera.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_camera_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_i2c_master.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_i2s.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_i2s_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_mculcd.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_mculcd_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_spi.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_spi_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_uart.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexio_uart_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexram.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexram_allocate.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexspi.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_flexspi_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\xip\fsl_flexspi_nor_boot.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_gpc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_gpio.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_gpt.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_kpp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpi2c.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpi2c_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpi2c_freertos.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpspi.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpspi_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpspi_freertos.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpuart.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpuart_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_lpuart_freertos.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_ocotp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\osa\fsl_os_abstraction_free_rtos.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_pit.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_pmu.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_pwm.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_qtmr.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_romapi.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_rtwdog.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_sai.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_sai_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_semc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_snvs_hp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_snvs_lp.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_spdif.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_spdif_edma.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_src.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\fsl_str.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_tempmon.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_trng.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_usdhc.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_wdog.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_xbara.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers\fsl_xbarb.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\globalScale.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\MemMang\heap_4.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\list.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board\pin_mux.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\IAR\ARM_CM4F\port.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\IAR\ARM_CM4F\portasm.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\queue.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\queueManager.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\rt1024_api\spi_flash_api.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\startup\startup_MIMXRT1024.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\stream_buffer.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\MIMXRT1024\device\system_MIMXRT1024.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\systemTimer.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\tasks.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\threadManager.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\timers.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\translator.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\usb_device_ch9.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\class\usb_device_class.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\dci\usb_device_dci.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\source\usb_device_descriptor.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\ehci\usb_device_ehci.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\phy\usb_phy.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\class\usbBootloader.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\source\usbTask.o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system\vendor.o
+#        --no_out_extension -o
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Exe\globalScaleBootloader.out
+#        --redirect _Printf=_PrintfSmallNoMb --redirect _Scanf=_ScanfSmallNoMb
+#        --map
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\List\globalScaleBootloader.map
+#        --config
+#        C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\MIMXRT1024\linker\MIMXRT1024xxxxx_flexspi_nor.icf
+#        --semihosting --entry Reset_Handler --vfe --text_out locale
+#        --cpu=Cortex-M7 --fpu=VFPv5_d16)
+#
+###############################################################################
+
+*******************************************************************************
+*** RUNTIME MODEL ATTRIBUTES
+***
+
+CppFlavor       = *
+__CPP_Runtime   = 1
+__Heap_Handler  = Basic
+__SystemLibrary = DLib
+__dlib_version  = 6
+
+
+*******************************************************************************
+*** HEAP SELECTION
+***
+
+The basic heap was selected because --advanced_heap
+was not specified and the application did not appear to
+be primarily optimized for speed.
+
+
+*******************************************************************************
+*** PLACEMENT SUMMARY
+***
+
+"A0":  place at address 0x6000'2000 { ro section .intvec };
+"A1":  place at address 0x6000'0000 { section .boot_hdr.conf };
+"A2":  place at address 0x6000'1000 { section .boot_hdr.ivt };
+"A3":  place at address 0x6000'1020 { ro section .boot_hdr.boot_data };
+"A4":  place at address 0x6000'1030 { ro section .boot_hdr.dcd_data };
+"P1":  place in [from 0x6000'2000 to 0x6000'23ff] |
+                [from 0x6000'2400 to 0x6003'ffef] { ro };
+define block RW { rw };
+"P2":  place in [from 0x2020'0000 to 0x2021'ffff] { block RW };
+define block ZI { zi };
+"P3":  place in [from 0x2020'0000 to 0x2021'ffff] { block ZI };
+"P5":  place in [from 0x2000'0000 to 0x2000'fbff] { section DEFAULT_RAM0 };
+define block NCACHE_VAR { section NonCacheable, section NonCacheable.init };
+"P6":  place in [from 0x2000'0000 to 0x2000'fbff] { block NCACHE_VAR };
+define block CSTACK with size = 1K, alignment = 8 { };
+"P7":  place in [from 0x2000'fc00 to 0x2000'ffff] { block CSTACK };
+"A5":  place at address 0x6003'fff0 {
+          section VENDOR_BOOT_MAJOR, section VENDOR_BOOT_MINOR,
+          section VENDOR_BOOT_ENG };
+initialize by copy { rw, section .textrw, section CodeQuickAccess };
+keep {
+   section .boot_hdr.conf, section .boot_hdr.ivt, section .boot_hdr.boot_data,
+   section .boot_hdr.dcd_data };
+
+No sections matched the following patterns:
+
+  section .textrw          in "P8-P9"
+  section CodeQuickAccess  in block QACCESS_CODE
+  section DEFAULT_RAM0     in "P5-P6"
+
+
+  Section                Kind         Address      Size  Object
+  -------                ----         -------      ----  ------
+"P5-P6":                                         0x16b8
+  NCACHE_VAR                      0x2000'0000    0x16b8  <Block>
+    NCACHE_VAR-1                  0x2000'0000      0xf8  <Init block>
+      NonCacheable       inited   0x2000'0000       0x4  queueManager.o [12]
+      NonCacheable       inited   0x2000'0004       0x4  queueManager.o [12]
+      NonCacheable.init  inited   0x2000'0008      0x4c  translator.o [12]
+      NonCacheable.init  inited   0x2000'0054      0x14  usb_device_descriptor.o [18]
+      NonCacheable.init  inited   0x2000'0068      0x30  usb_device_descriptor.o [18]
+      NonCacheable.init  inited   0x2000'0098       0x4  usb_device_descriptor.o [18]
+      NonCacheable.init  inited   0x2000'009c      0x34  usb_device_descriptor.o [18]
+      NonCacheable.init  inited   0x2000'00d0      0x28  usb_device_descriptor.o [18]
+    NonCacheable         zero     0x2000'0800     0x700  usb_device_ehci.o [16]
+    NonCacheable         zero     0x2000'0f00     0x200  usb_device_ehci.o [16]
+    NonCacheable         zero     0x2000'1100      0xc0  usb_device_dci.o [15]
+    NonCacheable         zero     0x2000'11c0      0x20  fsl_debug_console.o [20]
+    NonCacheable         zero     0x2000'11e0      0x10  usb_device_class.o [13]
+    NonCacheable         zero     0x2000'11f0       0x8  usb_device_class.o [13]
+    NonCacheable         zero     0x2000'11f8      0x40  usbBootloader.o [13]
+    NonCacheable         zero     0x2000'1238     0x200  usbTask.o [18]
+    NonCacheable         zero     0x2000'1438      0x40  usbTask.o [18]
+    NonCacheable         zero     0x2000'1478      0x40  usbTask.o [18]
+    NonCacheable         zero     0x2000'14b8     0x200  usbTask.o [18]
+                                - 0x2000'16b8    0x16b8
+
+"P7":                                             0x400
+  CSTACK                          0x2000'fc00     0x400  <Block>
+    CSTACK               uninit   0x2000'fc00     0x400  <Block tail>
+                                - 0x2001'0000     0x400
+
+"P2-P3", part 1 of 2:                              0xcc
+  RW                              0x2020'0000      0xcc  <Block>
+    RW-1                          0x2020'0000      0xcc  <Init block>
+      .data              inited   0x2020'0000       0x4  port.o [8]
+      .data              inited   0x2020'0004       0x4  system_MIMXRT1024.o [1]
+      .data              inited   0x2020'0008       0x4  tasks.o [7]
+      .data              inited   0x2020'000c      0x18  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0024      0x10  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0034      0x24  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0058       0x8  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0060       0x8  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0068       0xc  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0074       0xc  usb_device_descriptor.o [18]
+      .data              inited   0x2020'0080       0xc  usb_device_descriptor.o [18]
+      .data              inited   0x2020'008c      0x10  usb_device_descriptor.o [18]
+      .data              inited   0x2020'009c      0x24  usbTask.o [18]
+      .data              inited   0x2020'00c0       0xc  usbTask.o [18]
+                                - 0x2020'00cc      0xcc
+
+"P2-P3", part 2 of 2:                          0x1'4730
+  ZI                              0x2020'00cc  0x1'4730  <Block>
+    .bss                 zero     0x2020'00cc      0x64  bootTask.o [12]
+    .bss                 zero     0x2020'0130       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0134       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0138       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'013c       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0140      0x20  bootTask.o [12]
+    .bss                 zero     0x2020'0160      0x10  bootTask.o [12]
+    .bss                 zero     0x2020'0170       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0174       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0178       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'017c       0x4  bootTask.o [12]
+    .bss                 zero     0x2020'0180       0x4  fsl_clock.o [6]
+    .bss                 zero     0x2020'0184       0x4  fsl_clock.o [6]
+    .bss                 zero     0x2020'0188       0x4  fsl_component_exception_handling.o [3]
+    .bss                 zero     0x2020'018c       0x4  fsl_debug_console.o [20]
+    .bss                 zero     0x2020'0190      0x80  fsl_edma.o [6]
+    .bss                 zero     0x2020'0210       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'0214       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'0218       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'021c       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'0220       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'0224       0x4  fsl_enet.o [6]
+    .bss                 zero     0x2020'0228       0xc  fsl_flexcan.o [6]
+    .bss                 zero     0x2020'0234       0x4  fsl_flexcan.o [6]
+    .bss                 zero     0x2020'0238       0x8  fsl_flexio.o [6]
+    .bss                 zero     0x2020'0240       0x8  fsl_flexio.o [6]
+    .bss                 zero     0x2020'0248       0x8  fsl_flexio.o [6]
+    .bss                 zero     0x2020'0250       0x4  fsl_flexspi.o [6]
+    .bss                 zero     0x2020'0254       0x4  fsl_flexspi.o [6]
+    .bss                 zero     0x2020'0258       0x4  fsl_lpi2c.o [6]
+    .bss                 zero     0x2020'025c      0x14  fsl_lpi2c.o [6]
+    .bss                 zero     0x2020'0270       0x4  fsl_lpi2c.o [6]
+    .bss                 zero     0x2020'0274      0x14  fsl_lpi2c.o [6]
+    .bss                 zero     0x2020'0288      0x14  fsl_lpspi.o [6]
+    .bss                 zero     0x2020'029c       0x4  fsl_lpspi.o [6]
+    .bss                 zero     0x2020'02a0       0x4  fsl_lpspi.o [6]
+    .bss                 zero     0x2020'02a4      0x24  fsl_lpuart.o [6]
+    .bss                 zero     0x2020'02c8       0x4  fsl_lpuart.o [6]
+    .bss                 zero     0x2020'02cc      0x20  fsl_sai.o [6]
+    .bss                 zero     0x2020'02ec       0x4  fsl_sai.o [6]
+    .bss                 zero     0x2020'02f0       0x4  fsl_sai.o [6]
+    .bss                 zero     0x2020'02f4       0x8  fsl_spdif.o [6]
+    .bss                 zero     0x2020'02fc       0x4  fsl_spdif.o [6]
+    .bss                 zero     0x2020'0300       0x4  fsl_spdif.o [6]
+    .bss                 zero     0x2020'0304       0xc  fsl_usdhc.o [6]
+    .bss                 zero     0x2020'0310       0x4  fsl_usdhc.o [6]
+    .bss                 zero     0x2020'0314  0x1'4000  heap_4.o [9]
+    .bss                 zero     0x2021'4314       0x8  heap_4.o [9]
+    .bss                 zero     0x2021'431c       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'4320       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'4324       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'4328       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'432c       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'4330       0x4  heap_4.o [9]
+    .bss                 zero     0x2021'4334       0x4  port.o [8]
+    .bss                 zero     0x2021'4338      0x40  queue.o [7]
+    .bss                 zero     0x2021'4378       0x4  queueManager.o [12]
+    .bss                 zero     0x2021'437c       0x4  queueManager.o [12]
+    .bss                 zero     0x2021'4380     0x200  spi_flash_api.o [11]
+    .bss                 zero     0x2021'4580       0x4  systemTimer.o [12]
+    .bss                 zero     0x2021'4584       0x4  systemTimer.o [12]
+    .bss                 zero     0x2021'4588       0x4  systemTimer.o [12]
+    .bss                 zero     0x2021'458c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4590      0x64  tasks.o [7]
+    .bss                 zero     0x2021'45f4      0x14  tasks.o [7]
+    .bss                 zero     0x2021'4608      0x14  tasks.o [7]
+    .bss                 zero     0x2021'461c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4620       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4624      0x14  tasks.o [7]
+    .bss                 zero     0x2021'4638      0x14  tasks.o [7]
+    .bss                 zero     0x2021'464c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4650      0x14  tasks.o [7]
+    .bss                 zero     0x2021'4664       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4668       0x4  tasks.o [7]
+    .bss                 zero     0x2021'466c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4670       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4674       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4678       0x4  tasks.o [7]
+    .bss                 zero     0x2021'467c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4680       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4684       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4688       0x4  tasks.o [7]
+    .bss                 zero     0x2021'468c       0x4  tasks.o [7]
+    .bss                 zero     0x2021'4690      0x14  timers.o [7]
+    .bss                 zero     0x2021'46a4      0x14  timers.o [7]
+    .bss                 zero     0x2021'46b8       0x4  timers.o [7]
+    .bss                 zero     0x2021'46bc       0x4  timers.o [7]
+    .bss                 zero     0x2021'46c0       0x4  timers.o [7]
+    .bss                 zero     0x2021'46c4       0x4  timers.o [7]
+    .bss                 zero     0x2021'46c8       0x4  timers.o [7]
+    .bss                 zero     0x2021'46cc       0x4  translator.o [12]
+    .bss                 zero     0x2021'46d0       0x4  translator.o [12]
+    .bss                 zero     0x2021'46d4       0x4  translator.o [12]
+    .bss                 zero     0x2021'46d8       0x4  translator.o [12]
+    .bss                 zero     0x2021'46dc       0x4  translator.o [12]
+    .bss                 zero     0x2021'46e0       0x4  translator.o [12]
+    .bss                 zero     0x2021'46e4      0x8c  usb_device_ehci.o [16]
+    .bss                 zero     0x2021'4770       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'4774       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'4778       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'477c       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'4780       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'4784      0x10  usbTask.o [18]
+    .bss                 zero     0x2021'4794      0x54  usbTask.o [18]
+    .bss                 zero     0x2021'47e8       0x4  usbTask.o [18]
+    .bss                 zero     0x2021'47ec       0x4  usbTask.o [18]
+    .tbss                zero     0x2021'47f0       0x4  errno.o [24]
+    .bss                 zero     0x2021'47f4       0x1  bootTask.o [12]
+    .bss                 zero     0x2021'47f5       0x1  bootTask.o [12]
+    .bss                 zero     0x2021'47f6       0x1  fsl_debug_console.o [20]
+    .bss                 zero     0x2021'47f7       0x1  port.o [8]
+    .bss                 zero     0x2021'47f8       0x1  threadManager.o [12]
+    .bss                 zero     0x2021'47f9       0x1  translator.o [12]
+    .bss                 zero     0x2021'47fa       0x1  usb_device_ehci.o [16]
+    .bss                 zero     0x2021'47fb       0x1  usbTask.o [18]
+                                - 0x2021'47fc  0x1'4730
+
+"A1":                                             0x200
+  .boot_hdr.conf         const    0x6000'0000     0x200  evkmimxrt1024_flexspi_nor_config.o [23]
+                                - 0x6000'0200     0x200
+
+"A2":                                              0x20
+  .boot_hdr.ivt          const    0x6000'1000      0x20  fsl_flexspi_nor_boot.o [23]
+                                - 0x6000'1020      0x20
+
+"A3":                                              0x10
+  .boot_hdr.boot_data    const    0x6000'1020      0x10  fsl_flexspi_nor_boot.o [23]
+                                - 0x6000'1030      0x10
+
+"A4":                                             0x3e0
+  .boot_hdr.dcd_data     const    0x6000'1030     0x3e0  dcd.o [2]
+                                - 0x6000'1410     0x3e0
+
+"A0":                                             0x400
+  .intvec                ro code  0x6000'2000     0x400  startup_MIMXRT1024.o [19]
+                                - 0x6000'2400     0x400
+
+"P1":                                            0xf9ea
+  .text                  ro code  0x6000'2400    0x167c  pin_mux.o [2]
+  .text                  ro code  0x6000'3a7c      0x18  fsl_assert.o [20]
+  .text                  ro code  0x6000'3a94     0x1e0  fsl_gpio.o [6]
+  .text                  ro code  0x6000'3c74      0x2a  fsl_xbara.o [6]
+  .rodata                const    0x6000'3c9e       0x2  fsl_clock.o [6]
+  .text                  ro code  0x6000'3ca0     0x1e0  fsl_debug_console.o [20]
+  .text                  ro code  0x6000'3e80     0x1a2  fsl_component_serial_manager.o [21]
+  .text                  ro code  0x6000'4022       0x2  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6000'4024      0xa6  ABImemcpy.o [26]
+  .rodata                const    0x6000'40ca       0x1  usbTask.o [18]
+  .text                  ro code  0x6000'40cc      0x66  ABImemset.o [26]
+  .text                  ro code  0x6000'4134     0x998  fsl_str.o [20]
+  .text                  ro code  0x6000'4acc      0x3e  fsl_component_serial_port_uart.o [21]
+  .text                  ro code  0x6000'4b0c     0x274  I64DivMod.o [26]
+  .text                  ro code  0x6000'4d80      0x9e  modf.o [25]
+  .text                  ro code  0x6000'4e20     0x514  pow64.o [25]
+  .text                  ro code  0x6000'5334      0x66  DblToS64.o [25]
+  .text                  ro code  0x6000'539c      0x54  S64ToDbl.o [25]
+  .text                  ro code  0x6000'53f0      0x36  strlen.o [26]
+  .text                  ro code  0x6000'5428     0x1b4  fsl_adapter_lpuart.o [22]
+  .text                  ro code  0x6000'55dc       0x2  I64DivZer.o [26]
+  .text                  ro code  0x6000'55e0      0x24  errno.o [24]
+  .text                  ro code  0x6000'5604      0x7c  frexp.o [25]
+  .text                  ro code  0x6000'5680     0x2c0  iar_Exp64.o [25]
+  .text                  ro code  0x6000'5940     0x4d0  fsl_lpuart.o [6]
+  .text                  ro code  0x6000'5e10       0x4  tp_nothreads.o [24]
+  .text                  ro code  0x6000'5e14      0xf0  ldexp.o [25]
+  .text                  ro code  0x6000'5f04    0x11b0  usb_device_ehci.o [16]
+  .text                  ro code  0x6000'70b4     0x6b6  usb_device_dci.o [15]
+  .text                  ro code  0x6000'776c      0x3c  fsl_os_abstraction_free_rtos.o [5]
+  .text                  ro code  0x6000'77a8     0x224  port.o [8]
+  .text                  ro code  0x6000'79cc      0x34  port.o [8]
+  CODE                   ro code  0x6000'7a00      0xb0  portasm.o [8]
+  .text                  ro code  0x6000'7ab0     0x9c4  tasks.o [7]
+  .text                  ro code  0x6000'8474     0x298  heap_4.o [9]
+  .text                  ro code  0x6000'870c      0x98  list.o [7]
+  .text                  ro code  0x6000'87a4     0x50c  timers.o [7]
+  .text                  ro code  0x6000'8cb0     0x894  queue.o [7]
+  .text                  ro code  0x6000'9544     0x948  usb_device_ch9.o [14]
+  .text                  ro code  0x6000'9e8c     0x3d4  usb_device_class.o [13]
+  .text                  ro code  0x6000'a260     0x6f8  translator.o [12]
+  .text                  ro code  0x6000'a958      0x9c  queueManager.o [12]
+  .text                  ro code  0x6000'a9f4     0x692  bootTask.o [12]
+  .text                  ro code  0x6000'b088     0x104  vendor.o [12]
+  .text                  ro code  0x6000'b18c     0x16c  spi_flash_api.o [11]
+  .text                  ro code  0x6000'b2f8     0x2dc  threadManager.o [12]
+  .text                  ro code  0x6000'b5d4       0xc  memcpy.o [26]
+  .text                  ro code  0x6000'b5e0      0x3c  fsl_romapi.o [6]
+  .text                  ro code  0x6000'b61c     0x480  fsl_clock.o [6]
+  .text                  ro code  0x6000'ba9c     0x10c  systemTimer.o [12]
+  .text                  ro code  0x6000'bba8     0x624  usbTask.o [18]
+  .text                  ro code  0x6000'c1cc      0x64  fsl_common_arm.o [6]
+  .text                  ro code  0x6000'c230     0x63c  usbBootloader.o [13]
+  .text                  ro code  0x6000'c86c     0x148  usb_phy.o [17]
+  .text                  ro code  0x6000'c9b4     0x264  usb_device_descriptor.o [18]
+  .text                  ro code  0x6000'cc18     0x668  clock_config.o [2]
+  .text                  ro code  0x6000'd280     0x48c  fsl_component_exception_handling.o [3]
+  .text                  ro code  0x6000'd70c     0x474  fsl_edma.o [6]
+  .rodata                const    0x6000'db80     0x420  pow64.o [25]
+  .text                  ro code  0x6000'dfa0     0x370  board.o [2]
+  .text                  ro code  0x6000'e310     0x1b4  system_MIMXRT1024.o [1]
+  .text                  ro code  0x6000'e4c4       0x2  system_MIMXRT1024.o [1]
+  .rodata                const    0x6000'e4c8     0x1a0  fsl_component_exception_handling.o [3]
+  .text                  ro code  0x6000'e668     0x148  fsl_sai.o [6]
+  .text                  ro code  0x6000'e7b0     0x130  fsl_enet.o [6]
+  .text                  ro code  0x6000'e8e0      0xf4  fsl_lpspi.o [6]
+  .text                  ro code  0x6000'e9d4      0xa2  packbits_init.o [26]
+  .text                  ro code  0x6000'ea76       0x6  abort.o [24]
+  .text                  ro code  0x6000'ea7c      0x14  exit.o [27]
+  .text                  ro code  0x6000'ea90      0x94  fsl_lpi2c.o [6]
+  .rodata                const    0x6000'eb24      0x80  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'eba4      0x80  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'ec24      0x7c  fsl_component_exception_handling.o [3]
+  .text                  ro code  0x6000'eca0      0x70  fsl_flexcan.o [6]
+  .rodata                const    0x6000'ed10      0x64  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6000'ed74      0x64  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'edd8      0x60  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'ee38      0x60  fsl_component_exception_handling.o [3]
+  .text                  ro code  0x6000'ee98      0x58  fsl_flexio.o [6]
+  .rodata                const    0x6000'eef0      0x54  fsl_common_arm.o [6]
+  .rodata                const    0x6000'ef44      0x50  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'ef94      0x50  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'efe4      0x50  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f034      0x50  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f084      0x50  fsl_flexcan.o [6]
+  .rodata                const    0x6000'f0d4      0x50  fsl_lpuart.o [6]
+  .rodata                const    0x6000'f124      0x4c  clock_config.o [2]
+  .rodata                const    0x6000'f170      0x4c  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6000'f1bc      0x4c  fsl_clock.o [6]
+  .rodata                const    0x6000'f208      0x4c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f254      0x4c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f2a0      0x4c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f2ec      0x4c  fsl_edma.o [6]
+  .rodata                const    0x6000'f338      0x4c  fsl_enet.o [6]
+  .rodata                const    0x6000'f384      0x4c  fsl_gpio.o [6]
+  .rodata                const    0x6000'f3d0      0x4c  fsl_gpio.o [6]
+  .rodata                const    0x6000'f41c      0x4c  fsl_lpspi.o [6]
+  .rodata                const    0x6000'f468      0x4c  fsl_lpuart.o [6]
+  .rodata                const    0x6000'f4b4      0x4c  fsl_sai.o [6]
+  .rodata                const    0x6000'f500      0x4c  pin_mux.o [2]
+  .rodata                const    0x6000'f54c      0x4c  queueManager.o [12]
+  .rodata                const    0x6000'f598      0x4c  threadManager.o [12]
+  .rodata                const    0x6000'f5e4      0x48  board.o [2]
+  .rodata                const    0x6000'f62c      0x48  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f674      0x48  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f6bc      0x48  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f704      0x48  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f74c      0x48  queueManager.o [12]
+  .text                  ro code  0x6000'f794      0x48  fsl_spdif.o [6]
+  .rodata                const    0x6000'f7dc      0x40  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f81c      0x40  fsl_lpuart.o [6]
+  .rodata                const    0x6000'f85c      0x40  queueManager.o [12]
+  .rodata                const    0x6000'f89c      0x40  usbTask.o [18]
+  .rodata                const    0x6000'f8dc      0x40  usbTask.o [18]
+  .rodata                const    0x6000'f91c      0x3c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f958      0x3c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f994      0x3c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'f9d0      0x3c  fsl_enet.o [6]
+  .rodata                const    0x6000'fa0c      0x3c  fsl_gpio.o [6]
+  .rodata                const    0x6000'fa48      0x3c  threadManager.o [12]
+  .rodata                const    0x6000'fa84      0x3c  threadManager.o [12]
+  .rodata                const    0x6000'fac0      0x3c  translator.o [12]
+  .rodata                const    0x6000'fafc      0x3c  usbTask.o [18]
+  .text                  ro code  0x6000'fb38      0x3c  fsl_usdhc.o [6]
+  .rodata                const    0x6000'fb74      0x38  bootTask.o [12]
+  .rodata                const    0x6000'fbac      0x38  bootTask.o [12]
+  .rodata                const    0x6000'fbe4      0x38  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'fc1c      0x38  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'fc54      0x38  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'fc8c      0x38  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'fcc4      0x38  threadManager.o [12]
+  .rodata                const    0x6000'fcfc      0x38  threadManager.o [12]
+  .rodata                const    0x6000'fd34      0x38  translator.o [12]
+  .rodata                const    0x6000'fd6c      0x38  translator.o [12]
+  .rodata                const    0x6000'fda4      0x38  translator.o [12]
+  .rodata                const    0x6000'fddc      0x38  translator.o [12]
+  .rodata                const    0x6000'fe14      0x38  translator.o [12]
+  .rodata                const    0x6000'fe4c      0x38  translator.o [12]
+  .rodata                const    0x6000'fe84      0x38  translator.o [12]
+  .text                  ro code  0x6000'febc      0x38  zero_init3.o [26]
+  .rodata                const    0x6000'fef4      0x34  bootTask.o [12]
+  .rodata                const    0x6000'ff28      0x34  bootTask.o [12]
+  .rodata                const    0x6000'ff5c      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'ff90      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'ffc4      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6000'fff8      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'002c      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0060      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0094      0x34  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'00c8      0x34  threadManager.o [12]
+  .rodata                const    0x6001'00fc      0x34  threadManager.o [12]
+  .rodata                const    0x6001'0130      0x34  translator.o [12]
+  .rodata                const    0x6001'0164      0x34  translator.o [12]
+  .rodata                const    0x6001'0198      0x34  translator.o [12]
+  .rodata                const    0x6001'01cc      0x34  translator.o [12]
+  .rodata                const    0x6001'0200      0x34  translator.o [12]
+  .rodata                const    0x6001'0234      0x34  translator.o [12]
+  .rodata                const    0x6001'0268      0x34  translator.o [12]
+  .rodata                const    0x6001'029c      0x34  translator.o [12]
+  .rodata                const    0x6001'02d0      0x34  usb_device_ch9.o [14]
+  .rodata                const    0x6001'0304      0x34  usbTask.o [18]
+  .rodata                const    0x6001'0338      0x34  usbTask.o [18]
+  .rodata                const    0x6001'036c      0x34  usbTask.o [18]
+  .rodata                const    0x6001'03a0      0x30  bootTask.o [12]
+  .rodata                const    0x6001'03d0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0400      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0430      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0460      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0490      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'04c0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'04f0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0520      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0550      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0580      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'05b0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'05e0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0610      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0640      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0670      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'06a0      0x30  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'06d0      0x30  threadManager.o [12]
+  .rodata                const    0x6001'0700      0x30  threadManager.o [12]
+  .rodata                const    0x6001'0730      0x30  threadManager.o [12]
+  .rodata                const    0x6001'0760      0x30  threadManager.o [12]
+  .rodata                const    0x6001'0790      0x30  threadManager.o [12]
+  .rodata                const    0x6001'07c0      0x30  translator.o [12]
+  .rodata                const    0x6001'07f0      0x30  translator.o [12]
+  .rodata                const    0x6001'0820      0x30  translator.o [12]
+  .rodata                const    0x6001'0850      0x30  translator.o [12]
+  .rodata                const    0x6001'0880      0x30  translator.o [12]
+  .rodata                const    0x6001'08b0      0x30  translator.o [12]
+  .rodata                const    0x6001'08e0      0x30  usbTask.o [18]
+  .rodata                const    0x6001'0910      0x2c  bootTask.o [12]
+  .rodata                const    0x6001'093c      0x2c  bootTask.o [12]
+  .rodata                const    0x6001'0968      0x2c  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'0994      0x2c  fsl_assert.o [20]
+  .rodata                const    0x6001'09c0      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'09ec      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0a18      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0a44      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0a70      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0a9c      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0ac8      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0af4      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0b20      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0b4c      0x2c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0b78      0x2c  systemTimer.o [12]
+  .rodata                const    0x6001'0ba4      0x2c  translator.o [12]
+  .rodata                const    0x6001'0bd0      0x2c  usbTask.o [18]
+  .rodata                const    0x6001'0bfc      0x2c  usbTask.o [18]
+  .rodata                const    0x6001'0c28      0x28  bootTask.o [12]
+  .rodata                const    0x6001'0c50      0x28  bootTask.o [12]
+  .rodata                const    0x6001'0c78      0x28  bootTask.o [12]
+  .rodata                const    0x6001'0ca0      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0cc8      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0cf0      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0d18      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0d40      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0d68      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0d90      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0db8      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0de0      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0e08      0x28  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'0e30      0x28  fsl_lpuart.o [6]
+  .rodata                const    0x6001'0e58      0x28  fsl_lpuart.o [6]
+  .rodata                const    0x6001'0e80      0x28  systemTimer.o [12]
+  .rodata                const    0x6001'0ea8      0x28  systemTimer.o [12]
+  .rodata                const    0x6001'0ed0      0x28  threadManager.o [12]
+  .rodata                const    0x6001'0ef8      0x28  translator.o [12]
+  .rodata                const    0x6001'0f20      0x28  translator.o [12]
+  .rodata                const    0x6001'0f48      0x28  translator.o [12]
+  .rodata                const    0x6001'0f70      0x28  translator.o [12]
+  .rodata                const    0x6001'0f98      0x28  usbTask.o [18]
+  .rodata                const    0x6001'0fc0      0x28  usbTask.o [18]
+  .text                  ro code  0x6001'0fe8      0x28  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1010      0x28  data_init.o [26]
+  .rodata                const    0x6001'1038      0x24  bootTask.o [12]
+  .rodata                const    0x6001'105c      0x24  bootTask.o [12]
+  .rodata                const    0x6001'1080      0x24  bootTask.o [12]
+  .rodata                const    0x6001'10a4      0x24  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'10c8      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'10ec      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1110      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1134      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1158      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'117c      0x24  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'11a0      0x24  fsl_lpuart.o [6]
+  .rodata                const    0x6001'11c4      0x24  spi_flash_api.o [11]
+  .rodata                const    0x6001'11e8      0x24  threadManager.o [12]
+  .rodata                const    0x6001'120c      0x24  translator.o [12]
+  .rodata                const    0x6001'1230      0x24  translator.o [12]
+  .rodata                const    0x6001'1254      0x24  usbTask.o [18]
+  .text                  ro code  0x6001'1278      0x24  fsl_flexspi.o [6]
+  .text                  ro code  0x6001'129c      0x22  fpinit_M.o [25]
+  .iar.init_table        const    0x6001'12c0      0x50  - Linker created -
+  .rodata                const    0x6001'1310      0x20  bootTask.o [12]
+  .rodata                const    0x6001'1330      0x20  bootTask.o [12]
+  .rodata                const    0x6001'1350      0x20  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1370      0x20  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1390      0x20  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'13b0      0x20  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'13d0      0x20  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'13f0      0x20  spi_flash_api.o [11]
+  .rodata                const    0x6001'1410      0x20  usb_device_class.o [13]
+  .rodata                const    0x6001'1430      0x20  usbTask.o [18]
+  .text                  ro code  0x6001'1450      0x1e  cmain.o [26]
+  .text                  ro code  0x6001'146e       0x4  low_level_init.o [24]
+  .text                  ro code  0x6001'1472      0x18  globalScale.o [10]
+  .text                  ro code  0x6001'148a       0x4  exit.o [24]
+  .text                  ro code  0x6001'1490       0xa  cexit.o [26]
+  .rodata                const    0x6001'149c      0x1c  board.o [2]
+  .rodata                const    0x6001'14b8      0x1c  bootTask.o [12]
+  .rodata                const    0x6001'14d4      0x1c  bootTask.o [12]
+  .rodata                const    0x6001'14f0      0x1c  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'150c      0x1c  fsl_edma.o [6]
+  .rodata                const    0x6001'1528      0x1c  fsl_lpuart.o [6]
+  .rodata                const    0x6001'1544      0x1c  spi_flash_api.o [11]
+  .rodata                const    0x6001'1560      0x1c  threadManager.o [12]
+  .text                  ro code  0x6001'157c      0x1c  cstartup_M.o [26]
+  .rodata                const    0x6001'1598      0x18  board.o [2]
+  .rodata                const    0x6001'15b0      0x18  bootTask.o [12]
+  .rodata                const    0x6001'15c8      0x18  bootTask.o [12]
+  .rodata                const    0x6001'15e0      0x18  bootTask.o [12]
+  .rodata                const    0x6001'15f8      0x18  bootTask.o [12]
+  .rodata                const    0x6001'1610      0x18  clock_config.o [2]
+  .rodata                const    0x6001'1628      0x18  fsl_common_arm.o [6]
+  .rodata                const    0x6001'1640      0x18  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1658      0x18  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1670      0x18  fsl_flexcan.o [6]
+  .rodata                const    0x6001'1688      0x18  fsl_flexcan.o [6]
+  .rodata                const    0x6001'16a0      0x18  fsl_gpio.o [6]
+  .rodata                const    0x6001'16b8      0x18  fsl_lpspi.o [6]
+  .rodata                const    0x6001'16d0      0x18  fsl_lpspi.o [6]
+  .rodata                const    0x6001'16e8      0x18  fsl_lpspi.o [6]
+  .rodata                const    0x6001'1700      0x18  fsl_lpspi.o [6]
+  .rodata                const    0x6001'1718      0x18  fsl_sai.o [6]
+  .rodata                const    0x6001'1730      0x18  fsl_sai.o [6]
+  .rodata                const    0x6001'1748      0x18  pin_mux.o [2]
+  .rodata                const    0x6001'1760      0x18  threadManager.o [12]
+  .rodata                const    0x6001'1778      0x18  threadManager.o [12]
+  .rodata                const    0x6001'1790      0x18  usb_device_dci.o [15]
+  .rodata                const    0x6001'17a8      0x14  bootTask.o [12]
+  .rodata                const    0x6001'17bc      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'17d0      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'17e4      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'17f8      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'180c      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1820      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1834      0x14  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1848      0x14  fsl_lpuart.o [6]
+  .rodata                const    0x6001'185c      0x14  threadManager.o [12]
+  .rodata                const    0x6001'1870      0x14  threadManager.o [12]
+  .rodata                const    0x6001'1884      0x14  threadManager.o [12]
+  .rodata                const    0x6001'1898      0x14  threadManager.o [12]
+  .rodata                const    0x6001'18ac      0x14  threadManager.o [12]
+  .rodata                const    0x6001'18c0      0x10  clock_config.o [2]
+  .rodata                const    0x6001'18d0      0x10  fsl_clock.o [6]
+  .rodata                const    0x6001'18e0      0x10  fsl_clock.o [6]
+  .rodata                const    0x6001'18f0      0x10  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1900      0x10  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1910      0x10  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1920      0x10  fsl_debug_console.o [20]
+  .rodata                const    0x6001'1930      0x10  fsl_gpio.o [6]
+  .rodata                const    0x6001'1940      0x10  fsl_lpuart.o [6]
+  .rodata                const    0x6001'1950      0x10  pin_mux.o [2]
+  .rodata                const    0x6001'1960      0x10  translator.o [12]
+  .rodata                const    0x6001'1970       0xc  bootTask.o [12]
+  .rodata                const    0x6001'197c       0xc  bootTask.o [12]
+  .rodata                const    0x6001'1988       0xc  bootTask.o [12]
+  .rodata                const    0x6001'1994       0xc  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'19a0       0xc  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'19ac       0xc  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'19b8       0xc  fsl_adapter_lpuart.o [22]
+  .rodata                const    0x6001'19c4       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'19d0       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'19dc       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'19e8       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'19f4       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a00       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a0c       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a18       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a24       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a30       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a3c       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a48       0xc  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1a54       0xc  fsl_edma.o [6]
+  .rodata                const    0x6001'1a60       0xc  fsl_gpio.o [6]
+  .rodata                const    0x6001'1a6c       0xc  fsl_gpio.o [6]
+  .rodata                const    0x6001'1a78       0xc  fsl_lpuart.o [6]
+  .rodata                const    0x6001'1a84       0xc  fsl_lpuart.o [6]
+  .rodata                const    0x6001'1a90       0xc  fsl_usdhc.o [6]
+  .rodata                const    0x6001'1a9c       0xc  systemTimer.o [12]
+  .rodata                const    0x6001'1aa8       0xc  threadManager.o [12]
+  .rodata                const    0x6001'1ab4       0xc  translator.o [12]
+  .rodata                const    0x6001'1ac0       0x8  board.o [2]
+  .rodata                const    0x6001'1ac8       0x8  clock_config.o [2]
+  .rodata                const    0x6001'1ad0       0x8  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1ad8       0x8  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1ae0       0x8  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1ae8       0x8  fsl_component_exception_handling.o [3]
+  .rodata                const    0x6001'1af0       0x8  tasks.o [7]
+  .rodata                const    0x6001'1af8       0x8  timers.o [7]
+  .rodata                const    0x6001'1b00       0x8  timers.o [7]
+  .rodata                const    0x6001'1b08       0x8  usb_phy.o [17]
+  .rodata                const    0x6001'1b10       0x8  usb_phy.o [17]
+  .rodata                const    0x6001'1b18       0x8  usbTask.o [18]
+  .text                  ro code  0x6001'1b20       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b28       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b30       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b38       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b40       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b48       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b50       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b58       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b60       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b68       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b70       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b78       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b80       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b88       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b90       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1b98       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1ba0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1ba8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bb0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bb8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bc0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bc8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bd0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bd8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1be0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1be8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bf0       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1bf8       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c00       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c08       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c10       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c18       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c20       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c28       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c30       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c38       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c40       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c48       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c50       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c58       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c60       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c68       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c70       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c78       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c80       0x8  startup_MIMXRT1024.o [19]
+  .text                  ro code  0x6001'1c88       0x8  startup_MIMXRT1024.o [19]
+  .rodata                const    0x6001'1c90       0x4  fsl_enet.o [6]
+  .rodata                const    0x6001'1c94       0x4  heap_4.o [9]
+  .rodata                const    0x6001'1c98       0x4  pin_mux.o [2]
+  .rodata                const    0x6001'1c9c       0x4  port.o [8]
+  .rodata                const    0x6001'1ca0       0x4  systemTimer.o [12]
+  .rodata                const    0x6001'1ca4       0x4  usb_device_ehci.o [16]
+  .rodata                const    0x6001'1ca8       0x4  usbTask.o [18]
+  .text                  ro code  0x6001'1cac       0x4  startup_MIMXRT1024.o [19]
+  .rodata                const    0x6001'1cb0       0x0  zero_init3.o [26]
+  .rodata                const    0x6001'1cb0       0x0  packbits_init.o [26]
+  Initializer bytes      const    0x6001'1cb0      0xa6  <for NCACHE_VAR-1>
+  Initializer bytes      const    0x6001'1d56      0x94  <for RW-1>
+                                - 0x6001'1dea    0xf9ea
+
+"A5":                                               0x3
+  VENDOR_BOOT_MAJOR      const    0x6003'fff0       0x1  vendor.o [12]
+  VENDOR_BOOT_MINOR      const    0x6003'fff1       0x1  vendor.o [12]
+  VENDOR_BOOT_ENG        const    0x6003'fff2       0x1  vendor.o [12]
+                                - 0x6003'fff3       0x3
+
+Unused ranges:
+
+         From           To      Size
+         ----           --      ----
+  0x2000'16b8  0x2000'fbff    0xe548
+  0x2021'47fc  0x2021'ffff    0xb804
+  0x6001'1dea  0x6003'ffef  0x2'e206
+
+
+*******************************************************************************
+*** INIT TABLE
+***
+
+          Address      Size
+          -------      ----
+Zero (__iar_zero_init3)
+    2 destination ranges, total size 0x1'55e8:
+          0x2000'0800     0xeb8
+          0x2020'00cc  0x1'4730
+
+Copy/packbits (__iar_packbits_init3)
+    1 source range, total size 0x94 (72% of destination):
+          0x6001'1d56      0x94
+    1 destination range, total size 0xcc:
+          0x2020'0000      0xcc
+
+Copy/packbits (__iar_packbits_init3)
+    1 source range, total size 0xa6 (66% of destination):
+          0x6001'1cb0      0xa6
+    1 destination range, total size 0xf8:
+          0x2000'0000      0xf8
+
+
+
+*******************************************************************************
+*** MODULE SUMMARY
+***
+
+    Module                              ro code  ro data  rw data
+    ------                              -------  -------  -------
+command line/config:
+    -------------------------------------------------------------
+    Total:
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\MIMXRT1024\device: [1]
+    system_MIMXRT1024.o                     438        3        4
+    -------------------------------------------------------------
+    Total:                                  438        3        4
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board: [2]
+    board.o                                 880      132
+    clock_config.o                        1'640      124
+    dcd.o                                            992
+    pin_mux.o                             5'756      120
+    -------------------------------------------------------------
+    Total:                                8'276    1'368
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\exceptions: [3]
+    fsl_component_exception_handling.o    1'164    5'180        4
+    -------------------------------------------------------------
+    Total:                                1'164    5'180        4
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\list: [4]
+    -------------------------------------------------------------
+    Total:
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\osa: [5]
+    fsl_os_abstraction_free_rtos.o           60
+    -------------------------------------------------------------
+    Total:                                   60
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers: [6]
+    fsl_clock.o                           1'152      110        8
+    fsl_common_arm.o                        100      108
+    fsl_edma.o                            1'140      116      128
+    fsl_enet.o                              304      140       24
+    fsl_flexcan.o                           112      128       16
+    fsl_flexio.o                             88                24
+    fsl_flexspi.o                            36                 8
+    fsl_gpio.o                              480      276
+    fsl_lpi2c.o                             148                48
+    fsl_lpspi.o                             244      172       28
+    fsl_lpuart.o                          1'232      424       40
+    fsl_romapi.o                             60
+    fsl_sai.o                               328      124       40
+    fsl_spdif.o                              72                16
+    fsl_usdhc.o                              60       12       16
+    fsl_xbara.o                              42
+    -------------------------------------------------------------
+    Total:                                5'598    1'610      396
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel: [7]
+    list.o                                  152
+    queue.o                               2'196                64
+    tasks.o                               2'500       11      264
+    timers.o                              1'292       16       60
+    -------------------------------------------------------------
+    Total:                                6'140       27      388
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\IAR\ARM_CM4F: [8]
+    port.o                                  600        6        9
+    portasm.o                               176
+    -------------------------------------------------------------
+    Total:                                  776        6        9
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\MemMang: [9]
+    heap_4.o                                664        4   81'952
+    -------------------------------------------------------------
+    Total:                                  664        4   81'952
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source: [10]
+    globalScale.o                            24
+    -------------------------------------------------------------
+    Total:                                   24
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\rt1024_api: [11]
+    spi_flash_api.o                         364       96      512
+    -------------------------------------------------------------
+    Total:                                  364       96      512
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system: [12]
+    bootTask.o                            1'682      852      182
+    queueManager.o                          156      217       16
+    systemTimer.o                           268      140       12
+    threadManager.o                         732      916        1
+    translator.o                          1'784    1'511      101
+    vendor.o                                260        3
+    -------------------------------------------------------------
+    Total:                                4'882    3'639      312
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\class: [13]
+    usbBootloader.o                       1'596                64
+    usb_device_class.o                      980       32       24
+    -------------------------------------------------------------
+    Total:                                2'576       32       88
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source: [14]
+    usb_device_ch9.o                      2'376       52
+    -------------------------------------------------------------
+    Total:                                2'376       52
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\dci: [15]
+    usb_device_dci.o                      1'718       24      192
+    -------------------------------------------------------------
+    Total:                                1'718       24      192
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\ehci: [16]
+    usb_device_ehci.o                     4'528        4    2'445
+    -------------------------------------------------------------
+    Total:                                4'528        4    2'445
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\phy: [17]
+    usb_phy.o                               328       16
+    -------------------------------------------------------------
+    Total:                                  328       16
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\source: [18]
+    usbTask.o                             1'572      676    1'329
+    usb_device_descriptor.o                 612      215      308
+    -------------------------------------------------------------
+    Total:                                2'184      891    1'637
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\startup: [19]
+    startup_MIMXRT1024.o                  1'438
+    -------------------------------------------------------------
+    Total:                                1'438
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities: [20]
+    fsl_assert.o                             24       44
+    fsl_debug_console.o                     480       16       37
+    fsl_str.o                             2'456
+    -------------------------------------------------------------
+    Total:                                2'960       60       37
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common: [21]
+    fsl_component_serial_manager.o          418
+    fsl_component_serial_port_uart.o         62
+    -------------------------------------------------------------
+    Total:                                  480
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common\uart: [22]
+    fsl_adapter_lpuart.o                    436      304
+    -------------------------------------------------------------
+    Total:                                  436      304
+
+C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\xip: [23]
+    evkmimxrt1024_flexspi_nor_config.o               512
+    fsl_flexspi_nor_boot.o                            48
+    -------------------------------------------------------------
+    Total:                                           560
+
+dl7M_tln.a: [24]
+    abort.o                                   6
+    errno.o                                  36                 4
+    exit.o                                    4
+    low_level_init.o                          4
+    tp_nothreads.o                            4
+    -------------------------------------------------------------
+    Total:                                   54                 4
+
+m7M_tlv.a: [25]
+    DblToS64.o                              102
+    S64ToDbl.o                               84
+    fpinit_M.o                               34
+    frexp.o                                 124
+    iar_Exp64.o                             704
+    ldexp.o                                 240
+    modf.o                                  158
+    pow64.o                               1'300    1'056
+    -------------------------------------------------------------
+    Total:                                2'746    1'056
+
+rt7M_tl.a: [26]
+    ABImemcpy.o                             166
+    ABImemset.o                             102
+    I64DivMod.o                             628
+    I64DivZer.o                               2
+    cexit.o                                  10
+    cmain.o                                  30
+    cstartup_M.o                             28
+    data_init.o                              40
+    memcpy.o                                 12
+    packbits_init.o                         162
+    strlen.o                                 54
+    zero_init3.o                             56
+    -------------------------------------------------------------
+    Total:                                1'290
+
+shb_l.a: [27]
+    exit.o                                   20
+    -------------------------------------------------------------
+    Total:                                   20
+
+    Gaps                                     19        6    1'800
+    Linker created                                    80    1'024
+-----------------------------------------------------------------
+    Grand Total:                         51'539   15'018   90'804
+
+
+*******************************************************************************
+*** ENTRY LIST
+***
+
+Entry                       Address      Size  Type      Object
+-----                       -------      ----  ----      ------
+.iar.init_table$$Base   0x6001'12c0             --   Gb  - Linker created -
+.iar.init_table$$Limit  0x6001'1310             --   Gb  - Linker created -
+?main                   0x6001'1451            Code  Gb  cmain.o [26]
+ACMP1_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ACMP2_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ACMP3_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ACMP4_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC1_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC2_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC_ETC_ERROR_IRQ_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC_ETC_IRQ0_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC_ETC_IRQ1_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ADC_ETC_IRQ2_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ARM_MPU_Disable         0x6000'dfbd      0x1a  Code  Lc  board.o [2]
+ARM_MPU_Enable          0x6000'dfa1      0x1c  Code  Lc  board.o [2]
+BEE_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+BOARD_BootClockRUN      0x6000'ce07     0x382  Code  Gb  clock_config.o [2]
+BOARD_ConfigMPU         0x6000'e08d     0x1f0  Code  Gb  board.o [2]
+BOARD_DebugConsoleSrcFreq
+                        0x6000'e03d      0x3a  Code  Gb  board.o [2]
+BOARD_InitBootClocks    0x6000'cdff       0x8  Code  Gb  clock_config.o [2]
+BOARD_InitBootPins      0x6000'2551      0x80  Code  Gb  pin_mux.o [2]
+BOARD_InitDebugConsole  0x6000'e077      0x16  Code  Gb  board.o [2]
+BOARD_InitPins          0x6000'262d    0x11fa  Code  Gb  pin_mux.o [2]
+BusFault_Handler        0x6000'd5eb       0x8  Code  Gb  fsl_component_exception_handling.o [3]
+CAN1_DriverIRQHandler   0x6000'eca1      0x2a  Code  Gb  fsl_flexcan.o [6]
+CAN1_IRQHandler         0x6001'1c29            Code  Wk  startup_MIMXRT1024.o [19]
+CAN2_DriverIRQHandler   0x6000'eccb      0x2a  Code  Gb  fsl_flexcan.o [6]
+CAN2_IRQHandler         0x6001'1c31            Code  Wk  startup_MIMXRT1024.o [19]
+CCM_1_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+CCM_2_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+CLOCK_ControlGate       0x6000'ccfb      0x46  Code  Lc  clock_config.o [2]
+CLOCK_ControlGate       0x6000'3aab      0x40  Code  Lc  fsl_gpio.o [6]
+CLOCK_ControlGate       0x6000'5957      0x46  Code  Lc  fsl_lpuart.o [6]
+CLOCK_ControlGate       0x6000'24d3      0x40  Code  Lc  pin_mux.o [2]
+CLOCK_DeinitAudioPll    0x6000'b7ab       0xc  Code  Gb  fsl_clock.o [6]
+CLOCK_DisableClock      0x6000'cd41       0xc  Code  Lc  clock_config.o [2]
+CLOCK_DisableClock      0x6000'59a9       0xc  Code  Lc  fsl_lpuart.o [6]
+CLOCK_EnableClock       0x6000'3aeb       0xc  Code  Lc  fsl_gpio.o [6]
+CLOCK_EnableClock       0x6000'599d       0xc  Code  Lc  fsl_lpuart.o [6]
+CLOCK_EnableClock       0x6000'2513       0xc  Code  Lc  pin_mux.o [2]
+CLOCK_EnableUsbhs0Clock
+                        0x6000'b6e5      0x40  Code  Gb  fsl_clock.o [6]
+CLOCK_EnableUsbhs0PhyPllClock
+                        0x6000'b725      0x46  Code  Gb  fsl_clock.o [6]
+CLOCK_EnableUsbhs0PhyPllClock::g_ccmConfigUsbPll
+                        0x6000'3c9e       0x2  Data  Lc  fsl_clock.o [6]
+CLOCK_GetDiv            0x6000'e001      0x2a  Code  Lc  board.o [2]
+CLOCK_GetMux            0x6000'dfd7      0x2a  Code  Lc  board.o [2]
+CLOCK_GetOscFreq        0x6000'e02b      0x12  Code  Lc  board.o [2]
+CLOCK_GetOscFreq        0x6000'b61d      0x18  Code  Lc  fsl_clock.o [6]
+CLOCK_GetPllBypassRefClk
+                        0x6000'b65b      0x1c  Code  Lc  fsl_clock.o [6]
+CLOCK_GetPllFreq        0x6000'b815     0x198  Code  Gb  fsl_clock.o [6]
+CLOCK_GetPllFreq::enetRefClkFreq
+                        0x6001'18e0      0x10  Data  Lc  fsl_clock.o [6]
+CLOCK_GetSysPfdFreq     0x6000'b9ad      0x5e  Code  Gb  fsl_clock.o [6]
+CLOCK_InitEnetPll       0x6000'b7b7      0x5e  Code  Gb  fsl_clock.o [6]
+CLOCK_InitExternalClk   0x6000'b677      0x46  Code  Gb  fsl_clock.o [6]
+CLOCK_InitRcOsc24M      0x6000'b6d7       0xe  Code  Gb  fsl_clock.o [6]
+CLOCK_InitUsb1Pll       0x6000'b76b      0x40  Code  Gb  fsl_clock.o [6]
+CLOCK_IsPllBypassed     0x6000'b635      0x10  Code  Lc  fsl_clock.o [6]
+CLOCK_IsPllEnabled      0x6000'b645      0x16  Code  Lc  fsl_clock.o [6]
+CLOCK_SetDiv            0x6000'cc95      0x66  Code  Lc  clock_config.o [2]
+CLOCK_SetDiv            0x6000'2475      0x5e  Code  Lc  pin_mux.o [2]
+CLOCK_SetMux            0x6000'cc2f      0x66  Code  Lc  clock_config.o [2]
+CLOCK_SetMux            0x6000'2417      0x5e  Code  Lc  pin_mux.o [2]
+CLOCK_SetPllBypass      0x6000'cd5d      0x26  Code  Lc  clock_config.o [2]
+CLOCK_SetRtcXtalFreq    0x6000'cd55       0x8  Code  Lc  clock_config.o [2]
+CLOCK_SetXtalFreq       0x6000'cd4d       0x8  Code  Lc  clock_config.o [2]
+CLOCK_SwitchOsc         0x6000'b6bd      0x1a  Code  Gb  fsl_clock.o [6]
+CORE_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+CSTACK$$Base            0x2000'fc00             --   Gb  - Linker created -
+CSTACK$$Limit           0x2001'0000             --   Gb  - Linker created -
+CSU_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+CTI0_ERROR_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+CTI1_ERROR_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ConvertFloatRadixNumToString
+                        0x6000'4611     0x170  Code  Lc  fsl_str.o [20]
+ConvertRadixNumToString
+                        0x6000'4507     0x10a  Code  Lc  fsl_str.o [20]
+DCDC_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+DCP_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+DCP_VMI_IRQHandler      0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+DMA0_DMA16_DriverIRQHandler
+                        0x6000'd84b      0x36  Code  Gb  fsl_edma.o [6]
+DMA0_DMA16_IRQHandler   0x6001'1b21            Code  Wk  startup_MIMXRT1024.o [19]
+DMA10_DMA26_DriverIRQHandler
+                        0x6000'da43      0x32  Code  Gb  fsl_edma.o [6]
+DMA10_DMA26_IRQHandler  0x6001'1b71            Code  Wk  startup_MIMXRT1024.o [19]
+DMA11_DMA27_DriverIRQHandler
+                        0x6000'da75      0x32  Code  Gb  fsl_edma.o [6]
+DMA11_DMA27_IRQHandler  0x6001'1b79            Code  Wk  startup_MIMXRT1024.o [19]
+DMA12_DMA28_DriverIRQHandler
+                        0x6000'daa7      0x32  Code  Gb  fsl_edma.o [6]
+DMA12_DMA28_IRQHandler  0x6001'1b81            Code  Wk  startup_MIMXRT1024.o [19]
+DMA13_DMA29_DriverIRQHandler
+                        0x6000'dad9      0x32  Code  Gb  fsl_edma.o [6]
+DMA13_DMA29_IRQHandler  0x6001'1b89            Code  Wk  startup_MIMXRT1024.o [19]
+DMA14_DMA30_DriverIRQHandler
+                        0x6000'db0b      0x32  Code  Gb  fsl_edma.o [6]
+DMA14_DMA30_IRQHandler  0x6001'1b91            Code  Wk  startup_MIMXRT1024.o [19]
+DMA15_DMA31_DriverIRQHandler
+                        0x6000'db3d      0x32  Code  Gb  fsl_edma.o [6]
+DMA15_DMA31_IRQHandler  0x6001'1b99            Code  Wk  startup_MIMXRT1024.o [19]
+DMA1_DMA17_DriverIRQHandler
+                        0x6000'd881      0x32  Code  Gb  fsl_edma.o [6]
+DMA1_DMA17_IRQHandler   0x6001'1b29            Code  Wk  startup_MIMXRT1024.o [19]
+DMA2_DMA18_DriverIRQHandler
+                        0x6000'd8b3      0x32  Code  Gb  fsl_edma.o [6]
+DMA2_DMA18_IRQHandler   0x6001'1b31            Code  Wk  startup_MIMXRT1024.o [19]
+DMA3_DMA19_DriverIRQHandler
+                        0x6000'd8e5      0x32  Code  Gb  fsl_edma.o [6]
+DMA3_DMA19_IRQHandler   0x6001'1b39            Code  Wk  startup_MIMXRT1024.o [19]
+DMA4_DMA20_DriverIRQHandler
+                        0x6000'd917      0x32  Code  Gb  fsl_edma.o [6]
+DMA4_DMA20_IRQHandler   0x6001'1b41            Code  Wk  startup_MIMXRT1024.o [19]
+DMA5_DMA21_DriverIRQHandler
+                        0x6000'd949      0x32  Code  Gb  fsl_edma.o [6]
+DMA5_DMA21_IRQHandler   0x6001'1b49            Code  Wk  startup_MIMXRT1024.o [19]
+DMA6_DMA22_DriverIRQHandler
+                        0x6000'd97b      0x32  Code  Gb  fsl_edma.o [6]
+DMA6_DMA22_IRQHandler   0x6001'1b51            Code  Wk  startup_MIMXRT1024.o [19]
+DMA7_DMA23_DriverIRQHandler
+                        0x6000'd9ad      0x32  Code  Gb  fsl_edma.o [6]
+DMA7_DMA23_IRQHandler   0x6001'1b59            Code  Wk  startup_MIMXRT1024.o [19]
+DMA8_DMA24_DriverIRQHandler
+                        0x6000'd9df      0x32  Code  Gb  fsl_edma.o [6]
+DMA8_DMA24_IRQHandler   0x6001'1b61            Code  Wk  startup_MIMXRT1024.o [19]
+DMA9_DMA25_DriverIRQHandler
+                        0x6000'da11      0x32  Code  Gb  fsl_edma.o [6]
+DMA9_DMA25_IRQHandler   0x6001'1b69            Code  Wk  startup_MIMXRT1024.o [19]
+DMA_ERROR_DriverIRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+DMA_ERROR_IRQHandler    0x6001'1ba1            Code  Wk  startup_MIMXRT1024.o [19]
+DbgConsole_Deinit       0x6000'3de5      0x42  Code  Gb  fsl_debug_console.o [20]
+DbgConsole_Init         0x6000'3d13      0xd2  Code  Gb  fsl_debug_console.o [20]
+DbgConsole_PrintCallback
+                        0x6000'3cd5      0x3e  Code  Lc  fsl_debug_console.o [20]
+DbgConsole_Printf       0x6000'3e27      0x40  Code  Gb  fsl_debug_console.o [20]
+DbgConsole_SendDataReliable
+                        0x6000'3ca1      0x34  Code  Gb  fsl_debug_console.o [20]
+DebugMon_Handler        0x6000'4023            Code  Wk  startup_MIMXRT1024.o [19]
+DefaultISR              0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+DelayLoop               0x6000'c1cd       0xa  Code  Lc  fsl_common_arm.o [6]
+DisableGlobalIRQ        0x6000'3e81       0x8  Code  Lc  fsl_component_serial_manager.o [21]
+EDMA_GetChannelStatusFlags
+                        0x6000'd70d      0x46  Code  Gb  fsl_edma.o [6]
+EDMA_HandleIRQ          0x6000'd75d      0xec  Code  Gb  fsl_edma.o [6]
+ENC1_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ENC2_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+ENET_1588_Timer_DriverIRQHandler
+                        0x6000'e8b1       0xe  Code  Gb  fsl_enet.o [6]
+ENET_1588_Timer_IRQHandler
+                        0x6001'1c89            Code  Wk  startup_MIMXRT1024.o [19]
+ENET_CommonFrame0IRQHandler
+                        0x6000'e7f1      0x8c  Code  Gb  fsl_enet.o [6]
+ENET_DriverIRQHandler   0x6000'e8a3       0xe  Code  Gb  fsl_enet.o [6]
+ENET_GetInstance        0x6000'e7b1      0x32  Code  Gb  fsl_enet.o [6]
+ENET_IRQHandler         0x6001'1c81            Code  Wk  startup_MIMXRT1024.o [19]
+ENET_Ptp1588IRQHandler  0x6000'e87d      0x26  Code  Gb  fsl_enet.o [6]
+EWM_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+EXCEPTION_ConfigurableFaultStatusRegisterPrint
+                        0x6000'd281     0x10c  Code  Lc  fsl_component_exception_handling.o [3]
+EXCEPTION_CopyToStack   0x6000'd575      0x5e  Code  Lc  fsl_component_exception_handling.o [3]
+EXCEPTION_DataPrint     0x6000'd5fb      0x12  Code  Gb  fsl_component_exception_handling.o [3]
+EXCEPTION_HardFaultRegisterPrint
+                        0x6000'd3bb      0x64  Code  Lc  fsl_component_exception_handling.o [3]
+EXCEPTION_HardFaultStatusRegisterPrint
+                        0x6000'd38d      0x2e  Code  Lc  fsl_component_exception_handling.o [3]
+EXCEPTION_StackFramePrint
+                        0x6000'd41f     0x154  Code  Lc  fsl_component_exception_handling.o [3]
+EnableGlobalIRQ         0x6000'3e89       0x6  Code  Lc  fsl_component_serial_manager.o [21]
+EnableIRQ               0x6000'bbef      0x1e  Code  Lc  usbTask.o [18]
+FLEXIO1_DriverIRQHandler
+                        0x6000'eee9       0x8  Code  Gb  fsl_flexio.o [6]
+FLEXIO1_IRQHandler      0x6001'1c61            Code  Wk  startup_MIMXRT1024.o [19]
+FLEXIO_CommonIRQHandler
+                        0x6000'ee99      0x42  Code  Lc  fsl_flexio.o [6]
+FLEXRAM_IRQHandler      0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+FLEXSPI_DriverIRQHandler
+                        0x6001'1279      0x14  Code  Gb  fsl_flexspi.o [6]
+FLEXSPI_IRQHandler      0x6001'1c69            Code  Wk  startup_MIMXRT1024.o [19]
+FLEXSPI_NorFlash_GetConfig
+                        0x6000'b18d      0xa0  Code  Gb  spi_flash_api.o [11]
+GPC_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_Combined_0_15_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_Combined_16_31_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT0_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT1_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT2_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT3_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT4_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT5_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT6_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO1_INT7_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO2_Combined_0_15_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO2_Combined_16_31_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO3_Combined_0_15_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO3_Combined_16_31_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO5_Combined_0_15_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO5_Combined_16_31_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPIO_GetInstance        0x6000'3b01      0x2c  Code  Lc  fsl_gpio.o [6]
+GPIO_PinInit            0x6000'3b2d      0x62  Code  Gb  fsl_gpio.o [6]
+GPIO_PinRead            0x6000'b2f9      0x26  Code  Lc  threadManager.o [12]
+GPIO_PinSetInterruptConfig
+                        0x6000'3be9      0x8c  Code  Gb  fsl_gpio.o [6]
+GPIO_PinWrite           0x6000'3b8f      0x38  Code  Gb  fsl_gpio.o [6]
+GPIO_ReadPinInput       0x6000'b31f       0x8  Code  Lc  threadManager.o [12]
+GPIO_SetPinInterruptConfig
+                        0x6000'3af7       0xa  Code  Lc  fsl_gpio.o [6]
+GPIO_WritePinOutput     0x6000'2547       0xa  Code  Lc  pin_mux.o [2]
+GPIO_WritePinOutput     0x6000'ba9d       0xa  Code  Lc  systemTimer.o [12]
+GPR_IRQ_IRQHandler      0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPT1_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+GPT2_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+HAL_UartDeinit          0x6000'553d      0x28  Code  Gb  fsl_adapter_lpuart.o [22]
+HAL_UartGetStatus       0x6000'5429      0x10  Code  Lc  fsl_adapter_lpuart.o [22]
+HAL_UartInit            0x6000'54c5      0x78  Code  Gb  fsl_adapter_lpuart.o [22]
+HAL_UartInitCommon      0x6000'5439      0x8c  Code  Lc  fsl_adapter_lpuart.o [22]
+HAL_UartSendBlocking    0x6000'5565      0x58  Code  Gb  fsl_adapter_lpuart.o [22]
+HardFault_Handler       0x6000'd5db       0x8  Code  Gb  fsl_component_exception_handling.o [3]
+IOMUXC_EnableMode       0x6000'cd83      0x1c  Code  Lc  clock_config.o [2]
+IOMUXC_MQSConfig        0x6000'cddf      0x20  Code  Lc  clock_config.o [2]
+IOMUXC_SetPinConfig     0x6000'253b       0xc  Code  Lc  pin_mux.o [2]
+IOMUXC_SetPinMux        0x6000'251f      0x1c  Code  Lc  pin_mux.o [2]
+IOMUXC_SetSaiMClkClockSource
+                        0x6000'cd9f      0x40  Code  Lc  clock_config.o [2]
+KPP_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+LPI2C1_DriverIRQHandler
+                        0x6000'ead3       0xc  Code  Gb  fsl_lpi2c.o [6]
+LPI2C1_IRQHandler       0x6001'1be9            Code  Wk  startup_MIMXRT1024.o [19]
+LPI2C2_DriverIRQHandler
+                        0x6000'eadf       0xc  Code  Gb  fsl_lpi2c.o [6]
+LPI2C2_IRQHandler       0x6001'1bf1            Code  Wk  startup_MIMXRT1024.o [19]
+LPI2C3_DriverIRQHandler
+                        0x6000'eaeb       0xc  Code  Gb  fsl_lpi2c.o [6]
+LPI2C3_IRQHandler       0x6001'1bf9            Code  Wk  startup_MIMXRT1024.o [19]
+LPI2C4_DriverIRQHandler
+                        0x6000'eaf7       0xc  Code  Gb  fsl_lpi2c.o [6]
+LPI2C4_IRQHandler       0x6001'1c01            Code  Wk  startup_MIMXRT1024.o [19]
+LPI2C_CommonIRQHandler  0x6000'ea91      0x42  Code  Lc  fsl_lpi2c.o [6]
+LPSPI1_DriverIRQHandler
+                        0x6000'e915      0x24  Code  Gb  fsl_lpspi.o [6]
+LPSPI1_IRQHandler       0x6001'1c09            Code  Wk  startup_MIMXRT1024.o [19]
+LPSPI2_DriverIRQHandler
+                        0x6000'e939      0x24  Code  Gb  fsl_lpspi.o [6]
+LPSPI2_IRQHandler       0x6001'1c11            Code  Wk  startup_MIMXRT1024.o [19]
+LPSPI3_DriverIRQHandler
+                        0x6000'e95d      0x24  Code  Gb  fsl_lpspi.o [6]
+LPSPI3_IRQHandler       0x6001'1c19            Code  Wk  startup_MIMXRT1024.o [19]
+LPSPI4_DriverIRQHandler
+                        0x6000'e981      0x24  Code  Gb  fsl_lpspi.o [6]
+LPSPI4_IRQHandler       0x6001'1c21            Code  Wk  startup_MIMXRT1024.o [19]
+LPSPI_CommonIRQHandler  0x6000'e8e9      0x2c  Code  Lc  fsl_lpspi.o [6]
+LPSPI_IsMaster          0x6000'e8e1       0x8  Code  Lc  fsl_lpspi.o [6]
+LPUART1_DriverIRQHandler
+                        0x6000'5d45      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART1_IRQHandler      0x6001'1ba9            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART2_DriverIRQHandler
+                        0x6000'5d59      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART2_IRQHandler      0x6001'1bb1            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART3_DriverIRQHandler
+                        0x6000'5d71      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART3_IRQHandler      0x6001'1bb9            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART4_DriverIRQHandler
+                        0x6000'5d85      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART4_IRQHandler      0x6001'1bc1            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART5_DriverIRQHandler
+                        0x6000'5d99      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART5_IRQHandler      0x6001'1bc9            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART6_DriverIRQHandler
+                        0x6000'5dad      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART6_IRQHandler      0x6001'1bd1            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART7_DriverIRQHandler
+                        0x6000'5dc1      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART7_IRQHandler      0x6001'1bd9            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART8_DriverIRQHandler
+                        0x6000'5dd5      0x14  Code  Gb  fsl_lpuart.o [6]
+LPUART8_IRQHandler      0x6001'1be1            Code  Wk  startup_MIMXRT1024.o [19]
+LPUART_Deinit           0x6000'5c31      0x38  Code  Gb  fsl_lpuart.o [6]
+LPUART_GetDefaultConfig
+                        0x6000'5c69      0x68  Code  Gb  fsl_lpuart.o [6]
+LPUART_GetInstance      0x6000'59c7      0x32  Code  Gb  fsl_lpuart.o [6]
+LPUART_Init             0x6000'59f9     0x238  Code  Gb  fsl_lpuart.o [6]
+LPUART_SoftwareReset    0x6000'59b5      0x12  Code  Lc  fsl_lpuart.o [6]
+LPUART_WriteBlocking    0x6000'5cd1      0x3e  Code  Gb  fsl_lpuart.o [6]
+MemManage_Handler       0x6000'd5e3       0x8  Code  Gb  fsl_component_exception_handling.o [3]
+NCACHE_VAR$$Base        0x2000'0000             --   Gb  - Linker created -
+NCACHE_VAR$$Limit       0x2000'16b8             --   Gb  - Linker created -
+NMI_Handler             0x6000'd5d3       0x8  Code  Gb  fsl_component_exception_handling.o [3]
+NVIC_ClearAllPendingIRQs
+                        0x6000'aa2b      0x36  Code  Lc  bootTask.o [12]
+NVIC_ClearEnabledIRQs   0x6000'a9f5      0x36  Code  Lc  bootTask.o [12]
+OSA_EnterCritical       0x6000'776d      0x26  Code  Gb  fsl_os_abstraction_free_rtos.o [5]
+OSA_ExitCritical        0x6000'7793      0x16  Code  Gb  fsl_os_abstraction_free_rtos.o [5]
+PIT_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PMU_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM1_0_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM1_1_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM1_2_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM1_3_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM1_FAULT_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM2_0_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM2_1_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM2_2_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM2_3_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PWM2_FAULT_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+PendSV_Handler          0x6000'7a01            Code  Gb  portasm.o [8]
+PrintCheckFlags         0x6000'4443      0x56  Code  Lc  fsl_str.o [20]
+PrintGetLengthFlag      0x6000'4499      0x46  Code  Lc  fsl_str.o [20]
+PrintGetPrecision       0x6000'41b9      0x74  Code  Lc  fsl_str.o [20]
+PrintGetRadixFromobpu   0x6000'44df      0x28  Code  Lc  fsl_str.o [20]
+PrintGetSignChar        0x6000'4135      0x30  Code  Lc  fsl_str.o [20]
+PrintGetWidth           0x6000'4165      0x54  Code  Lc  fsl_str.o [20]
+PrintIsdi               0x6000'4253      0x16  Code  Lc  fsl_str.o [20]
+PrintIsfF               0x6000'4417      0x16  Code  Lc  fsl_str.o [20]
+PrintIsobpu             0x6000'422d      0x26  Code  Lc  fsl_str.o [20]
+PrintIsxX               0x6000'442d      0x16  Code  Lc  fsl_str.o [20]
+PrintOutputdifFobpu     0x6000'4269      0xae  Code  Lc  fsl_str.o [20]
+PrintOutputxX           0x6000'4317     0x100  Code  Lc  fsl_str.o [20]
+ROM_FLEXSPI_NorFlash_ClearCache
+                        0x6000'b60b       0xe  Code  Gb  fsl_romapi.o [6]
+ROM_FLEXSPI_NorFlash_Erase
+                        0x6000'b5fd       0xe  Code  Gb  fsl_romapi.o [6]
+ROM_FLEXSPI_NorFlash_Init
+                        0x6000'b5e1       0xe  Code  Gb  fsl_romapi.o [6]
+ROM_FLEXSPI_NorFlash_ProgramPage
+                        0x6000'b5ef       0xe  Code  Gb  fsl_romapi.o [6]
+RTWDOG_IRQHandler       0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+RW$$Base                0x2020'0000             --   Gb  - Linker created -
+RW$$Limit               0x2020'00cc             --   Gb  - Linker created -
+Region$$Table$$Base     0x6001'12c0             --   Gb  - Linker created -
+Region$$Table$$Limit    0x6001'1310             --   Gb  - Linker created -
+Reserved102_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved103_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved107_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved115_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved123_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved128_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved143_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved144_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved147_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved148_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved151_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved152_IRQHandler  0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved56_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved58_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved59_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved60_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved68_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved70_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved78_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved82_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved86_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reserved87_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+Reset_Handler           0x6001'0fe9            Code  Wk  startup_MIMXRT1024.o [19]
+SAI1_DriverIRQHandler   0x6000'e693      0x52  Code  Gb  fsl_sai.o [6]
+SAI1_IRQHandler         0x6001'1c39            Code  Wk  startup_MIMXRT1024.o [19]
+SAI2_DriverIRQHandler   0x6000'e6e5      0x52  Code  Gb  fsl_sai.o [6]
+SAI2_IRQHandler         0x6001'1c41            Code  Wk  startup_MIMXRT1024.o [19]
+SAI3_RX_DriverIRQHandler
+                        0x6000'e761      0x2a  Code  Gb  fsl_sai.o [6]
+SAI3_RX_IRQHandler      0x6001'1c49            Code  Wk  startup_MIMXRT1024.o [19]
+SAI3_TX_DriverIRQHandler
+                        0x6000'e737      0x2a  Code  Gb  fsl_sai.o [6]
+SAI3_TX_IRQHandler      0x6001'1c51            Code  Wk  startup_MIMXRT1024.o [19]
+SAI_RxGetEnabledInterruptStatus
+                        0x6000'e669      0x16  Code  Lc  fsl_sai.o [6]
+SAI_TxGetEnabledInterruptStatus
+                        0x6000'e67f      0x14  Code  Lc  fsl_sai.o [6]
+SDK_DelayAtLeastUs      0x6000'c1d7      0x4c  Code  Gb  fsl_common_arm.o [6]
+SEMC_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+SNVS_HP_WRAPPER_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+SNVS_HP_WRAPPER_TZ_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+SNVS_LP_HP_WRAPPER_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+SPDIF_DriverIRQHandler  0x6000'f795      0x36  Code  Gb  fsl_spdif.o [6]
+SPDIF_IRQHandler        0x6001'1c59            Code  Wk  startup_MIMXRT1024.o [19]
+SRC_IRQHandler          0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+SVC_Handler             0x6000'7a59            Code  Gb  portasm.o [8]
+SerialManager_CloseReadHandle
+                        0x6000'3feb      0x30  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_CloseWriteHandle
+                        0x6000'3f77      0x32  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_Deinit    0x6000'3f0b      0x3e  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_Init      0x6000'3ecf      0x3c  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_OpenReadHandle
+                        0x6000'3fa9      0x42  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_OpenWriteHandle
+                        0x6000'3f49      0x2e  Code  Gb  fsl_component_serial_manager.o [21]
+SerialManager_StartWriting
+                        0x6000'3e8f      0x1e  Code  Lc  fsl_component_serial_manager.o [21]
+SerialManager_Write     0x6000'3ead      0x22  Code  Lc  fsl_component_serial_manager.o [21]
+SerialManager_WriteBlocking
+                        0x6000'401b       0x8  Code  Gb  fsl_component_serial_manager.o [21]
+Serial_UartDeinit       0x6000'4ae9       0xe  Code  Gb  fsl_component_serial_port_uart.o [21]
+Serial_UartInit         0x6000'4acd      0x1c  Code  Gb  fsl_component_serial_port_uart.o [21]
+Serial_UartWrite        0x6000'4af7      0x14  Code  Gb  fsl_component_serial_port_uart.o [21]
+StrFormatPrintf         0x6000'4789     0x33c  Code  Gb  fsl_str.o [20]
+SysTick_Handler         0x6000'7929      0x28  Code  Gb  port.o [8]
+SystemCoreClock         0x2020'0004       0x4  Data  Gb  system_MIMXRT1024.o [1]
+SystemInit              0x6000'e311     0x170  Code  Gb  system_MIMXRT1024.o [1]
+SystemInitHook          0x6000'e4c5       0x2  Code  Wk  system_MIMXRT1024.o [1]
+TEMP_LOW_HIGH_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+TEMP_PANIC_IRQHandler   0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+TMR1_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+TMR2_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+TRNG_IRQHandler         0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+USB_DeviceAllocateHandle
+                        0x6000'70b5      0x82  Code  Lc  usb_device_dci.o [15]
+USB_DeviceBootloaderAllocateHandle
+                        0x6000'c231      0x24  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderBulkOut
+                        0x6000'c2d1      0x34  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderCallback
+                        0x6000'c03b      0xfa  Code  Gb  usbTask.o [18]
+USB_DeviceBootloaderEndpointsDeinit
+                        0x6000'c495      0x38  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderEndpointsInit
+                        0x6000'c305     0x17e  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderFreeHandle
+                        0x6000'c255      0x14  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderInit
+                        0x6000'be7d      0x60  Code  Gb  usbTask.o [18]
+USB_DeviceBootloaderInterruptIn
+                        0x6000'c269      0x34  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderInterruptOut
+                        0x6000'c29d      0x34  Code  Lc  usbBootloader.o [13]
+USB_DeviceBootloaderSetConfigure
+                        0x6000'bedd      0x38  Code  Gb  usbTask.o [18]
+USB_DeviceCallback      0x6000'bf15     0x126  Code  Lc  usbTask.o [18]
+USB_DeviceCh9GetConfiguration
+                        0x6000'990d      0x64  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9GetDescriptor
+                        0x6000'977b     0x192  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9GetInterface
+                        0x6000'99ef      0x70  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9GetStatus  0x6000'9545      0xd0  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9SetAddress
+                        0x6000'96e3      0x98  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9SetClearFeature
+                        0x6000'9615      0xce  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9SetConfiguration
+                        0x6000'9971      0x7e  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9SetInterface
+                        0x6000'9a5f      0x5e  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceCh9SynchFrame
+                        0x6000'9abd      0x6a  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceClassAllocateHandle
+                        0x6000'9e8d      0x80  Code  Lc  usb_device_class.o [13]
+USB_DeviceClassCallback
+                        0x6000'a0e7      0x44  Code  Gb  usb_device_class.o [13]
+USB_DeviceClassEvent    0x6000'a033      0xb4  Code  Gb  usb_device_class.o [13]
+USB_DeviceClassFreeHandle
+                        0x6000'9f0d      0x58  Code  Lc  usb_device_class.o [13]
+USB_DeviceClassGetDeviceHandle
+                        0x6000'9feb      0x48  Code  Gb  usb_device_class.o [13]
+USB_DeviceClassGetHandleByControllerId
+                        0x6000'9f65      0x4c  Code  Lc  usb_device_class.o [13]
+USB_DeviceClassGetHandleByDeviceHandle
+                        0x6000'9fb1      0x3a  Code  Lc  usb_device_class.o [13]
+USB_DeviceClassGetSpeed
+                        0x6000'a239      0x28  Code  Gb  usb_device_class.o [13]
+USB_DeviceClassInit     0x6000'a12b      0xfc  Code  Gb  usb_device_class.o [13]
+USB_DeviceClockInit     0x6000'be29      0x2c  Code  Gb  usbTask.o [18]
+USB_DeviceControl       0x6000'724d      0x24  Code  Lc  usb_device_dci.o [15]
+USB_DeviceControlCallback
+                        0x6000'9b8d     0x288  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceControlCallbackFeedback
+                        0x6000'9b27      0x66  Code  Lc  usb_device_ch9.o [14]
+USB_DeviceControlPipeInit
+                        0x6000'9e15      0x6e  Code  Gb  usb_device_ch9.o [14]
+USB_DeviceDeinit        0x6000'74e1      0x28  Code  Gb  usb_device_dci.o [15]
+USB_DeviceDeinitEndpoint
+                        0x6000'75af      0x6e  Code  Gb  usb_device_dci.o [15]
+USB_DeviceEhciCancel    0x6000'6d2f     0x1ac  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciCancelControlPipe
+                        0x6000'63f5     0x110  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciControl   0x6000'6edb     0x192  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciDeinit    0x6000'6c95      0x64  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciEndpointDeinit
+                        0x6000'61ab      0xc8  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciEndpointInit
+                        0x6000'5fcd     0x1de  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciEndpointStall
+                        0x6000'6273      0x6e  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciEndpointUnstall
+                        0x6000'62e1      0x98  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciFillSetupBuffer
+                        0x6000'6379      0x7c  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciInit      0x6000'6bd1      0xc4  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciInterruptPortChange
+                        0x6000'680f      0x52  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciInterruptReset
+                        0x6000'6861      0x64  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciInterruptSof
+                        0x6000'68c5       0x2  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciInterruptTokenDone
+                        0x6000'6505     0x30a  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciIsrFunction
+                        0x6000'706d      0x48  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciRecv      0x6000'6d23       0xc  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciSend      0x6000'6d11      0x12  Code  Gb  usb_device_ehci.o [16]
+USB_DeviceEhciSetDefaultState
+                        0x6000'5f05      0xc8  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceEhciTransfer  0x6000'68c7     0x2d0  Code  Lc  usb_device_ehci.o [16]
+USB_DeviceFreeHandle    0x6000'7137      0x1e  Code  Lc  usb_device_dci.o [15]
+USB_DeviceGetConfigurationDescriptor
+                        0x6000'c9c1      0x16  Code  Gb  usb_device_descriptor.o [18]
+USB_DeviceGetControllerInterface
+                        0x6000'7155      0x1c  Code  Lc  usb_device_dci.o [15]
+USB_DeviceGetDeviceDescriptor
+                        0x6000'c9b5       0xc  Code  Gb  usb_device_descriptor.o [18]
+USB_DeviceGetStatus     0x6000'7655      0x74  Code  Gb  usb_device_dci.o [15]
+USB_DeviceGetStringDescriptor
+                        0x6000'c9d7      0x7e  Code  Gb  usb_device_descriptor.o [18]
+USB_DeviceHBBootloaderDeinit
+                        0x6000'c771      0x20  Code  Gb  usbBootloader.o [13]
+USB_DeviceHBBootloaderEvent
+                        0x6000'c4cd     0x250  Code  Gb  usbBootloader.o [13]
+USB_DeviceHBBootloaderInit
+                        0x6000'c71d      0x54  Code  Gb  usbBootloader.o [13]
+USB_DeviceHBBootloaderRecv
+                        0x6000'c7db      0x92  Code  Gb  usbBootloader.o [13]
+USB_DeviceHBBootloaderSend
+                        0x6000'c791      0x4a  Code  Gb  usbBootloader.o [13]
+USB_DeviceInit          0x6000'7399     0x130  Code  Gb  usb_device_dci.o [15]
+USB_DeviceInitEndpoint  0x6000'7527      0x88  Code  Gb  usb_device_dci.o [15]
+USB_DeviceIsrEnable     0x6000'be55      0x28  Code  Gb  usbTask.o [18]
+USB_DeviceNotification  0x6000'72cf      0xa4  Code  Lc  usb_device_dci.o [15]
+USB_DeviceNotificationTrigger
+                        0x6000'7373      0x26  Code  Gb  usb_device_dci.o [15]
+USB_DeviceRecvRequest   0x6000'751b       0xc  Code  Gb  usb_device_dci.o [15]
+USB_DeviceResetNotification
+                        0x6000'7271      0x5e  Code  Lc  usb_device_dci.o [15]
+USB_DeviceRun           0x6000'74c9       0xc  Code  Gb  usb_device_dci.o [15]
+USB_DeviceSendRequest   0x6000'7509      0x12  Code  Gb  usb_device_dci.o [15]
+USB_DeviceSetSpeed      0x6000'ca55     0x1b4  Code  Gb  usb_device_descriptor.o [18]
+USB_DeviceSetStatus     0x6000'76c9      0xa2  Code  Gb  usb_device_dci.o [15]
+USB_DeviceStallEndpoint
+                        0x6000'761d      0x1c  Code  Gb  usb_device_dci.o [15]
+USB_DeviceStop          0x6000'74d5       0xc  Code  Gb  usb_device_dci.o [15]
+USB_DeviceTransfer      0x6000'7179      0xd4  Code  Lc  usb_device_dci.o [15]
+USB_DeviceUnstallEndpoint
+                        0x6000'7639      0x1c  Code  Gb  usb_device_dci.o [15]
+USB_EhciGetValidEhciState
+                        0x6000'6b97      0x3a  Code  Lc  usb_device_ehci.o [16]
+USB_EhciPhyGetBase      0x6000'c86d      0xa0  Code  Gb  usb_phy.o [17]
+USB_EhciPhyInit         0x6000'c90d      0x96  Code  Gb  usb_phy.o [17]
+USB_OTG1_IRQHandler     0x6000'be1b       0xe  Code  Gb  usbTask.o [18]
+USB_PHY_IRQHandler      0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+USDHC1_DriverIRQHandler
+                        0x6000'fb39      0x16  Code  Gb  fsl_usdhc.o [6]
+USDHC1_IRQHandler       0x6001'1c71            Code  Wk  startup_MIMXRT1024.o [19]
+USDHC2_DriverIRQHandler
+                        0x6000'fb51      0x16  Code  Gb  fsl_usdhc.o [6]
+USDHC2_IRQHandler       0x6001'1c79            Code  Wk  startup_MIMXRT1024.o [19]
+UsageFault_Handler      0x6000'd5f3       0x8  Code  Gb  fsl_component_exception_handling.o [3]
+WDOG1_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+WDOG2_IRQHandler        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+XBAR1_IRQ_0_1_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+XBAR1_IRQ_2_3_IRQHandler
+                        0x6001'1cad            Code  Wk  startup_MIMXRT1024.o [19]
+XBARA_SetSignalsConnection
+                        0x6000'3c75      0x2a  Code  Gb  fsl_xbara.o [6]
+ZI$$Base                0x2020'00cc             --   Gb  - Linker created -
+ZI$$Limit               0x2021'47fc             --   Gb  - Linker created -
+_SDK_AtomicLocalClearAndSet4Byte
+                        0x6000'cc19      0x16  Code  Lc  clock_config.o [2]
+_SDK_AtomicLocalClearAndSet4Byte
+                        0x6000'3a95      0x16  Code  Lc  fsl_gpio.o [6]
+_SDK_AtomicLocalClearAndSet4Byte
+                        0x6000'5941      0x16  Code  Lc  fsl_lpuart.o [6]
+_SDK_AtomicLocalClearAndSet4Byte
+                        0x6000'2401      0x16  Code  Lc  pin_mux.o [2]
+__NCACHE_REGION_SIZE {Abs}
+                                0x0            Data  Gb  <internal module>
+__NCACHE_REGION_START {Abs}
+                        0x2020'0000            Data  Gb  <internal module>
+__NVIC_EnableIRQ        0x6000'bba9      0x1e  Code  Lc  usbTask.o [18]
+__NVIC_SetPriority      0x6000'bbc7      0x28  Code  Lc  usbTask.o [18]
+__RAM_VECTOR_TABLE_SIZE {Abs}
+                                0x0            Data  Gb  <internal module>
+__VECTOR_RAM {Abs}      0x6000'2000            Data  Gb  <internal module>
+__VECTOR_TABLE {Abs}    0x6000'2000            Data  Gb  <internal module>
+__Vectors               0x6000'2000             --   Gb  startup_MIMXRT1024.o [19]
+__Vectors_End           0x6000'2400            Data  Gb  startup_MIMXRT1024.o [19]
+__Vectors_Size {Abs}          0x400             --   Gb  startup_MIMXRT1024.o [19]
+__aeabi_assert          0x6000'3a7d      0x18  Code  Gb  fsl_assert.o [20]
+__aeabi_d2lz            0x6000'5335            Code  Gb  DblToS64.o [25]
+__aeabi_l2d             0x6000'539d            Code  Gb  S64ToDbl.o [25]
+__aeabi_ldiv0           0x6000'55dd            Code  Gb  I64DivZer.o [26]
+__aeabi_ldivmod         0x6000'4b0d            Code  Gb  I64DivMod.o [26]
+__aeabi_memcpy          0x6000'4025            Code  Gb  ABImemcpy.o [26]
+__aeabi_memcpy4         0x6000'4045            Code  Gb  ABImemcpy.o [26]
+__aeabi_memcpy8         0x6000'4045            Code  Gb  ABImemcpy.o [26]
+__aeabi_memset          0x6000'40cd            Code  Gb  ABImemset.o [26]
+__aeabi_uldivmod        0x6000'4b51            Code  Gb  I64DivMod.o [26]
+__cmain                 0x6001'1451            Code  Gb  cmain.o [26]
+__exit                  0x6000'ea7d      0x14  Code  Gb  exit.o [27]
+__iar_Errno             0x2021'47f0       0x4  Tls   Gb  errno.o [24]
+__iar_Exp64             0x6000'5681     0x250  Code  Gb  iar_Exp64.o [25]
+__iar_Memset            0x6000'40cd            Code  Gb  ABImemset.o [26]
+__iar_Memset_word       0x6000'40d5            Code  Gb  ABImemset.o [26]
+__iar_data_init3        0x6001'1011      0x28  Code  Gb  data_init.o [26]
+__iar_errno_set_EDOM    0x6000'55e1       0xe  Code  Gb  errno.o [24]
+__iar_errno_set_ERANGE  0x6000'55ef       0xc  Code  Gb  errno.o [24]
+__iar_frexp             0x6000'561d            Code  Gb  frexp.o [25]
+__iar_frexp64           0x6000'5605            Code  Gb  frexp.o [25]
+__iar_frexpl            0x6000'561d            Code  Gb  frexp.o [25]
+__iar_init_vfp          0x6001'129d            Code  Gb  fpinit_M.o [25]
+__iar_ldexp64           0x6000'5e15            Code  Gb  ldexp.o [25]
+__iar_modf              0x6000'4d91            Code  Gb  modf.o [25]
+__iar_modf64            0x6000'4d81            Code  Gb  modf.o [25]
+__iar_modfl             0x6000'4d91            Code  Gb  modf.o [25]
+__iar_nothread_read_tp  0x6000'5e11       0x4  Code  Gb  tp_nothreads.o [24]
+__iar_packbits_init3    0x6000'e9d5      0xa2  Code  Gb  packbits_init.o [26]
+__iar_pow64             0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+__iar_pow_medium        0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+__iar_pow_medium64      0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+__iar_pow_mediuml       0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+__iar_program_start     0x6001'157d            Code  Gb  cstartup_M.o [26]
+__iar_scalbln64         0x6000'5e15            Code  Gb  ldexp.o [25]
+__iar_scalbn64          0x6000'5e15            Code  Gb  ldexp.o [25]
+__iar_zero_init3        0x6000'febd      0x38  Code  Gb  zero_init3.o [26]
+__low_level_init        0x6001'146f       0x4  Code  Gb  low_level_init.o [24]
+__vector_table          0x6000'2000            Data  Gb  startup_MIMXRT1024.o [19]
+__vector_table_0x1c     0x6000'201c            Data  Gb  startup_MIMXRT1024.o [19]
+_call_main              0x6001'145d            Code  Gb  cmain.o [26]
+_exit                   0x6001'1491            Code  Gb  cexit.o [26]
+abort                   0x6000'ea77       0x6  Code  Gb  abort.o [24]
+bFrameHeader            0x2020'0160      0x10  Data  Gb  bootTask.o [12]
+bState                  0x2020'0140      0x20  Data  Lc  bootTask.o [12]
+bootMsgHandle_          0x2020'0134       0x4  Data  Lc  bootTask.o [12]
+bootRcvUsbBfr           0x2000'0008      0x4c  Data  Gb  translator.o [12]
+bootReadyCallback       0x6000'abc1      0x44  Code  Gb  bootTask.o [12]
+bootReadyCallback::first_expiry
+                        0x2021'47f5       0x1  Data  Lc  bootTask.o [12]
+bootSwM                 0x6003'fff0       0x1  Data  Gb  vendor.o [12]
+bootSwe                 0x6003'fff2       0x1  Data  Gb  vendor.o [12]
+bootSwm                 0x6003'fff1       0x1  Data  Gb  vendor.o [12]
+bootTask                0x6000'ab65      0x5c  Code  Lc  bootTask.o [12]
+bootTaskHandle_         0x2020'0130       0x4  Data  Lc  bootTask.o [12]
+boot_data               0x6000'1020      0x10  Data  Gb  fsl_flexspi_nor_boot.o [23]
+boot_ready_             0x2020'0138       0x4  Data  Lc  bootTask.o [12]
+calculateChecksumBoot   0x6000'b06d      0x1a  Code  Gb  bootTask.o [12]
+createBootTask          0x6000'aa61     0x102  Code  Gb  bootTask.o [12]
+createHeartBeatTimer    0x6000'bac7      0x3e  Code  Gb  systemTimer.o [12]
+createTranslator        0x6000'a261      0x86  Code  Gb  translator.o [12]
+createUsbTask           0x6000'bc0d      0xa4  Code  Gb  usbTask.o [18]
+dcd_data                0x6000'1030     0x3e0  Data  Gb  dcd.o [2]
+enetPllConfig_BOARD_BootClockRUN
+                        0x6001'1ac8       0x8  Data  Gb  clock_config.o [2]
+exit                    0x6001'148b       0x4  Code  Gb  exit.o [24]
+frexp                   0x6000'5605            Code  Gb  frexp.o [25]
+frexpl                  0x6000'5605            Code  Gb  frexp.o [25]
+g_CompositeClassConfig  0x2020'009c      0x24  Data  Gb  usbTask.o [18]
+g_UsbDeviceBootloaderConfig
+                        0x2020'0060       0x8  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceBootloaderEndpoints
+                        0x2020'000c      0x18  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceBootloaderInterface
+                        0x2020'0024      0x10  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceBootloaderInterfaceList
+                        0x2020'0058       0x8  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceBootloaderInterfaces
+                        0x2020'0034      0x24  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceConfigurationDescriptor
+                        0x2000'0068      0x30  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceDescriptor   0x2000'0054      0x14  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceEhciState    0x2021'46e4      0x8c  Data  Lc  usb_device_ehci.o [16]
+g_UsbDeviceEhciStateStatus
+                        0x2021'47fa       0x1  Data  Lc  usb_device_ehci.o [16]
+g_UsbDeviceLanguage     0x2020'0080       0xc  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceLanguageList
+                        0x2020'008c      0x10  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceString0      0x2000'0098       0x4  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceString1      0x2000'009c      0x34  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceString2      0x2000'00d0      0x28  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceStringDescriptorArray
+                        0x2020'0074       0xc  Data  Gb  usb_device_descriptor.o [18]
+g_UsbDeviceStringDescriptorLength
+                        0x2020'0068       0xc  Data  Gb  usb_device_descriptor.o [18]
+g_exceptionStackStruct  0x2020'0188       0x4  Data  Lc  fsl_component_exception_handling.o [3]
+g_rtcXtalFreq           0x2020'0184       0x4  Data  Gb  fsl_clock.o [6]
+g_serialHandle          0x2020'018c       0x4  Data  Gb  fsl_debug_console.o [20]
+g_xtalFreq              0x2020'0180       0x4  Data  Gb  fsl_clock.o [6]
+getAppPrVerEng          0x6000'b115      0x18  Code  Gb  vendor.o [12]
+getAppPrVerMajor        0x6000'b0e5      0x18  Code  Gb  vendor.o [12]
+getAppPrVerMinor        0x6000'b0fd      0x18  Code  Gb  vendor.o [12]
+getAppWgVerEng          0x6000'b15d      0x18  Code  Gb  vendor.o [12]
+getAppWgVerMajor        0x6000'b12d      0x18  Code  Gb  vendor.o [12]
+getAppWgVerMinor        0x6000'b145      0x18  Code  Gb  vendor.o [12]
+getBlMsgTypeSize        0x6000'a861      0x58  Code  Gb  translator.o [12]
+getBootQueueHandle      0x6000'a959       0x6  Code  Gb  queueManager.o [12]
+getCharFromLong         0x6000'a427      0x46  Code  Gb  translator.o [12]
+getCharFromShort        0x6000'a3fb      0x2c  Code  Gb  translator.o [12]
+getMyModel              0x6000'b553       0x6  Code  Gb  threadManager.o [12]
+getPeripheralModel      0x6000'b46f      0xe4  Code  Lc  threadManager.o [12]
+getProductId            0x6000'b089      0x5c  Code  Gb  vendor.o [12]
+getUsbInBootQueueHandle
+                        0x6000'a95f       0x6  Code  Gb  queueManager.o [12]
+getUsbInQueueLength     0x6000'a96b       0x4  Code  Gb  queueManager.o [12]
+getUsbOutBootQueueHandle
+                        0x6000'a965       0x6  Code  Gb  queueManager.o [12]
+handleBootCmd           0x6000'ade5      0x72  Code  Lc  bootTask.o [12]
+handleBootloaderMsg     0x6000'ace7      0x98  Code  Lc  bootTask.o [12]
+handleFrameData         0x6000'aea3      0x96  Code  Lc  bootTask.o [12]
+handleFrameData::bytesWritten
+                        0x2020'017c       0x4  Data  Lc  bootTask.o [12]
+handleFrameData::count  0x2020'0178       0x4  Data  Lc  bootTask.o [12]
+heartBeatCallback       0x6000'bb31      0x4e  Code  Gb  systemTimer.o [12]
+heartBeat_              0x2021'4580       0x4  Data  Lc  systemTimer.o [12]
+iTransMgr_              0x2021'4784      0x10  Data  Lc  usbTask.o [18]
+imageBuffer             0x2000'1238     0x200  Data  Gb  usbTask.o [18]
+image_vector_table      0x6000'1000      0x20  Data  Gb  fsl_flexspi_nor_boot.o [23]
+initTimers              0x6000'baa7      0x20  Code  Gb  systemTimer.o [12]
+initUSB                 0x6000'bcb1      0x6e  Code  Lc  usbTask.o [18]
+initializeAppUpgrade    0x6000'ae57      0x4c  Code  Lc  bootTask.o [12]
+initializeQueueManager  0x6000'a96f      0x68  Code  Gb  queueManager.o [12]
+jumpToApp               0x6000'ada7      0x3e  Code  Lc  bootTask.o [12]
+jumpToApp::farewellBootloader
+                        0x2020'0170       0x4  Data  Lc  bootTask.o [12]
+jumpToApp::runApplicationAddress
+                        0x2020'0174       0x4  Data  Lc  bootTask.o [12]
+ldexp                   0x6000'5e15            Code  Gb  ldexp.o [25]
+ldexpl                  0x6000'5e15            Code  Gb  ldexp.o [25]
+lnbias                  0x6000'db80     0x420  Data  Lc  pow64.o [25]
+m_boot_hdr_conf_start {Abs}
+                        0x6000'0000            Data  Gb  <internal module>
+main                    0x6001'1473      0x18  Code  Gb  globalScale.o [10]
+memcpy                  0x6000'b5d5       0xc  Code  Gb  memcpy.o [26]
+model_                  0x2021'47f8       0x1  Data  Lc  threadManager.o [12]
+modf                    0x6000'4d81            Code  Gb  modf.o [25]
+modfl                   0x6000'4d81            Code  Gb  modf.o [25]
+norConfig               0x2021'4380     0x200  Data  Lc  spi_flash_api.o [11]
+pBQHandle_              0x2021'46dc       0x4  Data  Lc  translator.o [12]
+pBQHandle_              0x2021'477c       0x4  Data  Lc  usbTask.o [18]
+pBootQueue_             0x2021'4378       0x4  Data  Lc  queueManager.o [12]
+pMsgInBootQHandle_      0x2021'4774       0x4  Data  Lc  usbTask.o [18]
+pMsgOutBootQHandle_     0x2021'4778       0x4  Data  Lc  usbTask.o [18]
+pQUSBRcvBootHandle_     0x2021'46d4       0x4  Data  Lc  translator.o [12]
+pQUSBSendBootHandle_    0x2021'46d0       0x4  Data  Lc  translator.o [12]
+pThreadManagerQueue_    0x2021'437c       0x4  Data  Lc  queueManager.o [12]
+pUSBInBootQueue_        0x2000'0000       0x4  Data  Lc  queueManager.o [12]
+pUSBOutBootQueue_       0x2000'0004       0x4  Data  Lc  queueManager.o [12]
+pUsbHandle_             0x2021'4770       0x4  Data  Lc  usbTask.o [18]
+pcInterruptPriorityRegisters
+                        0x6001'1c9c       0x4  Data  Lc  port.o [8]
+pow                     0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+powl                    0x6000'4e21     0x4c4  Code  Gb  pow64.o [25]
+prvAddCurrentTaskToDelayedList
+                        0x6000'83cd      0x6e  Code  Lc  tasks.o [7]
+prvAddNewTaskToReadyList
+                        0x6000'7c01      0x9e  Code  Lc  tasks.o [7]
+prvCheckForValidListAndQueue
+                        0x6000'8bf7      0x46  Code  Lc  timers.o [7]
+prvCheckTasksWaitingTermination
+                        0x6000'826b      0x3c  Code  Lc  tasks.o [7]
+prvCopyDataFromQueue    0x6000'9311      0x2a  Code  Lc  queue.o [7]
+prvCopyDataToQueue      0x6000'928b      0x86  Code  Lc  queue.o [7]
+prvDeleteTCB            0x6000'82a7      0x12  Code  Lc  tasks.o [7]
+prvGetNextExpireTime    0x6000'89cf      0x26  Code  Lc  timers.o [7]
+prvHeapInit             0x6000'862d      0x5e  Code  Lc  heap_4.o [9]
+prvIdleTask             0x6000'81e5      0x22  Code  Lc  tasks.o [7]
+prvInitialiseMutex      0x6000'8ded      0x1e  Code  Lc  queue.o [7]
+prvInitialiseNewQueue   0x6000'8dc7      0x26  Code  Lc  queue.o [7]
+prvInitialiseNewTask    0x6000'7b1d      0xe4  Code  Lc  tasks.o [7]
+prvInitialiseNewTimer   0x6000'8823      0x54  Code  Lc  timers.o [7]
+prvInitialiseTaskLists  0x6000'8215      0x56  Code  Lc  tasks.o [7]
+prvInsertBlockIntoFreeList
+                        0x6000'868b      0x5e  Code  Lc  heap_4.o [9]
+prvInsertTimerInActiveList
+                        0x6000'8a1d      0x3e  Code  Lc  timers.o [7]
+prvIsQueueEmpty         0x6000'93bf      0x1c  Code  Lc  queue.o [7]
+prvIsQueueFull          0x6000'93db      0x1e  Code  Lc  queue.o [7]
+prvNotifyQueueSetContainer
+                        0x6000'94b3      0x92  Code  Lc  queue.o [7]
+prvProcessExpiredTimer  0x6000'88db      0x6a  Code  Lc  timers.o [7]
+prvProcessReceivedCommands
+                        0x6000'8a5b     0x128  Code  Lc  timers.o [7]
+prvProcessTimerOrBlockTask
+                        0x6000'8959      0x76  Code  Lc  timers.o [7]
+prvResetNextTaskUnblockTime
+                        0x6000'82b9      0x22  Code  Lc  tasks.o [7]
+prvSampleTimeNow        0x6000'89f5      0x28  Code  Lc  timers.o [7]
+prvSampleTimeNow::xLastTime
+                        0x2021'46c8       0x4  Data  Lc  timers.o [7]
+prvSwitchTimerLists     0x6000'8b83      0x74  Code  Lc  timers.o [7]
+prvTaskExitError        0x6000'77d1      0x2a  Code  Lc  port.o [8]
+prvTimerTask            0x6000'8945      0x14  Code  Lc  timers.o [7]
+prvUnlockQueue          0x6000'933b      0x84  Code  Lc  queue.o [7]
+pvPortMalloc            0x6000'8475     0x138  Code  Gb  heap_4.o [9]
+pvTimerGetTimerID       0x6000'8c3d      0x26  Code  Gb  timers.o [7]
+pxCurrentTCB            0x2021'458c       0x4  Data  Gb  tasks.o [7]
+pxCurrentTimerList      0x2021'46b8       0x4  Data  Lc  timers.o [7]
+pxDelayedTaskList       0x2021'461c       0x4  Data  Lc  tasks.o [7]
+pxEnd                   0x2021'431c       0x4  Data  Lc  heap_4.o [9]
+pxOverflowDelayedTaskList
+                        0x2021'4620       0x4  Data  Lc  tasks.o [7]
+pxOverflowTimerList     0x2021'46bc       0x4  Data  Lc  timers.o [7]
+pxPortInitialiseStack   0x6000'77a9      0x28  Code  Gb  port.o [8]
+pxReadyTasksLists       0x2021'4590      0x64  Data  Lc  tasks.o [7]
+qh_buffer               0x2000'0800     0x700  Data  Lc  usb_device_ehci.o [16]
+qspiflash_config        0x6000'0000     0x200  Data  Gb  evkmimxrt1024_flexspi_nor_config.o [23]
+resetTmrCallback        0x6000'ac05      0x14  Code  Gb  bootTask.o [12]
+reset_tmr_              0x2020'013c       0x4  Data  Lc  bootTask.o [12]
+sTick                   0x2021'4588       0x4  Data  Gb  systemTimer.o [12]
+s_BootloaderRcvBuffer   0x2000'1438      0x40  Data  Gb  usbTask.o [18]
+s_BootloaderSendBuffer  0x2000'1478      0x40  Data  Gb  usbTask.o [18]
+s_EDMAHandle            0x2020'0190      0x80  Data  Lc  fsl_edma.o [6]
+s_ENETHandle            0x2020'0210       0x4  Data  Lc  fsl_enet.o [6]
+s_LpuartAdapterBase     0x6001'10a4      0x24  Data  Lc  fsl_adapter_lpuart.o [22]
+s_UsbDevice             0x2000'1100      0xc0  Data  Lc  usb_device_dci.o [15]
+s_UsbDeviceBootloaderHandle
+                        0x2000'11f8      0x40  Data  Lc  usbBootloader.o [13]
+s_UsbDeviceClassInterfaceMap
+                        0x6001'1410      0x20  Data  Lc  usb_device_class.o [13]
+s_UsbDeviceCommonClassStruct
+                        0x2000'11e0      0x10  Data  Lc  usb_device_class.o [13]
+s_UsbDeviceEhciDtd      0x2000'0f00     0x200  Data  Lc  usb_device_ehci.o [16]
+s_UsbDeviceEhciInterface
+                        0x6001'1790      0x18  Data  Lc  usb_device_dci.o [15]
+s_UsbDeviceSetupBuffer  0x2000'11f0       0x8  Data  Lc  usb_device_class.o [13]
+s_UsbDeviceStandardRequest
+                        0x6001'02d0      0x34  Data  Lc  usb_device_ch9.o [14]
+s_applicationRcvBuffer  0x2000'14b8     0x200  Data  Gb  usbTask.o [18]
+s_debugConsoleReadWaitSemaphore
+                        0x2021'47f6       0x1  Data  Lc  fsl_debug_console.o [20]
+s_debugConsoleState     0x2000'11c0      0x20  Data  Lc  fsl_debug_console.o [20]
+s_enet1588TimerIsr      0x2020'0224       0x4  Data  Lc  fsl_enet.o [6]
+s_enetBases             0x6001'1c90       0x4  Data  Lc  fsl_enet.o [6]
+s_enetErrIsr            0x2020'021c       0x4  Data  Lc  fsl_enet.o [6]
+s_enetRxIsr             0x2020'0218       0x4  Data  Lc  fsl_enet.o [6]
+s_enetTsIsr             0x2020'0220       0x4  Data  Lc  fsl_enet.o [6]
+s_enetTxIsr             0x2020'0214       0x4  Data  Lc  fsl_enet.o [6]
+s_flexcanHandle         0x2020'0228       0xc  Data  Lc  fsl_flexcan.o [6]
+s_flexcanIsr            0x2020'0234       0x4  Data  Lc  fsl_flexcan.o [6]
+s_flexioHandle          0x2020'0238       0x8  Data  Lc  fsl_flexio.o [6]
+s_flexioIsr             0x2020'0248       0x8  Data  Lc  fsl_flexio.o [6]
+s_flexioType            0x2020'0240       0x8  Data  Lc  fsl_flexio.o [6]
+s_flexspiHandle         0x2020'0250       0x4  Data  Lc  fsl_flexspi.o [6]
+s_flexspiIsr            0x2020'0254       0x4  Data  Lc  fsl_flexspi.o [6]
+s_gpioBases             0x6001'16a0      0x18  Data  Lc  fsl_gpio.o [6]
+s_gpioClock             0x6001'1a6c       0xc  Data  Lc  fsl_gpio.o [6]
+s_lpi2cMasterHandle     0x2020'025c      0x14  Data  Gb  fsl_lpi2c.o [6]
+s_lpi2cMasterIsr        0x2020'0258       0x4  Data  Gb  fsl_lpi2c.o [6]
+s_lpi2cSlaveHandle      0x2020'0274      0x14  Data  Lc  fsl_lpi2c.o [6]
+s_lpi2cSlaveIsr         0x2020'0270       0x4  Data  Lc  fsl_lpi2c.o [6]
+s_lpspiHandle           0x2020'0288      0x14  Data  Lc  fsl_lpspi.o [6]
+s_lpspiMasterIsr        0x2020'029c       0x4  Data  Lc  fsl_lpspi.o [6]
+s_lpspiSlaveIsr         0x2020'02a0       0x4  Data  Lc  fsl_lpspi.o [6]
+s_lpuartBases           0x6001'11a0      0x24  Data  Lc  fsl_lpuart.o [6]
+s_lpuartClock           0x6001'1848      0x14  Data  Lc  fsl_lpuart.o [6]
+s_lpuartHandle          0x2020'02a4      0x24  Data  Gb  fsl_lpuart.o [6]
+s_lpuartIsr             0x2020'02c8       0x4  Data  Gb  fsl_lpuart.o [6]
+s_saiHandle             0x2020'02cc      0x20  Data  Lc  fsl_sai.o [6]
+s_saiRxIsr              0x2020'02f0       0x4  Data  Lc  fsl_sai.o [6]
+s_saiTxIsr              0x2020'02ec       0x4  Data  Lc  fsl_sai.o [6]
+s_spdifHandle           0x2020'02f4       0x8  Data  Lc  fsl_spdif.o [6]
+s_spdifRxIsr            0x2020'0300       0x4  Data  Lc  fsl_spdif.o [6]
+s_spdifTxIsr            0x2020'02fc       0x4  Data  Lc  fsl_spdif.o [6]
+s_usdhcBase             0x6001'1a90       0xc  Data  Lc  fsl_usdhc.o [6]
+s_usdhcHandle           0x2020'0304       0xc  Data  Lc  fsl_usdhc.o [6]
+s_usdhcIsr              0x2020'0310       0x4  Data  Lc  fsl_usdhc.o [6]
+scalbln                 0x6000'5e15            Code  Gb  ldexp.o [25]
+scalblnl                0x6000'5e15            Code  Gb  ldexp.o [25]
+scalbn                  0x6000'5e15            Code  Gb  ldexp.o [25]
+scalbnl                 0x6000'5e15            Code  Gb  ldexp.o [25]
+scb_data_text           0x6000'e4c8     0x1a0  Data  Lc  fsl_component_exception_handling.o [3]
+sendBootAck             0x6000'a59d      0x5e  Code  Gb  translator.o [12]
+sendBootAppVersion      0x6000'a76f      0xf2  Code  Gb  translator.o [12]
+sendBootReady           0x6000'a52b      0x72  Code  Gb  translator.o [12]
+sendBootStatus          0x6000'a5fb      0xd6  Code  Gb  translator.o [12]
+sendBootVersion         0x6000'a6d1      0x9e  Code  Gb  translator.o [12]
+sendBuffer              0x2020'00cc      0x64  Data  Lc  bootTask.o [12]
+sendStateStatus         0x6000'ad7f      0x28  Code  Lc  bootTask.o [12]
+spi_flash_erase_app     0x6000'b265      0x34  Code  Gb  spi_flash_api.o [11]
+spi_flash_init          0x6000'b22d      0x38  Code  Gb  spi_flash_api.o [11]
+spi_flash_program       0x6000'b299      0x2a  Code  Gb  spi_flash_api.o [11]
+startBootReadyTimer     0x6000'ac4d      0x30  Code  Gb  bootTask.o [12]
+startHeartBeatTimer     0x6000'bb05      0x2c  Code  Gb  systemTimer.o [12]
+startResetTmr           0x6000'acb1      0x36  Code  Gb  bootTask.o [12]
+startSystemThreads      0x6000'b461       0xe  Code  Lc  threadManager.o [12]
+stopBootReadyTimer      0x6000'ac19      0x34  Code  Gb  bootTask.o [12]
+stopResetTmr            0x6000'ac7d      0x34  Code  Gb  bootTask.o [12]
+strlen                  0x6000'53f1            Code  Gb  strlen.o [26]
+suspend_                0x2021'47f4       0x1  Data  Lc  bootTask.o [12]
+suspend_                0x2021'47f9       0x1  Data  Lc  translator.o [12]
+suspend_                0x2021'47fb       0x1  Data  Lc  usbTask.o [18]
+systemStartup           0x6000'b327     0x136  Code  Gb  threadManager.o [12]
+tHandle_                0x2021'46cc       0x4  Data  Lc  translator.o [12]
+tMutex_                 0x2021'46e0       0x4  Data  Lc  translator.o [12]
+tQueueSet_              0x2021'46d8       0x4  Data  Lc  translator.o [12]
+t_handleBootCmd         0x6000'a493      0x4c  Code  Lc  translator.o [12]
+t_handleBootMessage     0x6000'a391      0x6a  Code  Lc  translator.o [12]
+t_handleReqAppVersion   0x6000'a4df      0x26  Code  Lc  translator.o [12]
+t_handleReqBootStatus   0x6000'a46d      0x26  Code  Lc  translator.o [12]
+t_handleReqBootVersion  0x6000'a505      0x26  Code  Lc  translator.o [12]
+translateBootMessage    0x6000'a37b      0x16  Code  Lc  translator.o [12]
+translatorTask          0x6000'a2e9      0x92  Code  Lc  translator.o [12]
+uQueueSet_              0x2021'4780       0x4  Data  Gb  usbTask.o [18]
+ucHeap                  0x2020'0314  0x1'4000  Data  Lc  heap_4.o [9]
+ucMaxSysCallPriority    0x2021'47f7       0x1  Data  Lc  port.o [8]
+ulMaxPRIGROUPValue      0x2021'4334       0x4  Data  Lc  port.o [8]
+usbMgr                  0x2021'4794      0x54  Data  Gb  usbTask.o [18]
+usbMgrConfigList        0x2020'00c0       0xc  Data  Gb  usbTask.o [18]
+usbTask                 0x6000'bd21      0xfa  Code  Gb  usbTask.o [18]
+usbTask::blMsgCnt       0x2021'47ec       0x4  Data  Lc  usbTask.o [18]
+usbTask::blMsgSize      0x2021'47e8       0x4  Data  Lc  usbTask.o [18]
+uxCriticalNesting       0x2020'0000       0x4  Data  Lc  port.o [8]
+uxCurrentNumberOfTasks  0x2021'4664       0x4  Data  Lc  tasks.o [7]
+uxDeletedTasksWaitingCleanUp
+                        0x2021'464c       0x4  Data  Lc  tasks.o [7]
+uxListRemove            0x6000'877f      0x26  Code  Gb  list.o [7]
+uxQueueMessagesWaiting  0x6000'9265      0x26  Code  Gb  queue.o [7]
+uxSchedulerSuspended    0x2021'468c       0x4  Data  Lc  tasks.o [7]
+uxTaskNumber            0x2021'4680       0x4  Data  Lc  tasks.o [7]
+uxTopReadyPriority      0x2021'466c       0x4  Data  Lc  tasks.o [7]
+uxTopUsedPriority       0x2020'0008       0x4  Data  Gb  tasks.o [7]
+vListInitialise         0x6000'870d      0x1e  Code  Gb  list.o [7]
+vListInitialiseItem     0x6000'872b       0x6  Code  Gb  list.o [7]
+vListInsert             0x6000'8749      0x36  Code  Gb  list.o [7]
+vListInsertEnd          0x6000'8731      0x18  Code  Gb  list.o [7]
+vPortEnableVFP          0x6000'7a95            Code  Gb  portasm.o [8]
+vPortEnterCritical      0x6000'78c9      0x34  Code  Gb  port.o [8]
+vPortExitCritical       0x6000'78fd      0x2c  Code  Gb  port.o [8]
+vPortFree               0x6000'85ad      0x7a  Code  Gb  heap_4.o [9]
+vPortSetupTimerInterrupt
+                        0x6000'79cd      0x34  Code  Wk  port.o [8]
+vPortStartFirstTask     0x6000'7a75            Code  Gb  portasm.o [8]
+vPortValidateInterruptPriority
+                        0x6000'7951      0x4a  Code  Gb  port.o [8]
+vQueueAddToRegistry     0x6000'93f9      0x24  Code  Gb  queue.o [7]
+vQueueWaitForMessageRestricted
+                        0x6000'9421      0x4a  Code  Gb  queue.o [7]
+vTaskInternalSetTimeOutState
+                        0x6000'8139      0x12  Code  Gb  tasks.o [7]
+vTaskMissedYield        0x6000'81db       0xa  Code  Gb  tasks.o [7]
+vTaskPlaceOnEventList   0x6000'8035      0x2e  Code  Gb  tasks.o [7]
+vTaskPlaceOnEventListRestricted
+                        0x6000'8075      0x38  Code  Gb  tasks.o [7]
+vTaskStartScheduler     0x6000'7d87      0x74  Code  Gb  tasks.o [7]
+vTaskSuspend            0x6000'7c9f      0xe8  Code  Gb  tasks.o [7]
+vTaskSuspendAll         0x6000'7dfb       0xc  Code  Gb  tasks.o [7]
+vTaskSwitchContext      0x6000'7fcb      0x6a  Code  Gb  tasks.o [7]
+vTimerSetTimerID        0x6000'8c63      0x26  Code  Gb  timers.o [7]
+verifyApp               0x6000'af39      0x30  Code  Gb  bootTask.o [12]
+xActiveTimerList1       0x2021'4690      0x14  Data  Lc  timers.o [7]
+xActiveTimerList2       0x2021'46a4      0x14  Data  Lc  timers.o [7]
+xBlockAllocatedBit      0x2021'4330       0x4  Data  Lc  heap_4.o [9]
+xDelayedTaskList1       0x2021'45f4      0x14  Data  Lc  tasks.o [7]
+xDelayedTaskList2       0x2021'4608      0x14  Data  Lc  tasks.o [7]
+xFreeBytesRemaining     0x2021'4320       0x4  Data  Lc  heap_4.o [9]
+xHeapStructSize         0x6001'1c94       0x4  Data  Lc  heap_4.o [9]
+xIdleTaskHandle         0x2021'4688       0x4  Data  Lc  tasks.o [7]
+xMinimumEverFreeBytesRemaining
+                        0x2021'4324       0x4  Data  Lc  heap_4.o [9]
+xMutex_                 0x2021'4584       0x4  Data  Lc  systemTimer.o [12]
+xNextTaskUnblockTime    0x2021'4684       0x4  Data  Lc  tasks.o [7]
+xNumOfOverflows         0x2021'467c       0x4  Data  Lc  tasks.o [7]
+xNumberOfSuccessfulAllocations
+                        0x2021'4328       0x4  Data  Lc  heap_4.o [9]
+xNumberOfSuccessfulFrees
+                        0x2021'432c       0x4  Data  Lc  heap_4.o [9]
+xPendedTicks            0x2021'4674       0x4  Data  Lc  tasks.o [7]
+xPendingReadyList       0x2021'4624      0x14  Data  Lc  tasks.o [7]
+xPortGetFreeHeapSize    0x6000'8627       0x6  Code  Gb  heap_4.o [9]
+xPortStartScheduler     0x6000'77fb      0xce  Code  Gb  port.o [8]
+xQueueAddToSet          0x6000'9477      0x2a  Code  Gb  queue.o [7]
+xQueueCreateMutex       0x6000'8e0b      0x1a  Code  Gb  queue.o [7]
+xQueueCreateSet         0x6000'946b       0xc  Code  Gb  queue.o [7]
+xQueueGenericCreate     0x6000'8d43      0x84  Code  Gb  queue.o [7]
+xQueueGenericReset      0x6000'8cb1      0x92  Code  Gb  queue.o [7]
+xQueueGenericSend       0x6000'8e25     0x1c4  Code  Gb  queue.o [7]
+xQueueGenericSendFromISR
+                        0x6000'8fe9     0x11c  Code  Gb  queue.o [7]
+xQueueReceive           0x6000'9105     0x15c  Code  Gb  queue.o [7]
+xQueueRegistry          0x2021'4338      0x40  Data  Gb  queue.o [7]
+xQueueSelectFromSet     0x6000'94a1      0x12  Code  Gb  queue.o [7]
+xSchedulerRunning       0x2021'4670       0x4  Data  Lc  tasks.o [7]
+xStart                  0x2021'4314       0x8  Data  Lc  heap_4.o [9]
+xSuspendedTaskList      0x2021'4650      0x14  Data  Lc  tasks.o [7]
+xTaskCheckForTimeOut    0x6000'8155      0x86  Code  Gb  tasks.o [7]
+xTaskCreate             0x6000'7ab1      0x6c  Code  Gb  tasks.o [7]
+xTaskGetSchedulerState  0x6000'82db      0x20  Code  Gb  tasks.o [7]
+xTaskGetTickCount       0x6000'7ee7       0x8  Code  Gb  tasks.o [7]
+xTaskIncrementTick      0x6000'7eef      0xdc  Code  Gb  tasks.o [7]
+xTaskPriorityDisinherit
+                        0x6000'8301      0x9e  Code  Gb  tasks.o [7]
+xTaskRemoveFromEventList
+                        0x6000'80b5      0x80  Code  Gb  tasks.o [7]
+xTaskResumeAll          0x6000'7e07      0xe0  Code  Gb  tasks.o [7]
+xTasksWaitingTermination
+                        0x2021'4638      0x14  Data  Lc  tasks.o [7]
+xTickCount              0x2021'4668       0x4  Data  Lc  tasks.o [7]
+xTimerCreate            0x6000'87ed      0x36  Code  Gb  timers.o [7]
+xTimerCreateTimerTask   0x6000'87a5      0x48  Code  Gb  timers.o [7]
+xTimerGenericCommand    0x6000'8877      0x64  Code  Gb  timers.o [7]
+xTimerQueue             0x2021'46c0       0x4  Data  Lc  timers.o [7]
+xTimerTaskHandle        0x2021'46c4       0x4  Data  Lc  timers.o [7]
+xYieldPending           0x2021'4678       0x4  Data  Lc  tasks.o [7]
+
+
+[1] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\MIMXRT1024\device
+[2] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\board
+[3] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\exceptions
+[4] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\list
+[5] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\components\osa
+[6] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\drivers
+[7] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel
+[8] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\IAR\ARM_CM4F
+[9] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\freertos\freertos_kernel\portable\MemMang
+[10] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source
+[11] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\rt1024_api
+[12] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\system
+[13] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\class
+[14] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source
+[15] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\dci
+[16] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\device\source\ehci
+[17] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\phy
+[18] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\source\usb\source
+[19] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\startup
+[20] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities
+[21] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common
+[22] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\utilities\common\uart
+[23] = C:\Users\chris.king\Source\GlobalScaleRT1024\bootloader\flexspi_nor_sdram_debug\Obj\xip
+[24] = dl7M_tln.a
+[25] = m7M_tlv.a
+[26] = rt7M_tl.a
+[27] = shb_l.a
+
+  51'539 bytes of readonly  code memory
+  15'018 bytes of readonly  data memory
+  90'804 bytes of readwrite data memory
+
+Errors: none
+Warnings: none

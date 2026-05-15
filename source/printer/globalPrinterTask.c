@@ -23,6 +23,12 @@
 #include <stdlib.h>
 #include "takeupMotor.h"
 
+ICutterGeneric cSGMsg;
+
+uint8_t cHomeDebounceCounter = 0;
+uint8_t cSaddleDebounceCounter = 0;
+uint8_t cDoorDebounceCounter = 0;
+uint8_t cJammedDebounceCounter = 0;
 
 uint16_t callsToGapSensor = 0;
 bool labelQueuePaused = false;
@@ -36,9 +42,9 @@ static TaskHandle_t             pHandle_        = NULL;
 static QueueHandle_t            pMsgQHandle_    = NULL;
 static SemaphoreHandle_t        pCutSemaphore   = NULL;
 static QueueSetHandle_t         pQueueSet_      = NULL;
-static QueueHandle_t            pCRMsgQHandle_  = NULL;
-static QueueHandle_t            pIMsgQHandle_   = NULL;
-
+//static QueueHandle_t            pCRMsgQHandle_  = NULL;
+//static QueueHandle_t            pIMsgQHandle_   = NULL;
+static TimerHandle_t            pWTimer_        = NULL;
 
 /* label and sensor timers */
 static TimerHandle_t            pTTakeLabel_     = NULL;
@@ -78,6 +84,8 @@ extern void testPrintHeadTransfer( void );
 extern void weigherCountsStartStop( bool start );
 extern void setWeigherHWMajorVersion(unsigned short version);
 extern volatile ADCManager              adcManager;
+extern bool cutterSizingDoneFlag;
+extern uint16_t cutMsgSentCounter;
 
 extern DotCheckerStatus dotChecker;
 bool checkDotsOnce_ = false;
@@ -129,6 +137,8 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
 
     /* currently we have no way to detect stock width */
     currentStatus.sensor |= WideLabelBit;
+    currentStatus.sensor &= ~LABEL_TAKEN;
+    //currentStatus.sensor |= LABEL_TAKEN;
     
     currentStatus.mask.sensor2 = ( OUT_OF_DATA_BUFFERS | LOW_STOCK_REACHED | OUT_OF_STOCK );
     prevStatus.mask.sensor2 = ( OUT_OF_DATA_BUFFERS | LOW_STOCK_REACHED | OUT_OF_STOCK );
@@ -177,10 +187,10 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
             configValid  = false;
         }
     } else {
-        PRINTF("createGlobalPrinterTask(): Configuration valid!\r\n" );
+        //PRINTF("createGlobalPrinterTask(): Configuration valid!\r\n" );
         configValid = true;
         instance_ = config_.instance;
-        
+        /*
         PRINTF("instance: %d\r\n", config_.instance );
         PRINTF("label_width: %d\r\n", config_.label_width );
         PRINTF("media_sensor_adjustment: %d\r\n", config_.media_sensor_adjustment );
@@ -200,6 +210,7 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
         PRINTF("takeup_sensor_drive_current: %d\r\n", config_.takeup_sensor_drive_current );
         PRINTF("takeup_sensor_max_tension_counts: %d\r\n", config_.takeup_sensor_max_tension_counts );
         PRINTF("takeup_sensor_min_tension_counts: %d\r\n", config_.takeup_sensor_min_tension_counts );
+        */
     }
 
     /* release the lock onthe serial flash */
@@ -247,28 +258,7 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
     } else if( style_ ==  RT_PRINTER_PREPACK ) {
         PRINTF("createGlobalPrinterTask(): Unsupported printer style_: %d !\r\n", style_ );
     }
-    
-    /* cutter is only installed on better and best models */
-    if( getMyModel() == GLOBAL_SCALE_HB_GT ) { 
-       cutterInstalled_ = true;           
-    }
-    
-    if( cutterInstalled_ ) {
-        /* get my internal message queue */
-        pIMsgQHandle_ = getInternalPrinterQueueHandle();       
-        pCRMsgQHandle_ = getCutterQueueHandle();
-        /* set roller motor current high to avoid stalls due to linerless paper sticking to itself */
-        //TFinkToDo! GPIO_WritePinOutput( MAIN_MOTOR_HIGH_CUR_LIMIT_GPIO, MAIN_MOTOR_HIGH_CUR_LIMIT_PIN, true);
-        if( ( pCRMsgQHandle_ != NULL ) && ( pIMsgQHandle_ != NULL ) ) {
-            if( createAveryCutterTask( pCRMsgQHandle_, pIMsgQHandle_ ) != pdPASS ) {
-                PRINTF("createAveryPrinterTask(): failed to create cutter task!\r\n");
-            }
-        } else {
-            PRINTF("createAveryPrinterTask(): Cutter msg queue was not created!\r\n");    
-        }    
-    
-    }
-        
+            
     /* Create the semaphore that is being added to the set. */
     pCutSemaphore = xSemaphoreCreateBinary();
     
@@ -299,19 +289,14 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
         PRINTF("createGlobalPrinterTask(): Command queue is NULL! Printer task not created!\r\n" );
     }
     
-    if( cutterInstalled_ ) {
-        initCutter();
-    } else {
-      config_.cutterEnabled = false;
-    }
-    
     /* load zero into the printhead to avoid current spikes after boot. */ 
     loadZeroPrintLine();
-
+    
+    
     PrSysInfo info;
     info.msgType = PR_SYS_INFO;
     info.pid = getProductId();
-    info.id = instance_;        /* first, second or third */
+    info.id = instance_;        
     if( style_ ==  RT_PRINTER_SERVICE_SCALE_72MM ) {
         info.printhead_size = HEAD_DOTS_72MM;
         info.buffer_size = PRINTER_BUFFER_SIZE_72MM;
@@ -323,11 +308,15 @@ BaseType_t createGlobalPrinterTask( PrinterStyle style, QueueHandle_t msgQueue )
     }
     info.transfer_size = 512;
     info.headType = getPrintHeadType();
-    info.cutterInstalled = cutterInstalled_;
+    info.cutterInstalled = getCutterDetected();
+    //info.cutterInstalled = true;
     info.cutterEnabled = config_.cutterEnabled;
+    //info.cutterEnabled = true;
     info.configValid = configValid;   
     
-    sendPrSysInfo( &info );              
+    
+    sendPrSysInfo( &info ); 
+    
     
     return result; 
 }
@@ -485,29 +474,21 @@ static void handlePrinterMsg( PrMessage *pMsg )
 {
     static unsigned int rePostCntr_ = 0;    
     static GAPSteps step_ = _INIT;
+    static TUSteps TUstep_ = _INIT_TU_CAL;
         
     unsigned long headSize = 0;
     unsigned long buffSize = 0;
     
-    if(getPrintHeadType() == ROHM_72MM_800_OHM)
-    {
-        headSize = PRINTER_HEAD_SIZE_72MM;
-        buffSize = PRINTER_BUFFER_SIZE_72MM;
-    }
-    else
-    {
-        headSize = PRINTER_HEAD_SIZE_80MM;
-        buffSize = PRINTER_BUFFER_SIZE_80MM;
-    }   
+    headSize = PRINTER_HEAD_SIZE_80MM;
+    buffSize = PRINTER_BUFFER_SIZE_80MM;
     
     switch( pMsg->generic.msgType )
     {
-        
         //PRINTF("PM: %d\r\n", pMsg->generic.msgType);
       
         case PR_WAKEUP:
         {              
-            //PRINTF("handlePrinterMsg(): Processing message: PR_WAKEUP \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_WAKEUP \r\n");
             PrWakeup wakeMsg;
             wakeMsg.msgType = PR_WAKEUP;
             wakeMsg.pid = getProductId();
@@ -521,26 +502,19 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_SYS_INFO: 
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_SYS_INFO \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_SYS_INFO \r\n");
             PrSysInfo info;
             info.msgType = PR_SYS_INFO;
             info.pid = getProductId();
             info.id = instance_;        /* first, second or third */
-            
-            if( getHeadStyleSize() == HEAD_DOTS_72MM  ) {
-              info.printhead_size = HEAD_DOTS_72MM;
-              info.buffer_size = PRINTER_BUFFER_SIZE_72MM;
-            } else {            
-              info.printhead_size = HEAD_DOTS_80MM;
-              info.buffer_size = PRINTER_BUFFER_SIZE_80MM;            
-            }
-            
+            info.printhead_size = HEAD_DOTS_80MM;
+            info.buffer_size = PRINTER_BUFFER_SIZE_80MM;            
             info.transfer_size = 512;
             info.headType = getPrintHeadType();
-            info.cutterInstalled = cutterInstalled_;
+            info.cutterInstalled = getCutterDetected();
             info.cutterEnabled = config_.cutterEnabled;
             info.configValid = configValid;   
-            
+                        
             sendPrSysInfo( &info );              
             break;
         }
@@ -556,7 +530,6 @@ static void handlePrinterMsg( PrMessage *pMsg )
             getLockSerialFlash();
 
             PRINTF("handlePrinterMsg(): Processing message: PR_CONFIG \r\n");
-            //PRINTF("handlePrinterMsg(): disposition: %d\r\n", pMsg->config.disposition);
             FPMBLC3Checksums sums, tSum;   
             
             if( pMsg->config.disposition == DEFAULT_CFG ) {
@@ -593,17 +566,11 @@ static void handlePrinterMsg( PrMessage *pMsg )
                 config_.peel_position           = pMsg->config.config.peel_position;
                 config_.retract_position        = pMsg->config.config.retract_position;
                 config_.label_width		= pMsg->config.config.label_width;
-                              
-                /* make sure we write back our shootthrough values. */
-                //pMsg->config.config.backingPaper        = config_.backingPaper;
-                //pMsg->config.config.backingAndlabel     = config_.backingAndlabel;
-                //pMsg->config.config.media_sensor_adjustment = config_.media_sensor_adjustment;
-                
+                                              
                 if( getPageChecksums( &sums ) ) {
                     sums.prConfigSum  = calculateChecksum( (void *)&config_, sizeof (Pr_Config) );
                     /* copy the new configuration to the serial flash section for configuration */
                     if ( ! setSerialPrConfiguration( &config_ ) ) {
-                        //PRINTF("setSerialPrConfiguration() failed.\r\n");
                         /* serial flash write failed.... load defaults values */
                         setSerialPrDfltConfiguration( &config_ );
                         sums.prConfigSum  = 0;    /* section corruption indication. */
@@ -623,7 +590,6 @@ static void handlePrinterMsg( PrMessage *pMsg )
                         }
                         /* save the new checksum */
                         if( setPageChecksums( &sums ) ) {
-                            //configValid = true;
                             //PRINTF("handlePrinterMsg(): configuration saved.\r\n" );
                         } else {
                             configValid = false;
@@ -649,9 +615,6 @@ static void handlePrinterMsg( PrMessage *pMsg )
             }
             /* update print contrast */
             setEngineContrast( config_.contrast_adjustment );
-            /*  TO DO:  update the vertical print position 
-            updateLabelAlignment();*/
-            
             /* release the lock onthe serial flash */
             releaseLockSerialFlash();
             break;
@@ -676,27 +639,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                 setPageChecksums( &sums );
                 /* clear and read config from flash */
                 memset( &config_, 0, sizeof( Pr_Config ) );
-                getSerialPrConfiguration( &config_ );
-                
-                /* //defaults
-                pPrConfig->label_width                      = UFW_LABEL_STOCK;   
-                pPrConfig->media_sensor_adjustment          = 25; 
-                pPrConfig->out_of_media_count               = 200;
-                pPrConfig->contrast_adjustment              = 3;
-                pPrConfig->peel_position                    = 75;  
-                pPrConfig->retract_position                 = -200;         
-                pPrConfig->expel_position                   = 15; 
-                pPrConfig->printheadResistance                   = 0;
-                pPrConfig->verticalPosition                 = 34;
-                pPrConfig->backingPaper                     = 0;
-                pPrConfig->backingAndlabel                  = 0;
-                pPrConfig->labelCalCnts                     = 0;
-                pPrConfig->noLabelCalCnts                   = 0;
-                pPrConfig->takeup_sensor_drive_current      = 62;
-                pPrConfig->takeup_sensor_max_tension_counts = 0;
-                pPrConfig->takeup_sensor_min_tension_counts = 0;
-                */
-              
+                getSerialPrConfiguration( &config_ );              
                             
                 PRINTF("handlePrinterMsg(): factory default configuration saved.\r\n" );
                 sendPrFactoryDlftsComplete(true);
@@ -714,7 +657,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_STATUS:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_STATUS \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_STATUS \r\n");
             /* added for rollover error with interrupt pipes during bulk transfer */
             if( !paused_ ) {
                 sendPrStatus( &currentStatus, false );  
@@ -723,7 +666,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_SENSORS:
         {
-             //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_SENSORS \r\n"); 
+            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_SENSORS \r\n"); 
             
             PrSensors sensors;
             getCurrentSensors( &sensors );
@@ -754,32 +697,32 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_VERSION:
         {		  
-            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_VERSION \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_VERSION \r\n");
             prVersion_.msgType = PR_VERSION;
             sendPrVersion( &prVersion_ );				
             break;
         }
         case PR_REQ_HEAD_POWER:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_HEAD_POWER \r\n"); 
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_HEAD_POWER \r\n"); 
                         
             break;
         }
         case PR_MODE:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_MODE \r\n");            
+            PRINTF("handlePrinterMsg(): Processing message: PR_MODE \r\n");            
             printMode_ = pMsg->mode.mode;
             break;
         }
         case PR_RESET:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_RESET \r\n");          
+            PRINTF("handlePrinterMsg(): Processing message: PR_RESET \r\n");          
             resetPrinter(); 
             break;
         }
         case PR_ENABLE:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_ENABLE \r\n");            
+            PRINTF("handlePrinterMsg(): Processing message: PR_ENABLE \r\n");            
             currentStatus.command = ENABLE_COMMAND;
             /* set the idle operation. */
             setOperation( IDLE_DIRECTIVE, &currentStatus );
@@ -787,7 +730,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_DISABLE:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_DISABLE \r\n");            
+            PRINTF("handlePrinterMsg(): Processing message: PR_DISABLE \r\n");            
             currentStatus.command = DISABLE_COMMAND;            
             /* set the disable operation. */
             setOperation( DISABLE_DIRECTIVE, &currentStatus );
@@ -820,9 +763,12 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_TEACH:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_TEACH\r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_TEACH\r\n");
             
-            CmdOp *pOper = &pMsg->teach.operation[0];  
+            CmdOp *pOper = &pMsg->teach.operation[0];
+            
+            PRINTF("\r\teach.identifier: %d\r\n", pMsg->teach.identifier);
+            
             /* freestanding scale */
             if( pMsg->teach.identifier != 8 ) {
                 if( pMsg->teach.identifier != 7 ) { 
@@ -836,12 +782,12 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_MASK:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_MASK \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_MASK \r\n");
             currentStatus.mask.sensor = pMsg->mask.mask.sensor;
             currentStatus.mask.user   = pMsg->mask.mask.user; 
             
-            //PRINTF("MASK SENSOR: %d\r\n", pMsg->mask.mask.sensor);
-            //PRINTF("MASK USER %d\r\n", pMsg->mask.mask.user);
+            PRINTF("MASK SENSOR: %d\r\n", pMsg->mask.mask.sensor);
+            PRINTF("MASK USER %d\r\n", pMsg->mask.mask.user);
             break;
         }
         case PR_PCBA_REVISION:
@@ -856,7 +802,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }               
         case PR_TEST:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_TEST \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_TEST \r\n");
             PrCommand cmd;
             memset( &cmd, 0, sizeof(PrCommand) );
             /* check for shoot through gap test */ 
@@ -887,12 +833,14 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_RAM:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_RAM \r\n");            
+            PRINTF("handlePrinterMsg(): Processing message: PR_RAM \r\n");            
             /* updateRam( &(pMsg->ram) ); TO DO: is this needed??*/
             break;
         }
         case PR_COMMAND:
         {
+            //PRINTF("\r\ncmd id %d\r\n", pMsg->command.identifier);
+          
             if( ( ( pMsg->command.identifier == 4 ) && ( getPacketTransferTotal() <= 1 ) ) && ( rePostCntr_ <= 10 ) ) {                  
                 /* give the rs485 transfer time to transfer at least 2 payloads before we start printing. */
                 /* PRINTF("handlePrinterMsg(): repost print cmd!\r\n"); */
@@ -902,7 +850,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                 if( rePostCntr_ >= 10 ) {
                     rePostCntr_ = 0;
                 }
-                /* */
+
                 if(pMsg->command.options == PrExpelToTearBar)
                 {
                     pMsg->command.identifier = 3;
@@ -932,148 +880,241 @@ static void handlePrinterMsg( PrMessage *pMsg )
                 else if( pMsg->command.identifier == 2 ) 
                 {
                     PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND fsbackup\r\n"); 
-                    
-                    if(getCutterInstalled_() == true)
+
+                    HEADTYPE head = getPrintHeadType();
+                      
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                     {
-                        takeupDelayMid();
-                    }
-                    
-                    if(getTakingUpPaper() == false)
-                    {
-                        if( getStartOfQueue() == true || getCutterInstalled_() == true  || getUsingContinuous() == true)
-                        {
-                            setStreamingLeadInMod(0);
-                         
-                            int calcSteps = calculateStreamingBackwindSteps();
-                            
-                            if(getLabelPauseBackwindPending() == true)
-                            {
-                                calcSteps = 160 + getIndirectData( (CMD_DATA_IDS)4 );
-                                setLabelPauseBackwindPending(false);
-                            }
-                            
-                            if(getCutterInstalled_() == true || getUsingContinuous() == true)
-                            {
-                                calcSteps = 150; 
-                            }
-                     
-                            backwindStock(calcSteps, 1000);
-                        }
+                        backwindStock(0, 1000);
                         
-                        setStartOfQueue( false );
+                        takeupDelayMid();
                     }
                     else
                     {
-                        if(getTakingUpPaper() == true && getFirstPrint() == false)
+                        if(getCutterInstalled() == true && getCutterBladeDelayNeeded() == true)
                         {
-                            short* shoots = getShootThroughBuffer();
-                            int TPHStepsPastGapPeeling = 0;
                             
-                            int startFilterIdx = 0;
-                            int endFilterIdx = 24;
-                            
-                            while(endFilterIdx < (getShootIndex()))
+                            takeupDelayMid();
+                            takeupDelayMid();
+                          
+                            setCutterBladeDelayNeeded(true);
+                        }
+                      
+                        if(getTakingUpPaper() == false)
+                        {
+                            if( getStartOfQueue() == true /*|| getCutterInstalled() == true*/  || getUsingContinuous() == true )
                             {
-                                averageAndStore(shoots, startFilterIdx, endFilterIdx);
-                                startFilterIdx++;
-                                endFilterIdx++;
-                            }
-                            
-                            double desiredPercentage;
-                            
-                            desiredPercentage = 85;
-                            
-                            double result = find_percentage_of_average(shoots, getShootIndex(), desiredPercentage);
-                            
-                            find_lowest_points_lowest(shoots, getShootIndex(), (int)result);
-                            
-                            TPHStepsPastGapPeeling = ( getTPHStepsThisPrint() - getPrintDip() );
-                            
-                            setTPHStepsPastGapThisPrint(TPHStepsPastGapPeeling);
-                            
-                            if(TPHStepsPastGapPeeling >= 600)
-                            {
-                                TPHStepsPastGapPeeling = 600;
-                            }
-                            
-                            if(getPrintDip() < 10)
-                            {
-                                TPHStepsPastGapPeeling = 400;
-                            }
-                            
-                            //peeling backwind
-                            if(getUsingContinuous() == true || getLabelSizeInQuarterSteps() == 4999)
-                            {      
-                                if(getCutterInstalled_() == true)
+                                setStreamingLeadInMod(0);
+
+                                int calcSteps = calculateStreamingBackwindSteps();
+                                
+                                if(getLabelPauseBackwindPending() == true)
                                 {
-                                    backwindStock(1, 1000);
+                                    if(getLargeGapFlag() == true)
+                                    {
+                                        calcSteps = 160 + getIndirectData(4);
+                                    }
+                                    else
+                                    {
+                                        calcSteps = 160 + getIndirectData(4);
+                                    }
+
+                                    setLabelPauseBackwindPending(false);
+                                }
+                                
+                                if(getCutterInstalled() == true && getUsingContinuous() == true)
+                                {
+                                    calcSteps = 150;
+                                }
+                                
+                                if(getUsingContinuous() == true)
+                                {
+                                    calcSteps = 150;
+                                }
+                                
+                                if(getCutterInstalled() == true)
+                                {
+                                    if(getCutMsgSent() == false)
+                                    {
+                                        //PRINTF("\r\nCUTTER BACKWIND backup 1 %d", calcSteps);
+                                  
+                                        backwindStock(calcSteps, 1000);
+                                        
+                                        while(getTakeupBusy() == true)
+                                        {
+                                            __NOP();
+                                        }
+                                        
+                                        if(getCutterInstalled() == true && getCutterBladeDelayNeeded() == true)
+                                        {
+                                            for(int i = 0; i < 50; i++)
+                                            {
+                                                takeupDelayShort();
+                                            }
+                                            
+                                            setCutterBladeDelayNeeded(false);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        cutterSizingDoneFlag = false;
+                                        cutMsgSentCounter = 0;
+                                    }
                                 }
                                 else
                                 {
-                                    if(getTakingUpPaper() == true) 
-                                    {                                      
-                                        backwindStock(150, 1000);
-                                    }
-                                    else 
+                                    backwindStock(calcSteps, 1000);
+                                    
+                                    while(getTakeupBusy() == true)
                                     {
-                                        backwindStock(150, 1000);
+                                        __NOP();
+                                    }
+                                    
+                                    if(getCutterInstalled() == true && getCutterBladeDelayNeeded() == true)
+                                    {
+                                        for(int i = 0; i < 50; i++)
+                                        {
+                                            takeupDelayShort();
+                                        }
+                                        
+                                        setCutterBladeDelayNeeded(false);
+                                    }
+                                }  
+                            }
+                            
+                            setStartOfQueue( false );
+                        }
+                        else
+                        {
+                            if(getTakingUpPaper() == true && getFirstPrint() == false)
+                            {
+                                short* shoots = getShootThroughBuffer();
+                                int TPHStepsPastGapPeeling = 0;
+                                
+                                int startFilterIdx = 0;
+                                int endFilterIdx = 24;
+                                
+                                while(endFilterIdx < (getShootIndex()))
+                                {
+                                    averageAndStore(shoots, startFilterIdx, endFilterIdx);
+                                    startFilterIdx++;
+                                    endFilterIdx++;
+                                }
+                                
+                                double desiredPercentage;
+                                
+                                desiredPercentage = 85;
+                                
+                                double result = find_percentage_of_average(shoots, getShootIndex(), desiredPercentage);
+                                
+                                find_lowest_points_lowest(shoots, getShootIndex(), result);
+                                
+                                TPHStepsPastGapPeeling = ( getTPHStepsThisPrint() - getPrintDip() );
+                                
+                                setTPHStepsPastGapThisPrint(TPHStepsPastGapPeeling);
+                                
+                                if(TPHStepsPastGapPeeling >= 600)
+                                {
+                                    TPHStepsPastGapPeeling = 600;
+                                }
+                                
+                                if(getPrintDip() < 10)
+                                {
+                                    TPHStepsPastGapPeeling = 400;
+                                }
+                                
+                                //peeling backwind
+                                if(getUsingContinuous() == true || getLabelSizeInQuarterSteps() == 4999)
+                                {      
+                                    if(getCutterInstalled() == true)
+                                    {
+                                        backwindStock(1, 1000);
+                                    }
+                                    else
+                                    {
+                                        if(getTakingUpPaper() == true) 
+                                        {                                      
+                                            backwindStock(150, 1000);
+                                        }
+                                        else 
+                                        {
+                                            backwindStock(150, 1000);
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {   
-                                if(getTakingUpPaper() == true)
-                                {
-                                    backwindStock(calculatePeelingBackwindSteps() , 1000);
-                                } 
-                            }
+                                else
+                                {   
+                                    if(getTakingUpPaper() == true)
+                                    {
+                                        backwindStock(calculatePeelingBackwindSteps() , 1000);
+                                    } 
+                                }
 
-                            setShootIndex(0);
-                            memset(shoots, 0, sizeof(&shoots));
-                        }
+                                setShootIndex(0);
+                                memset(shoots, 0, sizeof(&shoots));
+                            }
+                        } 
                     }
                 } 
                 else if( pMsg->command.identifier == 3 ) 
                 {
                     PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND gAdvance\r\n"); 
-                    
-                    if(getLabelQueuePaused() == true || getLabelPauseBackwindPending() == true || getTakingUpPaper() == true)
+
+                    HEADTYPE head = getPrintHeadType();
+                      
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
                     {
-                        PRINTF("LABEL PAUSE COMMAND SKIPPED\r\n");
-                        
-                        if(getLabelQueuePaused() == true)
+                        if(getTakeupBusy() == false && currentStatus.state == ENGINE_IDLE)
                         {
-                            PRINTF("getLabelQueuePaused() == true\r\n");
-                        }
+                            stepToNextLabel(25, 950);
+                            
+                            //takeupDelay();
                         
-                        if(getLabelPauseBackwindPending() == true)
-                        {
-                            PRINTF("getLabelPauseBackwindPending() == true\r\n");
+                            currentStatus.command = COMMAND_COMPLETE;
                         }
-                        
-                        if(getTakingUpPaper() == true)
-                        {
-                            PRINTF("getTakingUpPaper() == true\r\n");
-                        }
+                                           
+                        addCmdToQueue( &pMsg->command );
                     }
                     else
                     {
-                        setLabelQueuePaused(true);
-                        setLabelPauseBackwindPending(false);
-                        setLabelPauseTimeout(0);
+                        if(getLabelQueuePaused() == true || getLabelPauseBackwindPending() == true || getTakingUpPaper() == true || getCutterInstalled() == true)
+                        {
+                            PRINTF("LABEL PAUSE COMMAND SKIPPED\r\n");
+                            
+                            if(getLabelQueuePaused() == true)
+                            {
+                                PRINTF("getLabelQueuePaused() == true\r\n");
+                            }
+                            
+                            if(getLabelPauseBackwindPending() == true)
+                            {
+                                PRINTF("getLabelPauseBackwindPending() == true\r\n");
+                            }
+                            
+                            if(getTakingUpPaper() == true)
+                            {
+                                PRINTF("getTakingUpPaper() == true\r\n");
+                            }
+                        }
+                        else
+                        {
+                            setLabelQueuePaused( true );
+                            setLabelPauseBackwindPending( false );
+                            setLabelPauseTimeout( 0 );
+                        }
                     }
                 } 
                 else if( pMsg->command.identifier == 4 ) 
                 {
-                    PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND gPrint\r\n");
-                    
+                    PRINTF("\r\nhandlePrinterMsg(): Processing message: PR_COMMAND gPrint\r\n");
+
                     setLabelPauseTimeout(0);
                     
                     setPrintingStatus(true);
                     
                     if(getWaitForLabelTaken() == true)
                     { 
-                        uint16_t expelSteps = getIndirectData( (CMD_DATA_IDS)4 );
+                        uint16_t expelSteps = getIndirectData(4);
                         
                         setStreamingExpelMod(expelSteps);
                     }
@@ -1128,9 +1169,25 @@ static void handlePrinterMsg( PrMessage *pMsg )
                 {
                     PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND gSizing\r\n"); 
                     
-                    bool outOfMedia = checkForOutOfMedia(); 
+                    bool outOfMedia = false; 
+                    
+                    HEADTYPE head = getPrintHeadType();
+                    
+                    if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+                    {
+                        outOfMedia = checkForOutOfMediaHTPrinter();
+                    }
+                    else
+                    {
+                        outOfMedia = checkForOutOfMedia();
+                    }
 
-                    if(outOfMedia == false && getHeadUp() == false)
+                    if(getGapCalStatus() == true)
+                    {
+                        PRINTF("\r\ngap cal true");
+                    }
+                    
+                    if(outOfMedia == false && getHeadUp() == false && getGapCalStatus() == false)
                     {
                         PRINTF("gSizing started\r\n");
                       
@@ -1141,6 +1198,8 @@ static void handlePrinterMsg( PrMessage *pMsg )
                         
                         setCanceledSizingFlag(false);
                         
+                        setOperation( IDLE_DIRECTIVE, &currentStatus );
+                        
                         addCmdToQueue( &pMsg->command );
                     }
                     else
@@ -1148,7 +1207,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
                         PRINTF("gSizing canceled\r\n");
                         
                         setSizingStatus(false);
-                        
+                       
                         setSizingState(0);
                         setTakeupBusy(false);
                         
@@ -1176,6 +1235,14 @@ static void handlePrinterMsg( PrMessage *pMsg )
                     PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND fsCutRetractVirt\r\n"); 
                     addCmdToQueue( &pMsg->command );
                 } 
+                else if( pMsg->command.identifier == 12 ) 
+                {
+                    PRINTF("handlePrinterMsg(): Processing message: PR_COMMAND cutterJiggleEnable\r\n"); 
+                    
+                    setCutterJiggleEnabled(true);
+                    
+                    addCmdToQueue( &pMsg->command );
+                } 
                 else  
                 {
                     PRINTF("handlePrinterMsg(): Processing UNKNOWN COMMAND message: PR_COMMAND %d\r\n", pMsg->command.identifier); 
@@ -1187,6 +1254,8 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_TRANSFER: 
         {
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_TRANSFER \r\n");
+          
             //PRINTF("handlePrinterMsg(): transfer size: %d \r\n", pMsg->transfer.transferSize );
             //PRINTF("handlePrinterMsg(): label image size to print: %d \r\n", pMsg->transfer.imageSize );
             /* inform the image manager of the incomming label image size */
@@ -1196,7 +1265,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_HEAD_TYPE:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_REQ_HEAD_TYPE \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_HEAD_TYPE \r\n");
             
             PrHead head;
             head.msgType  = PR_HEAD_TYPE;
@@ -1208,30 +1277,53 @@ static void handlePrinterMsg( PrMessage *pMsg )
         case PR_CUTTER_CUT: 
         {
             PRINTF("handlePrinterMsg(): Processing message: PR_CUTTER_CUT \r\n");
-            #if 0   /* TO DO: finish integration to averyCutter. This should be a message sent to the cutter task */
-            cutterCut(false);
-            #endif
+                  
+            if(getCutterInstalled() == true)
+            {   
+                ICutterGeneric cMsg;
+                
+                //cMsg.msgType = _I_CUTTER_REQ_STATUS;
+                cMsg.msgType = _I_CUTTER_CUT_CMD;
+              
+                if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                {
+                    BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cMsg, 0 );
+                }
+            } 
+                
             break;
         }
         case PR_CUTTER_HOME:
         {
-            PRINTF("handlePrinterMsg(): Processing message: PR_CUTTER_HOME \r\n");
-            #if 0   /* TO DO: finish integration to averyCutter. This should be a message sent to the cutter task */
-            cutterHome();
-            #endif
+            PRINTF("handlePrinterMsg(): Processing message: PR_CUTTER_HOME \r\n");            
             break;
         }
         case PR_REQ_CUTTER_STATUS:
         {
-            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_CUTTER_STATUS \r\n");
-            #if 0   /* TO DO: finish integration to averyCutter. This should be a message sent to the cutter task */
+            cSGMsg.msgType = _I_CUTTER_REQ_STATUS;
+              
+            if(currentStatus.state == ENGINE_IDLE && getCutterState() == AC_WAIT_FOR_COMMAND_ && getCutterJiggling() == false && getTakeupBusy() == false)
+            {
+                if( (QueueHandle_t)getCutterQHandle() != NULL ) 
+                {
+                    BaseType_t result = xQueueSendFromISR( (QueueHandle_t)getCutterQHandle(), (void *)&cSGMsg, 0 );
+                }
+            }
+            
             PrCutterStatus msg;
+            bool cHome = getCutterHome();
+            bool cSaddle = getCutterSaddleInterlock();
+            bool cDoor = getCutterDoorInterlock();
+            bool cJammed = getCutterJammed();
             
             msg.msgType = PR_CUTTER_STATUS;
-            
-            getCutterStatus(&msg);
+            msg.home = cHome;
+            msg.saddleInterlock = cSaddle;
+            msg.doorInterlock = cDoor;
+            msg.jammed = cJammed;
+
             sendPrCutterStatus( &msg );
-            #endif
+            
             break;
         } 
         case PR_REQ_DOT_WEAR:        
@@ -1303,7 +1395,7 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_STATION_ID:
         {
-            //PRINTF("handlePrinterMsg(): Processing message: PR_STATION_ID \r\n");
+            PRINTF("handlePrinterMsg(): Processing message: PR_STATION_ID \r\n");
             
             FPMBLC3Checksums sums;
             config_.instance = pMsg->id.station;
@@ -1332,40 +1424,69 @@ static void handlePrinterMsg( PrMessage *pMsg )
         }
         case PR_REQ_DOT_STATUS: 
         {
-            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_DOT_STATUS \r\n");
-
-            sendDotWear( getHeadStyleSize() );
-            
+            PRINTF("handlePrinterMsg(): Processing message: PR_REQ_DOT_STATUS \r\n");            
+            sendPrHeadDotStatus( getHeadStyleSize() );
             break;
         }
         case PR_START_GAP_CALIBRATION: 
         { 
-            setGapCalStatus(true);
-            
-            delay_uS(10000);
-         
-            callsToGapSensor = 0;
-            
             PRINTF("handlePrinterMsg(): Processing message: PR_START_GAP_CALIBRATION \r\n");
             
-            setStreamingLabelBackwind( 0 );
-            setTPHStepsPastGapThisPrint( 0 );
-            setTPHStepsThisPrint( 0 );
+            setGapCalStatus( true );            
+            delay_uS( 10000 );        
+            callsToGapSensor = 0;
             
-            /* stop processing weigher counts until cal is done. */ 
-            weigherCountsStartStop( false );
+            HEADTYPE head = getPrintHeadType();
             
-            unsigned char calPoint = 0;
-            /* check we are successful in initializing */
-            if( gapSensorCal( step_, &calPoint ) ) {
-                 PRINTF("handlePrinterMsg(): _CALBACKING \r\n");
-                /* switch to next step */
-                step_ = _CALBACKING;
-            } else {
-                PRINTF("handlePrinterMsg(): failed to initialize for gap calibration!\r\n" );
-                step_ = _CALDONE;
-                 weigherCountsStartStop( true );
-            }                
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
+            {
+                setStreamingLabelBackwind( 0 );
+                setTPHStepsPastGapThisPrint( 0 );
+                setTPHStepsThisPrint( 0 );
+                
+                /* stop processing weigher counts until cal is done. */ 
+                weigherCountsStartStop( false );
+                
+                unsigned char calPoint = 0;
+                /* check we are successful in initializing */
+                if( mediaSensorCal( step_, &calPoint ) ) 
+                {
+                    PRINTF("handlePrinterMsg(): _CALBACKING HT\r\n");
+                    /* switch to next step */
+                    step_ = _CALBACKING;
+                } 
+                else 
+                {
+                    PRINTF("handlePrinterMsg(): failed to initialize for gap calibration!\r\n" );
+                    step_ = _CALDONE;
+                    weigherCountsStartStop( true );
+                } 
+            }
+            else
+            {
+                setStreamingLabelBackwind( 0 );
+                setTPHStepsPastGapThisPrint( 0 );
+                setTPHStepsThisPrint( 0 );
+                
+                /* stop processing weigher counts until cal is done. */ 
+                weigherCountsStartStop( false );
+                
+                unsigned char calPoint = 0;
+                /* check we are successful in initializing */
+                if( gapSensorCal( step_, &calPoint ) ) 
+                {
+                    PRINTF("handlePrinterMsg(): _CALBACKING \r\n");
+                    /* switch to next step */
+                    step_ = _CALBACKING;
+                } 
+                else 
+                {
+                    PRINTF("handlePrinterMsg(): failed to initialize for gap calibration!\r\n" );
+                    step_ = _CALDONE;
+                    weigherCountsStartStop( true );
+                }  
+            }
+            
             break;
         }
         case PR_CAL_GAP_SENSOR_NEXT: 
@@ -1376,87 +1497,183 @@ static void handlePrinterMsg( PrMessage *pMsg )
             
             delay_uS(10000);
             
-            if(callsToGapSensor >= 4)
+            HEADTYPE head = getPrintHeadType();
+            
+            if(head == KYOCERA753_OHM || head == KYOCERA800_OHM || head == KYOCERA849_OHM)
             {
-                PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT BEFORE RESET = %d\r\n\r\n", callsToGapSensor);
-                
-                callsToGapSensor = 0;
-                
-                step_ = _CALDONE;
-                
-                setGapCalStatus(true);
-            }
-            
-            PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT = %d\r\n\r\n", callsToGapSensor);
-          
-            PRINTF("handlePrinterMsg(): Processing message: PR_CAL_GAP_SENSOR_NEXT \r\n");
-            unsigned char calPoint = 0;
-            FPMBLC3Checksums sums;
-            
-            PRINTF("printerTask(): Current gap cal state: %d!\r\n", step_ );
-            /* if the cal step completed then setup for the next step */
-            if( gapSensorCal( step_, &calPoint ) ) {
-                /* switch to the next state based on current state */
-                if( step_ == _CALBACKING )  
-                    step_ = _CALLABEL;
-                else if( step_ == _CALLABEL )
-                    step_ = _CALRESULTS;
-                else if( step_ == _CALRESULTS ) {
-                    config_.media_sensor_adjustment = calPoint;
+                if(callsToGapSensor >= 4)
+                {
+                    PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT BEFORE RESET HT = %d\r\n\r\n", callsToGapSensor);
                     
-                    if( setGapCurrent( calPoint ) ) {  
-                        /* save set point */
-                        if( setSerialPrConfiguration( &config_ ) ) {   
-                            /* SOF-5109 */
-                            getPageChecksums( &sums );
-                            sums.prConfigSum  = calculateChecksum( (void *)&config_, sizeof (Pr_Config) );
-                            
-                            /* save the new checksum */
-                            if( setPageChecksums( &sums ) ) {
-                                configValid = true;
+                    callsToGapSensor = 0;
+                    
+                    step_ = _CALDONE;
+                    
+                    setGapCalStatus(true);
+                }
+                
+                PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT HT = %d\r\n\r\n", callsToGapSensor);
+              
+                PRINTF("handlePrinterMsg(): Processing message: PR_CAL_GAP_SENSOR_NEXT HT \r\n");
+                unsigned char calPoint = 0;
+                FPMBLC3Checksums sums;
+                
+                PRINTF("printerTask(): Current gap cal state HT: %d!\r\n", step_ );
+                /* if the cal step completed then setup for the next step */
+                if( mediaSensorCal( step_, &calPoint ) ) {
+                    /* switch to the next state based on current state */
+                    if( step_ == _CALBACKING )
+                    {
+                        step_ = _CALLABEL;
+                        PRINTF("printerTask(): Current gap cal state HT: %d!\r\n", step_ );
+                    }
+                    else if( step_ == _CALLABEL )
+                    {
+                        step_ = _CALRESULTS;
+                        PRINTF("printerTask(): Current gap cal state HT: %d!\r\n", step_ );
+                    }
+                    else if( step_ == _CALRESULTS ) {
+                        config_.media_sensor_adjustment = calPoint;
+                        
+                        if( /*setGapCurrent( calPoint )*/ 1 ) {  
+                            /* save set point */
+                            if( setSerialPrConfiguration( &config_ ) ) {   
+                                /* SOF-5109 */
+                                getPageChecksums( &sums );
+                                sums.prConfigSum  = calculateChecksum( (void *)&config_, sizeof (Pr_Config) );
+                                
+                                /* save the new checksum */
+                                if( setPageChecksums( &sums ) ) {
+                                    configValid = true;
+                                } else {
+                                    /* failed to save new checksum! */
+                                    PRINTF("printerTask(): Failed to save gap cal new checksum HT!\r\n" );
+                                }
                             } else {
-                                /* failed to save new checksum! */
-                                PRINTF("printerTask(): Failed to save gap cal new checksum!\r\n" );
-                            }
+                                /* failed to save cal point into configuration! */
+                                PRINTF("printerTask(): Failed to save gap cal! HT\r\n" );                        
+                            }                                                       
+                            mediaSensorCal( _CALDONE, &calPoint );
+                            /* allow weigher to continue processing weigher counts */
+                            weigherCountsStartStop( true );
+                            
+                            step_ = _INIT;
                         } else {
-                            /* failed to save cal point into configuration! */
-                            PRINTF("printerTask(): Failed to save gap cal!\r\n" );                        
-                        }                                                       
-                        gapSensorCal( _CALDONE, &calPoint );
+                            PRINTF("printerTask(): failured to set gap drive current! HT\r\n" );
+                            /* allow weigher to continue processing weigher counts */
+                            weigherCountsStartStop( true );
+
+                            // TO DO: inform host of failure.
+                        }
+                    }
+                    
+                    if( step_ == _CALDONE ) {
                         /* allow weigher to continue processing weigher counts */
                         weigherCountsStartStop( true );
                         
+                        setGapCalStatus(false);
+                        
+                        currentStatus.sensor &= ~OUT_OF_MEDIA;
+                        
                         step_ = _INIT;
-                    } else {
-                        PRINTF("printerTask(): failured to set gap drive current!\r\n" );
-                        /* allow weigher to continue processing weigher counts */
-                        weigherCountsStartStop( true );
-
-                        // TO DO: inform host of failure.
                     }
-                }
-                
-                if( step_ == _CALDONE ) {
+                } else {
                     /* allow weigher to continue processing weigher counts */
                     weigherCountsStartStop( true );
                     
                     setGapCalStatus(false);
                     
                     currentStatus.sensor &= ~OUT_OF_MEDIA;
-                    
-                    step_ = _INIT;
-                }
-            } else {
-                /* allow weigher to continue processing weigher counts */
-                weigherCountsStartStop( true );
-                
-                setGapCalStatus(false);
-                
-                currentStatus.sensor &= ~OUT_OF_MEDIA;
 
-                /* problem, next step cleanup */
-                step_ = _CALDONE;
+                    /* problem, next step cleanup */
+                    step_ = _CALDONE;
+                }
             }
+            else
+            {
+                if(callsToGapSensor >= 4)
+                {
+                    PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT BEFORE RESET = %d\r\n\r\n", callsToGapSensor);
+                    
+                    callsToGapSensor = 0;
+                    
+                    step_ = _CALDONE;
+                    
+                    setGapCalStatus(true);
+                }
+                
+                PRINTF("\r\n\r\nCalls to PR_CAL_GAP_SENSOR_NEXT = %d\r\n\r\n", callsToGapSensor);
+              
+                PRINTF("handlePrinterMsg(): Processing message: PR_CAL_GAP_SENSOR_NEXT \r\n");
+                unsigned char calPoint = 0;
+                FPMBLC3Checksums sums;
+                
+                PRINTF("printerTask(): Current gap cal state: %d!\r\n", step_ );
+                /* if the cal step completed then setup for the next step */
+                if( gapSensorCal( step_, &calPoint ) ) {
+                    /* switch to the next state based on current state */
+                    if( step_ == _CALBACKING )  
+                        step_ = _CALLABEL;
+                    else if( step_ == _CALLABEL )
+                        step_ = _CALRESULTS;
+                    else if( step_ == _CALRESULTS ) {
+                        config_.media_sensor_adjustment = calPoint;
+                        
+                        if( setGapCurrent( calPoint ) ) {  
+                            /* save set point */
+                            if( setSerialPrConfiguration( &config_ ) ) {   
+                                /* SOF-5109 */
+                                getPageChecksums( &sums );
+                                sums.prConfigSum  = calculateChecksum( (void *)&config_, sizeof (Pr_Config) );
+                                
+                                /* save the new checksum */
+                                if( setPageChecksums( &sums ) ) {
+                                    configValid = true;
+                                } else {
+                                    /* failed to save new checksum! */
+                                    PRINTF("printerTask(): Failed to save gap cal new checksum!\r\n" );
+                                }
+                            } else {
+                                /* failed to save cal point into configuration! */
+                                PRINTF("printerTask(): Failed to save gap cal!\r\n" );                        
+                            }                                                       
+                            gapSensorCal( _CALDONE, &calPoint );
+                            /* allow weigher to continue processing weigher counts */
+                            weigherCountsStartStop( true );
+                            
+                            step_ = _INIT;
+                        } else {
+                            PRINTF("printerTask(): failured to set gap drive current!\r\n" );
+                            /* allow weigher to continue processing weigher counts */
+                            weigherCountsStartStop( true );
+
+                            // TO DO: inform host of failure.
+                        }
+                    }
+                    
+                    if( step_ == _CALDONE ) {
+                        /* allow weigher to continue processing weigher counts */
+                        weigherCountsStartStop( true );
+                        
+                        setGapCalStatus(false);
+                        
+                        currentStatus.sensor &= ~OUT_OF_MEDIA;
+                        
+                        step_ = _INIT;
+                    }
+                } else {
+                    /* allow weigher to continue processing weigher counts */
+                    weigherCountsStartStop( true );
+                    
+                    setGapCalStatus(false);
+                    
+                    currentStatus.sensor &= ~OUT_OF_MEDIA;
+
+                    /* problem, next step cleanup */
+                    step_ = _CALDONE;
+                }
+            }
+            
             //PRINTF("printerTask(): Switching to cal state: %d!\r\n", step_ );
             break;
         }
@@ -1531,16 +1748,18 @@ static void handlePrinterMsg( PrMessage *pMsg )
             break;
         }
         case PR_SET_TIMER: {
+          PRINTF("handlePrinterMsg(): Processing message: PR_SET_TIMER\r\n");
+          
           if( pMsg->setTimer.timer == _LABEL_TAKEN_TIMER ) {
               /* should we be ignoring label taken sensor? */
               if( pMsg->setTimer.milliseconds != 0 ) {
-                  //PRINTF("printerTask(): set label taken timer: %dmS\r\n", pMsg->setTimer.milliseconds ); 
+                  PRINTF("printerTask(): set label taken timer: %dmS\r\n", pMsg->setTimer.milliseconds ); 
                   if( pTTakeLabel_ == NULL ) {
-                      //pTTakeLabel_ = xTimerCreate( "labelTimer", (TickType_t)pMsg->setTimer.milliseconds, pdTRUE, ( void * ) 0, takeLabelCallBack );
+                      pTTakeLabel_ = xTimerCreate( "labelTimer", (TickType_t)pMsg->setTimer.milliseconds, pdTRUE, ( void * ) 0, takeLabelCallBack );
                       if( pTTakeLabel_ != NULL ) {        
-                          //PRINTF("printerTask(): take label timer created\r\n" );                      
+                          PRINTF("printerTask(): take label timer created\r\n" );                      
                       } else {
-                          //PRINTF("printerTask(): Critical Error label timer not created!\r\n" );
+                          PRINTF("printerTask(): Critical Error label timer not created!\r\n" );
                       }
                   }
               } else {
@@ -1725,13 +1944,8 @@ void prWakeupCallBack( TimerHandle_t timer_  )
     wake.msgType = PR_WAKEUP;
     wake.pid = getProductId();  
     wake.id = instance_;
-    if( getHeadStyleSize() == HEAD_DOTS_72MM  ) {
-        wake.printhead_size = PRINTER_HEAD_SIZE_72MM;
-        wake.buffer_size = PRINTER_BUFFER_SIZE_72MM;
-    } else {
-        wake.printhead_size = PRINTER_HEAD_SIZE_80MM;
-        wake.buffer_size = PRINTER_BUFFER_SIZE_80MM;    
-    }
+    wake.printhead_size = PRINTER_HEAD_SIZE_80MM;
+    wake.buffer_size = PRINTER_BUFFER_SIZE_80MM;    
     wake.transfer_size = 512; 
     /* freestanding scale printer does not use narrow stock */
     if( ( style_ == RT_PRINTER_SERVICE_SCALE_72MM ) || 
@@ -1825,37 +2039,6 @@ static void monitorMaintenance( void )
     static long long cntr_ = 0;    
     switch( maintenanceTest_ )
     {
-        #if 0 /* TO DO: port this here */                
-        case _CUTTER_LIFE_TEST: {
-            while( !stopTest_ ) {
-                if( currentStatus.error == NO_ERROR && (currentStatus.sensor & OUT_OF_MEDIA) != OUT_OF_MEDIA 
-                    && (currentStatus.sensor & LABEL_TAKEN) == LABEL_TAKEN && 
-                        isCutterInterlockClosed() ) {
-                    initializeCmdSequence( 5, &currentStatus );
-                    while(currentStatus.state != ENGINE_IDLE) {
-                        taskYIELD();
-                    }
-
-                    cutterCut(true);
-                    xSemaphoreTake( pCutDoneSemaphore, portMAX_DELAY );
-                    initializeCmdSequence( 2, &currentStatus );
-                    while(currentStatus.state != ENGINE_IDLE){
-                        taskYIELD();
-                    }
-                
-                    cntr_++;
-                    PRINTF("-----------------------Number of Cuts %lld-----------------------\r\n",cntr_);
-                    vTaskDelay(pdMS_TO_TICKS(1000));                
-                }
-                readHeadUpSensor(&currentStatus);
-                readLabelTakenSensor();
-                processLabelTakenSensor(&currentStatus);
-                taskYIELD();
-            } 
-            cntr_= 0;
-            break;           
-        }
-        #endif
         case _DRIVETRAIN_LIFE_TEST: {
             while( !stopTest_ ) {
                 if( ( currentStatus.error == NO_ERROR ) && 
@@ -1976,6 +2159,7 @@ static bool verifyPrConfiguration( Pr_Config *pTemp, Pr_Config *pSF )
     bool result = false;
 
     if( memcmp( pTemp, pSF, sizeof(Pr_Config) ) == 0 ) {
+        /*
         PRINTF("verifyConfiguration(): success!\r\n" );
         PRINTF("instance: %d  %d\r\n", pTemp->instance, pSF->instance );
         PRINTF("label_width: %d  %d\r\n", pTemp->label_width, pSF->label_width );
@@ -1996,7 +2180,7 @@ static bool verifyPrConfiguration( Pr_Config *pTemp, Pr_Config *pSF )
         PRINTF("takeup_sensor_drive_current: %d  %d\r\n", pTemp->takeup_sensor_drive_current, pSF->takeup_sensor_drive_current );
         PRINTF("takeup_sensor_max_tension_counts: %d  %d\r\n", pTemp->takeup_sensor_max_tension_counts, pSF->takeup_sensor_max_tension_counts );
         PRINTF("takeup_sensor_min_tension_counts: %d  %d\r\n", pTemp->takeup_sensor_min_tension_counts, pSF->takeup_sensor_min_tension_counts );
-        
+        */
       
         result = true;
         
@@ -2094,12 +2278,12 @@ void resetPrinter( void )
     /* clear label image buffer */
     clearLabelImageBuffer();
 	
-    /* free up Cal buffers incase we just completed calibration */
-    freePrinterCalBuffers();
-  
+	/* Free up Cal buffers incase we just completed calibration */
+	freePrinterCalBuffers();
+    
     /* set the idle operation. */
-    if( currentStatus.state != ENGINE_IDLE )  //Fixes print multiple. Carlos fix.  Prevents a sendPrStatus
-       setOperation( IDLE_DIRECTIVE, &currentStatus ); 
+    //if( currentStatus.state != ENGINE_IDLE )  //Fixes print multiple. Carlos fix.  Prevents a sendPrStatus
+    //   setOperation( IDLE_DIRECTIVE, &currentStatus ); 
 }
 
 void setConfigBackingValue(unsigned short val )
@@ -2131,9 +2315,14 @@ bool getWaitForLabelTaken( void )
     return waitForLabelTaken;
 }
 
-bool getCutterInstalled_( void )
+bool getCutterInstalled( void )
 {
     return cutterInstalled_;
+}
+
+void setCutterInstalled( bool cutterInstalled )
+{
+    cutterInstalled_ = cutterInstalled;
 }
 
 bool getLabelQueuePaused( void )

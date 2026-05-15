@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021 NXP
+ * Copyright 2016-2021, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -206,7 +206,7 @@ static void USDHC_TransferHandleReTuning(USDHC_Type *base, usdhc_handle_t *handl
 static USDHC_Type *const s_usdhcBase[] = USDHC_BASE_PTRS;
 
 /*! @brief USDHC internal handle pointer array */
-static usdhc_handle_t *s_usdhcHandle[ARRAY_SIZE(s_usdhcBase)] = {NULL};
+static usdhc_handle_t *s_usdhcHandle[ARRAY_SIZE(s_usdhcBase)] = {0};
 
 /*! @brief USDHC IRQ name array */
 static const IRQn_Type s_usdhcIRQ[] = USDHC_IRQS;
@@ -957,7 +957,9 @@ void USDHC_GetCapability(USDHC_Type *base, usdhc_capability_t *capability)
         (htCapability & (USDHC_HOST_CTRL_CAP_ADMAS_MASK | USDHC_HOST_CTRL_CAP_HSS_MASK | USDHC_HOST_CTRL_CAP_DMAS_MASK |
                          USDHC_HOST_CTRL_CAP_SRS_MASK | USDHC_HOST_CTRL_CAP_VS33_MASK));
     capability->flags |= htCapability & USDHC_HOST_CTRL_CAP_VS30_MASK;
+#if !(defined(FSL_FEATURE_USDHC_HAS_NO_VS18) && FSL_FEATURE_USDHC_HAS_NO_VS18)
     capability->flags |= htCapability & USDHC_HOST_CTRL_CAP_VS18_MASK;
+#endif
     capability->flags |= htCapability & USDHC_HOST_CTRL_CAP_DDR50_SUPPORT_MASK;
 #if defined(FSL_FEATURE_USDHC_HAS_SDR104_MODE) && FSL_FEATURE_USDHC_HAS_SDR104_MODE
     capability->flags |= USDHC_HOST_CTRL_CAP_SDR104_SUPPORT_MASK;
@@ -1220,11 +1222,11 @@ status_t USDHC_SetADMA1Descriptor(
 
     uint32_t miniEntries, startEntries = 0UL,
                           maxEntries = (admaTableWords * sizeof(uint32_t)) / sizeof(usdhc_adma1_descriptor_t);
-    usdhc_adma1_descriptor_t *adma1EntryAddress = (usdhc_adma1_descriptor_t *)(uint32_t)(admaTable);
+    usdhc_adma1_descriptor_t *adma1EntryAddress = (usdhc_adma1_descriptor_t *)(uintptr_t)(admaTable);
     uint32_t i, dmaBufferLen = 0UL;
     const uint32_t *data = dataBufferAddr;
 
-    if (((uint32_t)data % USDHC_ADMA1_ADDRESS_ALIGN) != 0UL)
+    if (((uintptr_t)data % USDHC_ADMA1_ADDRESS_ALIGN) != 0UL)
     {
         return kStatus_USDHC_DMADataAddrNotAlign;
     }
@@ -1275,10 +1277,10 @@ status_t USDHC_SetADMA1Descriptor(
 
         adma1EntryAddress[i] = (dmaBufferLen << USDHC_ADMA1_DESCRIPTOR_LENGTH_SHIFT);
         adma1EntryAddress[i] |= (uint32_t)kUSDHC_Adma1DescriptorTypeSetLength;
-        adma1EntryAddress[i + 1UL] = (uint32_t)(data);
+        adma1EntryAddress[i + 1UL] = (uintptr_t)(data);
         adma1EntryAddress[i + 1UL] |=
             (uint32_t)kUSDHC_Adma1DescriptorTypeTransfer | (uint32_t)kUSDHC_Adma1DescriptorInterrupFlag;
-        data = (uint32_t *)((uint32_t)data + dmaBufferLen);
+        data = (uint32_t *)((uintptr_t)data + dmaBufferLen);
         dataBytes -= dmaBufferLen;
     }
     /* the end of the descriptor */
@@ -1307,11 +1309,11 @@ status_t USDHC_SetADMA2Descriptor(
 
     uint32_t miniEntries, startEntries = 0UL,
                           maxEntries = (admaTableWords * sizeof(uint32_t)) / sizeof(usdhc_adma2_descriptor_t);
-    usdhc_adma2_descriptor_t *adma2EntryAddress = (usdhc_adma2_descriptor_t *)(uint32_t)(admaTable);
+    usdhc_adma2_descriptor_t *adma2EntryAddress = (usdhc_adma2_descriptor_t *)(uintptr_t)(admaTable);
     uint32_t i, dmaBufferLen = 0UL;
     const uint32_t *data = dataBufferAddr;
 
-    if (((uint32_t)data % USDHC_ADMA2_ADDRESS_ALIGN) != 0UL)
+    if (((uintptr_t)data % USDHC_ADMA2_ADDRESS_ALIGN) != 0UL)
     {
         return kStatus_USDHC_DMADataAddrNotAlign;
     }
@@ -1369,13 +1371,17 @@ status_t USDHC_SetADMA2Descriptor(
         }
 
         /* Each descriptor for ADMA2 is 64-bit in length */
+#if INTPTR_MAX == INT64_MAX
+        adma2EntryAddress[i].address   = (uintptr_t)((dataBytes == 0UL) ? &s_usdhcBootDummy : data);
+#else
         adma2EntryAddress[i].address   = (dataBytes == 0UL) ? &s_usdhcBootDummy : data;
+#endif
         adma2EntryAddress[i].attribute = (dmaBufferLen << USDHC_ADMA2_DESCRIPTOR_LENGTH_SHIFT);
         adma2EntryAddress[i].attribute |=
             (dataBytes == 0UL) ?
                 0UL :
                 ((uint32_t)kUSDHC_Adma2DescriptorTypeTransfer | (uint32_t)kUSDHC_Adma2DescriptorInterruptFlag);
-        data = (uint32_t *)((uint32_t)data + dmaBufferLen);
+        data = (uint32_t *)((uintptr_t)data + dmaBufferLen);
 
         if (dataBytes != 0UL)
         {
@@ -1418,7 +1424,7 @@ status_t USDHC_SetInternalDmaConfig(USDHC_Type *base,
     assert(dmaConfig != NULL);
     assert(dataAddr != NULL);
     assert((NULL != dmaConfig->admaTable) &&
-           (((USDHC_ADMA_TABLE_ADDRESS_ALIGN - 1U) & (uint32_t)dmaConfig->admaTable) == 0UL));
+           (((USDHC_ADMA_TABLE_ADDRESS_ALIGN - 1U) & (uintptr_t)dmaConfig->admaTable) == 0UL));
 
 #if FSL_FEATURE_USDHC_HAS_EXT_DMA
     /* disable the external DMA if support */
@@ -1428,7 +1434,7 @@ status_t USDHC_SetInternalDmaConfig(USDHC_Type *base,
     if (dmaConfig->dmaMode == kUSDHC_DmaModeSimple)
     {
         /* check DMA data buffer address align or not */
-        if (((uint32_t)dataAddr % USDHC_ADMA2_ADDRESS_ALIGN) != 0UL)
+        if (((uintptr_t)dataAddr % USDHC_ADMA2_ADDRESS_ALIGN) != 0UL)
         {
             return kStatus_USDHC_DMADataAddrNotAlign;
         }
@@ -1436,18 +1442,18 @@ status_t USDHC_SetInternalDmaConfig(USDHC_Type *base,
              and block count should load to DS_ADDR*/
         if (enAutoCmd23)
         {
-            base->ADMA_SYS_ADDR = USDHC_ADDR_CPU_2_DMA((uint32_t)dataAddr);
+            base->ADMA_SYS_ADDR = USDHC_ADDR_CPU_2_DMA((uintptr_t)dataAddr);
         }
         else
         {
-            base->DS_ADDR = USDHC_ADDR_CPU_2_DMA((uint32_t)dataAddr);
+            base->DS_ADDR = USDHC_ADDR_CPU_2_DMA((uintptr_t)dataAddr);
         }
     }
     else
     {
         /* When use ADMA, disable simple DMA */
         base->DS_ADDR       = 0UL;
-        base->ADMA_SYS_ADDR = USDHC_ADDR_CPU_2_DMA((uint32_t)(dmaConfig->admaTable));
+        base->ADMA_SYS_ADDR = USDHC_ADDR_CPU_2_DMA((uintptr_t)(dmaConfig->admaTable));
     }
 
 #if (defined(FSL_FEATURE_USDHC_HAS_NO_RW_BURST_LEN) && FSL_FEATURE_USDHC_HAS_NO_RW_BURST_LEN)
@@ -1483,14 +1489,14 @@ status_t USDHC_SetAdmaTableConfig(USDHC_Type *base,
 {
     assert(NULL != dmaConfig);
     assert((NULL != dmaConfig->admaTable) &&
-           (((USDHC_ADMA_TABLE_ADDRESS_ALIGN - 1U) & (uint32_t)dmaConfig->admaTable) == 0UL));
+           (((USDHC_ADMA_TABLE_ADDRESS_ALIGN - 1U) & (uintptr_t)dmaConfig->admaTable) == 0UL));
     assert(NULL != dataConfig);
 
     status_t error = kStatus_Fail;
     uint32_t bootDummyOffset =
         dataConfig->dataType == (uint32_t)kUSDHC_TransferDataBootcontinous ? sizeof(uint32_t) : 0UL;
-    const uint32_t *data = (const uint32_t *)USDHC_ADDR_CPU_2_DMA((uint32_t)(
-        (uint32_t)((dataConfig->rxData == NULL) ? dataConfig->txData : dataConfig->rxData) + bootDummyOffset));
+    const uint32_t *data = (const uint32_t *)USDHC_ADDR_CPU_2_DMA((uintptr_t)(
+        (uintptr_t)((dataConfig->rxData == NULL) ? dataConfig->txData : dataConfig->rxData) + bootDummyOffset));
     uint32_t blockSize   = dataConfig->blockSize * dataConfig->blockCount - bootDummyOffset;
 
 #if FSL_FEATURE_USDHC_HAS_EXT_DMA
@@ -1603,12 +1609,12 @@ status_t USDHC_TransferBlocking(USDHC_Type *base, usdhc_adma_config_t *dmaConfig
         if (data->txData != NULL)
         {
             /* clear the DCACHE */
-            DCACHE_CleanByRange((uint32_t)data->txData, (data->blockSize) * (data->blockCount));
+            DCACHE_CleanByRange((uintptr_t)data->txData, (data->blockSize) * (data->blockCount));
         }
         else
         {
             /* clear the DCACHE */
-            DCACHE_CleanInvalidateByRange((uint32_t)data->rxData, (data->blockSize) * (data->blockCount));
+            DCACHE_CleanInvalidateByRange((uintptr_t)data->rxData, (data->blockSize) * (data->blockCount));
         }
     }
 #endif
@@ -1924,12 +1930,12 @@ status_t USDHC_TransferNonBlocking(USDHC_Type *base,
         if (data->txData != NULL)
         {
             /* clear the DCACHE */
-            DCACHE_CleanByRange((uint32_t)data->txData, (data->blockSize) * (data->blockCount));
+            DCACHE_CleanByRange((uintptr_t)data->txData, (data->blockSize) * (data->blockCount));
         }
         else
         {
             /* clear the DCACHE */
-            DCACHE_CleanInvalidateByRange((uint32_t)data->rxData, (data->blockSize) * (data->blockCount));
+            DCACHE_CleanInvalidateByRange((uintptr_t)data->rxData, (data->blockSize) * (data->blockCount));
         }
     }
 #endif
@@ -2148,6 +2154,24 @@ void USDHC_EnableAutoTuningForCmdAndData(USDHC_Type *base)
 
     base->VEND_SPEC2 |= USDHC_VEND_SPEC2_TUNING_CMD_EN_MASK;
 
+#if defined(USDHC_VEND_SPEC2_TUNING_BIT_EN_MASK) && USDHC_VEND_SPEC2_TUNING_BIT_EN_MASK
+    base->VEND_SPEC2 &= ~USDHC_VEND_SPEC2_TUNING_BIT_EN_MASK;
+    /* 1bit data width */
+    if (busWidth == 0UL)
+    {
+        base->VEND_SPEC2 |= USDHC_VEND_SPEC2_TUNING_BIT_EN(2U);
+    }
+    /* 4bit data width */
+    else if (busWidth == 1UL)
+    {
+        base->VEND_SPEC2 |= USDHC_VEND_SPEC2_TUNING_BIT_EN(0U);
+    }
+    /* 8bit data width */
+    else
+    {
+        base->VEND_SPEC2 |= USDHC_VEND_SPEC2_TUNING_BIT_EN(1U);
+    }
+#else
     /* 1bit data width */
     if (busWidth == 0UL)
     {
@@ -2166,6 +2190,7 @@ void USDHC_EnableAutoTuningForCmdAndData(USDHC_Type *base)
         base->VEND_SPEC2 |= USDHC_VEND_SPEC2_TUNING_8bit_EN_MASK;
         base->VEND_SPEC2 &= ~USDHC_VEND_SPEC2_TUNING_1bit_EN_MASK;
     }
+#endif
 }
 #endif /* FSL_FEATURE_USDHC_HAS_SDR50_MODE */
 
@@ -2324,7 +2349,7 @@ static void USDHC_TransferHandleData(USDHC_Type *base, usdhc_handle_t *handle, u
 #if defined(FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL) && FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL
                 if (handle->data->rxData != NULL)
                 {
-                    DCACHE_InvalidateByRange((uint32_t)(handle->data->rxData),
+                    DCACHE_InvalidateByRange((uintptr_t)(handle->data->rxData),
                                              (handle->data->blockSize) * (handle->data->blockCount));
                 }
 #endif

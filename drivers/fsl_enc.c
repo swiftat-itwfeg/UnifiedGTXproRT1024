@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2019 NXP
+ * Copyright 2016-2021, 2023 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -17,8 +17,16 @@
 #define FSL_COMPONENT_ID "platform.drivers.enc"
 #endif
 
-#define ENC_CTRL_W1C_FLAGS  (ENC_CTRL_HIRQ_MASK | ENC_CTRL_XIRQ_MASK | ENC_CTRL_DIRQ_MASK | ENC_CTRL_CMPIRQ_MASK)
+#define ENC_CTRL_W1C_FLAGS (ENC_CTRL_HIRQ_MASK | ENC_CTRL_XIRQ_MASK | ENC_CTRL_DIRQ_MASK | ENC_CTRL_CMPIRQ_MASK)
+#if (defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
+#define ENC_CTRL2_W1C_FLAGS (ENC_CTRL2_ROIRQ_MASK | ENC_CTRL2_RUIRQ_MASK)
+#else
 #define ENC_CTRL2_W1C_FLAGS (ENC_CTRL2_SABIRQ_MASK | ENC_CTRL2_ROIRQ_MASK | ENC_CTRL2_RUIRQ_MASK)
+#endif
+
+#if defined(ENC_RSTS)
+#define ENC_RESETS_ARRAY ENC_RSTS
+#endif
 
 /*******************************************************************************
  * Prototypes
@@ -41,6 +49,11 @@ static ENC_Type *const s_encBases[] = ENC_BASE_PTRS;
 static const clock_ip_name_t s_encClocks[] = ENC_CLOCKS;
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
+#if defined(ENC_RESETS_ARRAY)
+/* Reset array */
+static const reset_ip_name_t s_encResets[] = ENC_RESETS_ARRAY;
+#endif
+
 /*******************************************************************************
  * Code
  ******************************************************************************/
@@ -51,7 +64,7 @@ static uint32_t ENC_GetInstance(ENC_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_encBases); instance++)
     {
-        if (s_encBases[instance] == base)
+        if (MSDK_REG_SECURE_ADDR(s_encBases[instance]) == MSDK_REG_SECURE_ADDR(base))
         {
             break;
         }
@@ -83,6 +96,10 @@ void ENC_Init(ENC_Type *base, const enc_config_t *config)
     /* Enable the clock. */
     CLOCK_EnableClock(s_encClocks[ENC_GetInstance(base)]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
+
+#if defined(ENC_RESETS_ARRAY)
+    RESET_ReleasePeripheralReset(s_encResets[ENC_GetInstance(base)]);
+#endif
 
     /* ENC_CTRL. */
     tmp16 = base->CTRL & (uint16_t)(~(ENC_CTRL_W1C_FLAGS | ENC_CTRL_HIP_MASK | ENC_CTRL_HNE_MASK | ENC_CTRL_REV_MASK |
@@ -123,7 +140,11 @@ void ENC_Init(ENC_Type *base, const enc_config_t *config)
     base->CTRL = tmp16;
 
     /* ENC_FILT. */
-    base->FILT = ENC_FILT_FILT_CNT(config->filterCount) | ENC_FILT_FILT_PER(config->filterSamplePeriod);
+    base->FILT = ENC_FILT_FILT_CNT(config->filterCount) | ENC_FILT_FILT_PER(config->filterSamplePeriod)
+#if (defined(FSL_FEATURE_ENC_HAS_FILT_PRSC) && FSL_FEATURE_ENC_HAS_FILT_PRSC)
+                 | ENC_FILT_FILT_PRSC(config->filterPrescaler)
+#endif
+        ;
 
     /* ENC_CTRL2. */
     tmp16 = base->CTRL2 & (uint16_t)(~(ENC_CTRL2_W1C_FLAGS | ENC_CTRL2_OUTCTL_MASK | ENC_CTRL2_REVMOD_MASK |
@@ -152,6 +173,18 @@ void ENC_Init(ENC_Type *base, const enc_config_t *config)
         tmp16 |= ENC_CTRL2_UPDHLD_MASK;
     }
     base->CTRL2 = tmp16;
+
+#if (defined(FSL_FEATURE_ENC_HAS_CTRL3) && FSL_FEATURE_ENC_HAS_CTRL3)
+    /* ENC_CTRL3. */
+    tmp16 = base->CTRL3 & (uint16_t)(~(ENC_CTRL3_PMEN_MASK | ENC_CTRL3_PRSC_MASK));
+    if (config->enablePeriodMeasurementFunction)
+    {
+        tmp16 |= ENC_CTRL3_PMEN_MASK;
+        /* Set prescaler value. */
+        tmp16 |= ((uint16_t)config->prescalerValue << ENC_CTRL3_PRSC_SHIFT);
+    }
+    base->CTRL3 = tmp16;
+#endif
 
     /* ENC_UCOMP & ENC_LCOMP. */
     base->UCOMP = (uint16_t)(config->positionCompareValue >> 16U); /* Upper 16 bits. */
@@ -200,6 +233,8 @@ void ENC_Deinit(ENC_Type *base)
  *   config->enableModuloCountMode                 = false;
  *   config->positionModulusValue                  = 0U;
  *   config->positionInitialValue                  = 0U;
+ *   config->prescalerValue                        = kENC_ClockDiv1;
+ *   config->enablePeriodMeasurementFunction       = true;
  * endcode
  * param config Pointer to a variable of configuration structure. See to "enc_config_t".
  */
@@ -226,6 +261,14 @@ void ENC_GetDefaultConfig(enc_config_t *config)
     config->enableModuloCountMode                 = false;
     config->positionModulusValue                  = 0U;
     config->positionInitialValue                  = 0U;
+#if (defined(FSL_FEATURE_ENC_HAS_CTRL3) && FSL_FEATURE_ENC_HAS_CTRL3)
+    config->prescalerValue                  = kENC_ClockDiv1;
+    config->enablePeriodMeasurementFunction = true;
+#endif
+
+#if (defined(FSL_FEATURE_ENC_HAS_FILT_PRSC) && FSL_FEATURE_ENC_HAS_FILT_PRSC)
+    config->filterPrescaler = kENC_FilterPrescalerDiv1;
+#endif
 }
 
 /*!
@@ -322,10 +365,12 @@ uint32_t ENC_GetStatusFlags(ENC_Type *base)
     }
 
     /* ENC_CTRL2. */
+#if !(defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
     if (0U != (ENC_CTRL2_SABIRQ_MASK & base->CTRL2))
     {
         ret32 |= (uint32_t)kENC_SimultBothPhaseChangeFlag;
     }
+#endif
     if (0U != (ENC_CTRL2_ROIRQ_MASK & base->CTRL2))
     {
         ret32 |= (uint32_t)kENC_PositionRollOverFlag;
@@ -376,10 +421,12 @@ void ENC_ClearStatusFlags(ENC_Type *base, uint32_t mask)
 
     /* ENC_CTRL2. */
     tmp16 = 0U;
+#if !(defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
     if (0U != ((uint32_t)kENC_SimultBothPhaseChangeFlag & mask))
     {
         tmp16 |= ENC_CTRL2_SABIRQ_MASK;
     }
+#endif
     if (0U != ((uint32_t)kENC_PositionRollOverFlag & mask))
     {
         tmp16 |= ENC_CTRL2_ROIRQ_MASK;
@@ -427,10 +474,12 @@ void ENC_EnableInterrupts(ENC_Type *base, uint32_t mask)
     }
     /* ENC_CTRL2. */
     tmp16 = 0U;
+#if !(defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
     if (0U != ((uint32_t)kENC_SimultBothPhaseChangeInterruptEnable & mask))
     {
         tmp16 |= ENC_CTRL2_SABIE_MASK;
     }
+#endif
     if (0U != ((uint32_t)kENC_PositionRollOverInterruptEnable & mask))
     {
         tmp16 |= ENC_CTRL2_ROIE_MASK;
@@ -478,10 +527,12 @@ void ENC_DisableInterrupts(ENC_Type *base, uint32_t mask)
     }
     /* ENC_CTRL2. */
     tmp16 = 0U;
+#if !(defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
     if (0U != ((uint32_t)kENC_SimultBothPhaseChangeInterruptEnable & mask))
     {
         tmp16 |= ENC_CTRL2_SABIE_MASK;
     }
+#endif
     if (0U != ((uint32_t)kENC_PositionRollOverInterruptEnable & mask))
     {
         tmp16 |= ENC_CTRL2_ROIE_MASK;
@@ -525,10 +576,12 @@ uint32_t ENC_GetEnabledInterrupts(ENC_Type *base)
         ret32 |= (uint32_t)kENC_PositionCompareInerruptEnable;
     }
     /* ENC_CTRL2. */
+#if !(defined(FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT) && FSL_FEATURE_ENC_HAS_NO_CTRL2_SAB_INT)
     if (0U != (ENC_CTRL2_SABIE_MASK & base->CTRL2))
     {
         ret32 |= (uint32_t)kENC_SimultBothPhaseChangeInterruptEnable;
     }
+#endif
     if (0U != (ENC_CTRL2_ROIE_MASK & base->CTRL2))
     {
         ret32 |= (uint32_t)kENC_PositionRollOverInterruptEnable;

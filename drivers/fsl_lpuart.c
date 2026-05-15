@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2022, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -8,6 +8,15 @@
 
 #include "fsl_lpuart.h"
 
+/*
+ * $Coverage Justification Reference$
+ *
+ * $Justification fsl_lpuart_c_ref_1$
+ * (osr > 3) (false) can't be not covered, because osr(osrTemp) is increased from 4U.
+ *
+ * $Justification fsl_lpuart_c_ref_2$
+ * The flag is cleared successfully during test.
+ */
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -25,6 +34,10 @@ enum
     kLPUART_RxIdle, /*!< RX idle. */
     kLPUART_RxBusy  /*!< RX busy. */
 };
+
+#if defined(LPUART_RSTS)
+#define LPUART_RESETS_ARRAY LPUART_RSTS
+#endif
 
 /*******************************************************************************
  * Prototypes
@@ -53,6 +66,19 @@ static bool LPUART_TransferIsRxRingBufferFull(LPUART_Type *base, lpuart_handle_t
  * @param length Size of the buffer to be sent.
  */
 static void LPUART_WriteNonBlocking(LPUART_Type *base, const uint8_t *data, size_t length);
+/*!
+ * @brief Write to TX register using non-blocking method in 9bit or 10bit mode.
+ *
+ * The 10bit of data will be writen to TX register DATA.
+ * Please make sure data 10bit is valid and other bit is 0.
+ *
+ * @note This function only support 9bit or 10bit transfer.
+ *
+ * @param base LPUART peripheral base address.
+ * @param data Start address of the data to write.
+ * @param length Size of the buffer to be sent.
+ */
+static void LPUART_WriteNonBlocking16bit(LPUART_Type *base, const uint16_t *data, size_t length);
 
 /*!
  * @brief Read RX register using non-blocking method.
@@ -65,6 +91,53 @@ static void LPUART_WriteNonBlocking(LPUART_Type *base, const uint8_t *data, size
  * @param length Size of the buffer.
  */
 static void LPUART_ReadNonBlocking(LPUART_Type *base, uint8_t *data, size_t length);
+/*!
+ * @brief Read RX register using non-blocking method in 9bit or 10bit mode.
+ *
+ * This function reads 10bit data from the RX register directly and stores to 16bit data.
+ *
+ * @note This function only support 9bit or 10bit transfer.
+ *
+ * @param base LPUART peripheral base address.
+ * @param data Start address of the buffer to store the received data.
+ * @param length Size of the buffer.
+ */
+static void LPUART_ReadNonBlocking16bit(LPUART_Type *base, uint16_t *data, size_t length);
+/*!
+ * @brief LPUART_TransferHandleIDLEIsReady handle function.
+ * This function handles when IDLE is ready.
+ *
+ * @param base LPUART peripheral base address.
+ * @param irqHandle LPUART handle pointer.
+ */
+static void LPUART_TransferHandleIDLEReady(LPUART_Type *base, lpuart_handle_t *handle);
+
+/*!
+ * @brief LPUART_TransferHandleReceiveDataIsFull handle function.
+ * This function handles when receive data is full.
+ *
+ * @param base LPUART peripheral base address.
+ * @param handle LPUART handle pointer.
+ */
+static void LPUART_TransferHandleReceiveDataFull(LPUART_Type *base, lpuart_handle_t *handle);
+
+/*!
+ * @brief LPUART_TransferHandleSendDataIsEmpty handle function.
+ * This function handles when send data is empty.
+ *
+ * @param base LPUART peripheral base address.
+ * @param irqHandle LPUART handle pointer.
+ */
+static void LPUART_TransferHandleSendDataEmpty(LPUART_Type *base, lpuart_handle_t *handle);
+
+/*!
+ * @brief LPUART_TransferHandleTransmissionIsComplete handle function.
+ * This function handles Transmission complete and the interrupt is enabled.
+ *
+ * @param base LPUART peripheral base address.
+ * @param irqHandle LPUART handle pointer.
+ */
+static void LPUART_TransferHandleTransmissionComplete(LPUART_Type *base, lpuart_handle_t *handle);
 
 /*******************************************************************************
  * Variables
@@ -75,10 +148,16 @@ static LPUART_Type *const s_lpuartBases[] = LPUART_BASE_PTRS;
 void *s_lpuartHandle[ARRAY_SIZE(s_lpuartBases)];
 /* Array of LPUART IRQ number. */
 #if defined(FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ) && FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ
+#if defined(LPUART_RX_IRQS)
 static const IRQn_Type s_lpuartRxIRQ[] = LPUART_RX_IRQS;
+#endif
+#if defined(LPUART_TX_IRQS)
 const IRQn_Type s_lpuartTxIRQ[]        = LPUART_TX_IRQS;
+#endif
 #else
+#if defined(LPUART_RX_TX_IRQS)
 const IRQn_Type s_lpuartIRQ[] = LPUART_RX_TX_IRQS;
+#endif
 #endif
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
 /* Array of LPUART clock name. */
@@ -93,9 +172,15 @@ static const clock_ip_name_t s_lpuartPeriphClocks[] = LPUART_PERIPH_CLOCKS;
 
 /* LPUART ISR for transactional APIs. */
 #if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050)
-lpuart_isr_t s_lpuartIsr = (lpuart_isr_t)DefaultISR;
+lpuart_isr_t s_lpuartIsr[ARRAY_SIZE(s_lpuartBases)] = {[0 ...(ARRAY_SIZE(s_lpuartBases) - 1)] =
+                                                           (lpuart_isr_t)DefaultISR};
 #else
-lpuart_isr_t s_lpuartIsr;
+lpuart_isr_t s_lpuartIsr[ARRAY_SIZE(s_lpuartBases)];
+#endif
+
+#if defined(LPUART_RESETS_ARRAY)
+/* Reset array */
+static const reset_ip_name_t s_lpuartResets[] = LPUART_RESETS_ARRAY;
 #endif
 
 /*******************************************************************************
@@ -114,9 +199,9 @@ uint32_t LPUART_GetInstance(LPUART_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0U; instance < ARRAY_SIZE(s_lpuartBases); instance++)
     {
-        if (s_lpuartBases[instance] == base)
+        if (MSDK_REG_SECURE_ADDR(s_lpuartBases[instance]) == MSDK_REG_SECURE_ADDR(base))
         {
-            break;
+            return instance;
         }
     }
 
@@ -182,6 +267,19 @@ static void LPUART_WriteNonBlocking(LPUART_Type *base, const uint8_t *data, size
         base->DATA = data[i];
     }
 }
+static void LPUART_WriteNonBlocking16bit(LPUART_Type *base, const uint16_t *data, size_t length)
+{
+    assert(NULL != data);
+
+    size_t i;
+
+    /* The Non Blocking write data API assume user have ensured there is enough space in
+    peripheral to write. */
+    for (i = 0; i < length; i++)
+    {
+        base->DATA = data[i];
+    }
+}
 
 static void LPUART_ReadNonBlocking(LPUART_Type *base, uint8_t *data, size_t length)
 {
@@ -210,6 +308,19 @@ static void LPUART_ReadNonBlocking(LPUART_Type *base, uint8_t *data, size_t leng
 #else
         data[i] = (uint8_t)(base->DATA);
 #endif
+    }
+}
+
+static void LPUART_ReadNonBlocking16bit(LPUART_Type *base, uint16_t *data, size_t length)
+{
+    assert(NULL != data);
+
+    size_t i;
+    /* The Non Blocking read data API assume user have ensured there is enough space in
+    peripheral to write. */
+    for (i = 0; i < length; i++)
+    {
+        data[i] = (uint16_t)(base->DATA & 0x03FFU);
     }
 }
 
@@ -242,8 +353,9 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
     assert(NULL != config);
     assert(0U < config->baudRate_Bps);
 #if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-    assert((uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) >= config->txFifoWatermark);
-    assert((uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) >= config->rxFifoWatermark);
+    assert(FSL_FEATURE_LPUART_FIFO_SIZEn(base) > 0);
+    assert((uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) > config->txFifoWatermark);
+    assert((uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) > config->rxFifoWatermark);
 #endif
 
     status_t status = kStatus_Success;
@@ -264,16 +376,24 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
     for (osrTemp = 4U; osrTemp <= 32U; osrTemp++)
     {
         /* calculate the temporary sbr value   */
-        sbrTemp = (uint16_t)((srcClock_Hz * 10U / (config->baudRate_Bps * (uint32_t)osrTemp) + 5U) / 10U);
+        sbrTemp = (uint16_t)((srcClock_Hz * 2U / (config->baudRate_Bps * (uint32_t)osrTemp) + 1U) / 2U);
         /*set sbrTemp to 1 if the sourceClockInHz can not satisfy the desired baud rate*/
         if (sbrTemp == 0U)
         {
             sbrTemp = 1U;
         }
+        else if (sbrTemp > LPUART_BAUD_SBR_MASK)
+        {
+            sbrTemp = LPUART_BAUD_SBR_MASK;
+        }
+        else
+        {
+            /* Avoid MISRA 15.7 */
+        }
         /* Calculate the baud rate based on the temporary OSR and SBR values */
         calculatedBaud = (srcClock_Hz / ((uint32_t)osrTemp * (uint32_t)sbrTemp));
         tempDiff       = calculatedBaud > config->baudRate_Bps ? (calculatedBaud - config->baudRate_Bps) :
-                                                           (config->baudRate_Bps - calculatedBaud);
+                                                                 (config->baudRate_Bps - calculatedBaud);
 
         if (tempDiff <= baudDiff)
         {
@@ -304,6 +424,10 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
 
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
+#if defined(LPUART_RESETS_ARRAY)
+        RESET_ReleasePeripheralReset(s_lpuartResets[LPUART_GetInstance(base)]);
+#endif
+
 #if defined(FSL_FEATURE_LPUART_HAS_GLOBAL) && FSL_FEATURE_LPUART_HAS_GLOBAL
         /*Reset all internal logic and registers, except the Global Register */
         LPUART_SoftwareReset(base);
@@ -316,6 +440,10 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
 
         /* Acceptable baud rate, check if OSR is between 4x and 7x oversampling.
          * If so, then "BOTHEDGE" sampling must be turned on */
+        /*
+         * $Branch Coverage Justification$
+         * $ref fsl_lpuart_c_ref_1$
+         */
         if ((osr > 3U) && (osr < 8U))
         {
             temp |= LPUART_BAUD_BOTHEDGE_MASK;
@@ -358,6 +486,17 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
                 temp |= LPUART_CTRL_M_MASK; /* Eight data bits and one parity bit */
             }
         }
+
+#if defined(FSL_FEATURE_LPUART_HAS_CTRL_SWAP) && FSL_FEATURE_LPUART_HAS_CTRL_SWAP
+        if (config->swapTxdRxd == true)
+        {
+            temp |= LPUART_CTRL_SWAP_MASK;
+        }
+        else
+        {
+            temp &= ~LPUART_CTRL_SWAP_MASK;
+        }
+#endif
 
         base->CTRL = temp;
 
@@ -541,6 +680,9 @@ void LPUART_GetDefaultConfig(lpuart_config_t *config)
     config->rxIdleConfig = kLPUART_IdleCharacter1;
     config->enableTx     = false;
     config->enableRx     = false;
+#if defined(FSL_FEATURE_LPUART_HAS_CTRL_SWAP) && FSL_FEATURE_LPUART_HAS_CTRL_SWAP
+    config->swapTxdRxd   = false;
+#endif
 }
 
 /*!
@@ -580,11 +722,19 @@ status_t LPUART_SetBaudRate(LPUART_Type *base, uint32_t baudRate_Bps, uint32_t s
     for (osrTemp = 4U; osrTemp <= 32U; osrTemp++)
     {
         /* calculate the temporary sbr value   */
-        sbrTemp = (uint16_t)((srcClock_Hz * 10U / (baudRate_Bps * (uint32_t)osrTemp) + 5U) / 10U);
+        sbrTemp = (uint16_t)((srcClock_Hz * 2U / (baudRate_Bps * (uint32_t)osrTemp) + 1U) / 2U);
         /*set sbrTemp to 1 if the sourceClockInHz can not satisfy the desired baud rate*/
         if (sbrTemp == 0U)
         {
             sbrTemp = 1U;
+        }
+        else if (sbrTemp > LPUART_BAUD_SBR_MASK)
+        {
+            sbrTemp = LPUART_BAUD_SBR_MASK;
+        }
+        else
+        {
+            /* Avoid MISRA 15.7 */
         }
         /* Calculate the baud rate based on the temporary OSR and SBR values */
         calculatedBaud = srcClock_Hz / ((uint32_t)osrTemp * (uint32_t)sbrTemp);
@@ -613,6 +763,10 @@ status_t LPUART_SetBaudRate(LPUART_Type *base, uint32_t baudRate_Bps, uint32_t s
 
         /* Acceptable baud rate, check if OSR is between 4x and 7x oversampling.
          * If so, then "BOTHEDGE" sampling must be turned on */
+        /*
+         * $Branch Coverage Justification$
+         * $ref fsl_lpuart_c_ref_1$
+         */
         if ((osr > 3U) && (osr < 8U))
         {
             temp |= LPUART_BAUD_BOTHEDGE_MASK;
@@ -700,35 +854,45 @@ void LPUART_SendAddress(LPUART_Type *base, uint8_t address)
  * endcode
  *
  * param base LPUART peripheral base address.
- * param mask The interrupts to enable. Logical OR of ref _uart_interrupt_enable.
+ * param mask The interrupts to enable. Logical OR of ref _lpuart_interrupt_enable.
  */
 void LPUART_EnableInterrupts(LPUART_Type *base, uint32_t mask)
 {
+    uint32_t s_atomicOldInt;
     /* Only consider the real interrupt enable bits. */
     mask &= (uint32_t)kLPUART_AllInterruptEnable;
 
     /* Check int enable bits in base->BAUD */
-    uint32_t tempReg = base->BAUD;
+    uint32_t baudRegMask = 0UL;
 #if defined(FSL_FEATURE_LPUART_HAS_LIN_BREAK_DETECT) && FSL_FEATURE_LPUART_HAS_LIN_BREAK_DETECT
-    tempReg |= ((mask << 8U) & LPUART_BAUD_LBKDIE_MASK);
+    baudRegMask |= ((mask << 8U) & LPUART_BAUD_LBKDIE_MASK);
     /* Clear bit 7 from mask */
     mask &= ~(uint32_t)kLPUART_LinBreakInterruptEnable;
 #endif
-    tempReg |= ((mask << 8U) & LPUART_BAUD_RXEDGIE_MASK);
+    baudRegMask |= ((mask << 8U) & LPUART_BAUD_RXEDGIE_MASK);
     /* Clear bit 6 from mask */
     mask &= ~(uint32_t)kLPUART_RxActiveEdgeInterruptEnable;
-    base->BAUD = tempReg;
+
+    s_atomicOldInt = DisableGlobalIRQ();
+    base->BAUD |= baudRegMask;
+    EnableGlobalIRQ(s_atomicOldInt);
 
 #if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
     /* Check int enable bits in base->FIFO */
-    base->FIFO = (base->FIFO & ~(LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK)) |
+
+    s_atomicOldInt = DisableGlobalIRQ();
+    base->FIFO     = (base->FIFO & ~(LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK)) |
                  (mask & (LPUART_FIFO_TXOFE_MASK | LPUART_FIFO_RXUFE_MASK));
+    EnableGlobalIRQ(s_atomicOldInt);
+
     /* Clear bit 9 and bit 8 from mask */
     mask &= ~((uint32_t)kLPUART_TxFifoOverflowInterruptEnable | (uint32_t)kLPUART_RxFifoUnderflowInterruptEnable);
 #endif
 
-    /* Check int enable bits in base->CTRL */
+    /* Set int enable bits in base->CTRL */
+    s_atomicOldInt = DisableGlobalIRQ();
     base->CTRL |= mask;
+    EnableGlobalIRQ(s_atomicOldInt);
 }
 
 /*!
@@ -746,30 +910,40 @@ void LPUART_EnableInterrupts(LPUART_Type *base, uint32_t mask)
  */
 void LPUART_DisableInterrupts(LPUART_Type *base, uint32_t mask)
 {
+    uint32_t s_atomicOldInt;
     /* Only consider the real interrupt enable bits. */
     mask &= (uint32_t)kLPUART_AllInterruptEnable;
-    /* Check int enable bits in base->BAUD */
-    uint32_t tempReg = base->BAUD;
+
+    /* Clear int enable bits in base->BAUD */
+    uint32_t baudRegMask = 0UL;
 #if defined(FSL_FEATURE_LPUART_HAS_LIN_BREAK_DETECT) && FSL_FEATURE_LPUART_HAS_LIN_BREAK_DETECT
-    tempReg &= ~((mask << 8U) & LPUART_BAUD_LBKDIE_MASK);
+    baudRegMask |= ((mask << 8U) & LPUART_BAUD_LBKDIE_MASK);
     /* Clear bit 7 from mask */
     mask &= ~(uint32_t)kLPUART_LinBreakInterruptEnable;
 #endif
-    tempReg &= ~((mask << 8U) & LPUART_BAUD_RXEDGIE_MASK);
+    baudRegMask |= ((mask << 8U) & LPUART_BAUD_RXEDGIE_MASK);
     /* Clear bit 6 from mask */
     mask &= ~(uint32_t)kLPUART_RxActiveEdgeInterruptEnable;
-    base->BAUD = tempReg;
+
+    s_atomicOldInt = DisableGlobalIRQ();
+    base->BAUD &= ~baudRegMask;
+    EnableGlobalIRQ(s_atomicOldInt);
 
 #if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-    /* Check int enable bits in base->FIFO */
-    base->FIFO = (base->FIFO & ~(LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK)) &
+    /* Clear int enable bits in base->FIFO */
+
+    s_atomicOldInt = DisableGlobalIRQ();
+    base->FIFO     = (base->FIFO & ~(LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK)) &
                  ~(mask & (LPUART_FIFO_TXOFE_MASK | LPUART_FIFO_RXUFE_MASK));
+    EnableGlobalIRQ(s_atomicOldInt);
     /* Clear bit 9 and bit 8 from mask */
     mask &= ~((uint32_t)kLPUART_TxFifoOverflowInterruptEnable | (uint32_t)kLPUART_RxFifoUnderflowInterruptEnable);
 #endif
 
-    /* Check int enable bits in base->CTRL */
+    /* Clear int enable bits in base->CTRL */
+    s_atomicOldInt = DisableGlobalIRQ();
     base->CTRL &= ~mask;
+    EnableGlobalIRQ(s_atomicOldInt);
 }
 
 /*!
@@ -851,7 +1025,7 @@ uint32_t LPUART_GetStatusFlags(LPUART_Type *base)
  * can't be cleared by this function.
  * Flags that can only cleared or set by hardware are:
  *    kLPUART_TxDataRegEmptyFlag, kLPUART_TransmissionCompleteFlag, kLPUART_RxDataRegFullFlag,
- *    kLPUART_RxActiveFlag, kLPUART_NoiseErrorInRxDataRegFlag, kLPUART_ParityErrorInRxDataRegFlag,
+ *    kLPUART_RxActiveFlag, kLPUART_NoiseErrorFlag, kLPUART_ParityErrorFlag,
  *    kLPUART_TxFifoEmptyFlag,kLPUART_RxFifoEmptyFlag
  * Note: This API should be called when the Tx/Rx is idle, otherwise it takes no effects.
  *
@@ -877,8 +1051,8 @@ status_t LPUART_ClearStatusFlags(LPUART_Type *base, uint32_t mask)
         /* Get the FIFO register value and mask the rx/tx FIFO flush bits and the status bits that can be W1C in case
            they are written 1 accidentally. */
         temp = (uint32_t)base->FIFO;
-        temp &= (uint32_t)(
-            ~(LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK | LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK));
+        temp &= (uint32_t)(~(LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK | LPUART_FIFO_TXOF_MASK |
+                             LPUART_FIFO_RXUF_MASK));
         temp |= (mask << 16U) & (LPUART_FIFO_TXOF_MASK | LPUART_FIFO_RXUF_MASK);
         base->FIFO = temp;
     }
@@ -919,6 +1093,66 @@ status_t LPUART_WriteBlocking(LPUART_Type *base, const uint8_t *data, size_t len
 
     const uint8_t *dataAddress = data;
     size_t transferSize        = length;
+
+#if UART_RETRY_TIMES
+    uint32_t waitTimes;
+#endif
+
+    while (0U != transferSize)
+    {
+#if UART_RETRY_TIMES
+        waitTimes = UART_RETRY_TIMES;
+        while ((0U == (base->STAT & LPUART_STAT_TDRE_MASK)) && (0U != --waitTimes))
+#else
+        while (0U == (base->STAT & LPUART_STAT_TDRE_MASK))
+#endif
+        {
+        }
+#if UART_RETRY_TIMES
+        if (0U == waitTimes)
+        {
+            return kStatus_LPUART_Timeout;
+        }
+#endif
+        base->DATA = *(dataAddress);
+        dataAddress++;
+        transferSize--;
+    }
+    /* Ensure all the data in the transmit buffer are sent out to bus. */
+#if UART_RETRY_TIMES
+    waitTimes = UART_RETRY_TIMES;
+    while ((0U == (base->STAT & LPUART_STAT_TC_MASK)) && (0U != --waitTimes))
+#else
+    while (0U == (base->STAT & LPUART_STAT_TC_MASK))
+#endif
+    {
+    }
+#if UART_RETRY_TIMES
+    if (0U == waitTimes)
+    {
+        return kStatus_LPUART_Timeout;
+    }
+#endif
+    return kStatus_Success;
+}
+/*!
+ * brief Writes to the transmitter register using a blocking method in 9bit or 10bit mode.
+ *
+ * note This function only support 9bit or 10bit transfer.
+ *       Please make sure only 10bit of data is valid and other bits are 0.
+ *
+ * param base LPUART peripheral base address.
+ * param data Start address of the data to write.
+ * param length Size of the data to write.
+ * retval kStatus_LPUART_Timeout Transmission timed out and was aborted.
+ * retval kStatus_Success Successfully wrote all data.
+ */
+status_t LPUART_WriteBlocking16bit(LPUART_Type *base, const uint16_t *data, size_t length)
+{
+    assert(NULL != data);
+
+    const uint16_t *dataAddress = data;
+    size_t transferSize         = length;
 
 #if UART_RETRY_TIMES
     uint32_t waitTimes;
@@ -1018,6 +1252,10 @@ status_t LPUART_ReadBlocking(LPUART_Type *base, uint8_t *data, size_t length)
 
             if (0U != (statusFlag & (uint32_t)kLPUART_RxOverrunFlag))
             {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
                 status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_RxOverrunFlag)) ?
                               (kStatus_LPUART_RxHardwareOverrun) :
                               (kStatus_LPUART_FlagCannotClearManually));
@@ -1028,6 +1266,10 @@ status_t LPUART_ReadBlocking(LPUART_Type *base, uint8_t *data, size_t length)
 
             if (0U != (statusFlag & (uint32_t)kLPUART_ParityErrorFlag))
             {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
                 status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_ParityErrorFlag)) ?
                               (kStatus_LPUART_ParityError) :
                               (kStatus_LPUART_FlagCannotClearManually));
@@ -1035,6 +1277,10 @@ status_t LPUART_ReadBlocking(LPUART_Type *base, uint8_t *data, size_t length)
 
             if (0U != (statusFlag & (uint32_t)kLPUART_FramingErrorFlag))
             {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
                 status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_FramingErrorFlag)) ?
                               (kStatus_LPUART_FramingError) :
                               (kStatus_LPUART_FlagCannotClearManually));
@@ -1042,6 +1288,10 @@ status_t LPUART_ReadBlocking(LPUART_Type *base, uint8_t *data, size_t length)
 
             if (0U != (statusFlag & (uint32_t)kLPUART_NoiseErrorFlag))
             {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
                 status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_NoiseErrorFlag)) ?
                               (kStatus_LPUART_NoiseError) :
                               (kStatus_LPUART_FlagCannotClearManually));
@@ -1069,6 +1319,117 @@ status_t LPUART_ReadBlocking(LPUART_Type *base, uint8_t *data, size_t length)
             *(dataAddress) = (uint8_t)base->DATA;
             dataAddress++;
 #endif
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return status;
+}
+/*!
+ * brief Reads the receiver data register in 9bit or 10bit mode.
+ *
+ * note This function only support 9bit or 10bit transfer.
+ *
+ * param base LPUART peripheral base address.
+ * param data Start address of the buffer to store the received data by 16bit, only 10bit is valid.
+ * param length Size of the buffer.
+ * retval kStatus_LPUART_RxHardwareOverrun Receiver overrun happened while receiving data.
+ * retval kStatus_LPUART_NoiseError Noise error happened while receiving data.
+ * retval kStatus_LPUART_FramingError Framing error happened while receiving data.
+ * retval kStatus_LPUART_ParityError Parity error happened while receiving data.
+ * retval kStatus_LPUART_Timeout Transmission timed out and was aborted.
+ * retval kStatus_Success Successfully received all data.
+ */
+status_t LPUART_ReadBlocking16bit(LPUART_Type *base, uint16_t *data, size_t length)
+{
+    assert(NULL != data);
+
+    status_t status = kStatus_Success;
+    uint32_t statusFlag;
+    uint16_t *dataAddress = data;
+
+#if UART_RETRY_TIMES
+    uint32_t waitTimes;
+#endif
+
+    while (0U != (length--))
+    {
+#if UART_RETRY_TIMES
+        waitTimes = UART_RETRY_TIMES;
+#endif
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+        while (0U == ((base->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT))
+#else
+        while (0U == (base->STAT & LPUART_STAT_RDRF_MASK))
+#endif
+        {
+#if UART_RETRY_TIMES
+            if (0U == --waitTimes)
+            {
+                status = kStatus_LPUART_Timeout;
+                break;
+            }
+#endif
+            statusFlag = LPUART_GetStatusFlags(base);
+
+            if (0U != (statusFlag & (uint32_t)kLPUART_RxOverrunFlag))
+            {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
+                status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_RxOverrunFlag)) ?
+                              (kStatus_LPUART_RxHardwareOverrun) :
+                              (kStatus_LPUART_FlagCannotClearManually));
+                /* Other error flags(FE, NF, and PF) are prevented from setting once OR is set, no need to check other
+                 * error flags*/
+                break;
+            }
+
+            if (0U != (statusFlag & (uint32_t)kLPUART_ParityErrorFlag))
+            {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
+                status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_ParityErrorFlag)) ?
+                              (kStatus_LPUART_ParityError) :
+                              (kStatus_LPUART_FlagCannotClearManually));
+            }
+
+            if (0U != (statusFlag & (uint32_t)kLPUART_FramingErrorFlag))
+            {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
+                status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_FramingErrorFlag)) ?
+                              (kStatus_LPUART_FramingError) :
+                              (kStatus_LPUART_FlagCannotClearManually));
+            }
+
+            if (0U != (statusFlag & (uint32_t)kLPUART_NoiseErrorFlag))
+            {
+                /*
+                 * $Branch Coverage Justification$
+                 * $ref fsl_lpuart_c_ref_2$.
+                 */
+                status = ((kStatus_Success == LPUART_ClearStatusFlags(base, (uint32_t)kLPUART_NoiseErrorFlag)) ?
+                              (kStatus_LPUART_NoiseError) :
+                              (kStatus_LPUART_FlagCannotClearManually));
+            }
+            if (kStatus_Success != status)
+            {
+                break;
+            }
+        }
+        if (kStatus_Success == status)
+        {
+            *(dataAddress) = (uint16_t)(base->DATA & 0x03FFU);
+            dataAddress++;
         }
         else
         {
@@ -1127,6 +1488,7 @@ void LPUART_TransferCreateHandle(LPUART_Type *base,
     /* Initial seven data bits flag */
     handle->isSevenDataBits = isSevenDataBits;
 #endif
+    handle->is16bitData = false;
 
     /* Get instance from peripheral base address. */
     instance = LPUART_GetInstance(base);
@@ -1134,14 +1496,20 @@ void LPUART_TransferCreateHandle(LPUART_Type *base,
     /* Save the handle in global variables to support the double weak mechanism. */
     s_lpuartHandle[instance] = handle;
 
-    s_lpuartIsr = LPUART_TransferHandleIRQ;
+    s_lpuartIsr[instance] = LPUART_TransferHandleIRQ;
 
 /* Enable interrupt in NVIC. */
 #if defined(FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ) && FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ
+#if defined(LPUART_RX_IRQS)
     (void)EnableIRQ(s_lpuartRxIRQ[instance]);
+#endif
+#if defined(LPUART_TX_IRQS)
     (void)EnableIRQ(s_lpuartTxIRQ[instance]);
+#endif
 #else
+#if defined(LPUART_RX_TX_IRQS)
     (void)EnableIRQ(s_lpuartIRQ[instance]);
+#endif
 #endif
 }
 
@@ -1171,8 +1539,15 @@ void LPUART_TransferStartRingBuffer(LPUART_Type *base,
     assert(NULL != ringBuffer);
 
     /* Setup the ring buffer address */
-    handle->rxRingBuffer     = ringBuffer;
-    handle->rxRingBufferSize = ringBufferSize;
+    handle->rxRingBuffer = ringBuffer;
+    if (!handle->is16bitData)
+    {
+        handle->rxRingBufferSize = ringBufferSize;
+    }
+    else
+    {
+        handle->rxRingBufferSize = ringBufferSize / 2U;
+    }
     handle->rxRingBufferHead = 0U;
     handle->rxRingBufferTail = 0U;
 
@@ -1245,7 +1620,14 @@ status_t LPUART_TransferSendNonBlocking(LPUART_Type *base, lpuart_handle_t *hand
     }
     else
     {
-        handle->txData        = xfer->txData;
+        if (!handle->is16bitData)
+        {
+            handle->txData = xfer->txData;
+        }
+        else
+        {
+            handle->txData16 = xfer->txData16;
+        }
         handle->txDataSize    = xfer->dataSize;
         handle->txDataSizeAll = xfer->dataSize;
         handle->txState       = (uint8_t)kLPUART_TxBusy;
@@ -1416,7 +1798,14 @@ status_t LPUART_TransferReceiveNonBlocking(LPUART_Type *base,
                 /* Copy data from ring buffer to user memory. */
                 for (i = 0U; i < bytesToCopy; i++)
                 {
-                    xfer->rxData[bytesCurrentReceived] = handle->rxRingBuffer[handle->rxRingBufferTail];
+                    if (!handle->is16bitData)
+                    {
+                        xfer->rxData[bytesCurrentReceived] = handle->rxRingBuffer[handle->rxRingBufferTail];
+                    }
+                    else
+                    {
+                        xfer->rxData16[bytesCurrentReceived] = handle->rxRingBuffer16[handle->rxRingBufferTail];
+                    }
                     bytesCurrentReceived++;
 
                     /* Wrap to 0. Not use modulo (%) because it might be large and slow. */
@@ -1435,7 +1824,15 @@ status_t LPUART_TransferReceiveNonBlocking(LPUART_Type *base,
             if (0U != bytesToReceive)
             {
                 /* No data in ring buffer, save the request to LPUART handle. */
-                handle->rxData        = &xfer->rxData[bytesCurrentReceived];
+
+                if (!handle->is16bitData)
+                {
+                    handle->rxData = &xfer->rxData[bytesCurrentReceived];
+                }
+                else
+                {
+                    handle->rxData16 = &xfer->rxData16[bytesCurrentReceived];
+                }
                 handle->rxDataSize    = bytesToReceive;
                 handle->rxDataSizeAll = xfer->dataSize;
                 handle->rxState       = (uint8_t)kLPUART_RxBusy;
@@ -1460,7 +1857,14 @@ status_t LPUART_TransferReceiveNonBlocking(LPUART_Type *base,
         /* Ring buffer not used. */
         else
         {
-            handle->rxData        = &xfer->rxData[bytesCurrentReceived];
+            if (!handle->is16bitData)
+            {
+                handle->rxData = &xfer->rxData[bytesCurrentReceived];
+            }
+            else
+            {
+                handle->rxData16 = &xfer->rxData16[bytesCurrentReceived];
+            }
             handle->rxDataSize    = bytesToReceive;
             handle->rxDataSizeAll = bytesToReceive;
             handle->rxState       = (uint8_t)kLPUART_RxBusy;
@@ -1545,6 +1949,271 @@ status_t LPUART_TransferGetReceiveCount(LPUART_Type *base, lpuart_handle_t *hand
     return status;
 }
 
+static void LPUART_TransferHandleIDLEReady(LPUART_Type *base, lpuart_handle_t *handle)
+{
+    uint32_t irqMask;
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+    uint8_t count;
+    uint8_t tempCount;
+    count = ((uint8_t)((base->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT));
+
+    while ((0U != handle->rxDataSize) && (0U != count))
+    {
+        tempCount = (uint8_t)MIN(handle->rxDataSize, count);
+        /* Using non block API to read the data from the registers. */
+        if (!handle->is16bitData)
+        {
+            LPUART_ReadNonBlocking(base, handle->rxData, tempCount);
+            handle->rxData = &handle->rxData[tempCount];
+        }
+        else
+        {
+            LPUART_ReadNonBlocking16bit(base, handle->rxData16, tempCount);
+            handle->rxData16 = &handle->rxData16[tempCount];
+        }
+        handle->rxDataSize -= tempCount;
+        count -= tempCount;
+
+        /* If rxDataSize is 0, invoke rx idle callback.*/
+        if (0U == (handle->rxDataSize))
+        {
+            handle->rxState = (uint8_t)kLPUART_RxIdle;
+
+            if (NULL != handle->callback)
+            {
+                handle->callback(base, handle, kStatus_LPUART_RxIdle, handle->userData);
+            }
+        }
+    }
+#endif
+    /* Clear IDLE flag.*/
+    base->STAT = ((base->STAT & 0x3FE00000U) | LPUART_STAT_IDLE_MASK);
+
+    /* If rxDataSize is 0, disable rx ready, overrun and idle line interrupt.*/
+    if (0U == handle->rxDataSize)
+    {
+        /* Disable and re-enable the global interrupt to protect the interrupt enable register during
+         * read-modify-wrte. */
+        irqMask = DisableGlobalIRQ();
+        base->CTRL &= ~(uint32_t)(LPUART_CTRL_RIE_MASK | LPUART_CTRL_ILIE_MASK | LPUART_CTRL_ORIE_MASK);
+        EnableGlobalIRQ(irqMask);
+    }
+    /* Invoke callback if callback is not NULL and rxDataSize is not 0. */
+    else if (NULL != handle->callback)
+    {
+        handle->callback(base, handle, kStatus_LPUART_IdleLineDetected, handle->userData);
+    }
+    else
+    {
+        /* Avoid MISRA 15.7 */
+    }
+}
+
+static void LPUART_TransferHandleReceiveDataFull(LPUART_Type *base, lpuart_handle_t *handle)
+{
+    uint8_t count;
+    uint8_t tempCount;
+    uint16_t tpmRxRingBufferHead;
+    uint32_t tpmData;
+    uint32_t irqMask;
+
+    /* Get the size that can be stored into buffer for this interrupt. */
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+    count = ((uint8_t)((base->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT));
+#else
+    count = 1;
+#endif
+
+    /* If handle->rxDataSize is not 0, first save data to handle->rxData. */
+    while ((0U != handle->rxDataSize) && (0U != count))
+    {
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+        tempCount = (uint8_t)MIN(handle->rxDataSize, count);
+#else
+        tempCount = 1;
+#endif
+
+        /* Using non block API to read the data from the registers. */
+        if (!handle->is16bitData)
+        {
+            LPUART_ReadNonBlocking(base, handle->rxData, tempCount);
+            handle->rxData = &handle->rxData[tempCount];
+        }
+        else
+        {
+            LPUART_ReadNonBlocking16bit(base, handle->rxData16, tempCount);
+            handle->rxData16 = &handle->rxData16[tempCount];
+        }
+        handle->rxDataSize -= tempCount;
+        count -= tempCount;
+
+        /* If all the data required for upper layer is ready, trigger callback. */
+        if (0U == handle->rxDataSize)
+        {
+            handle->rxState = (uint8_t)kLPUART_RxIdle;
+
+            if (NULL != handle->callback)
+            {
+                handle->callback(base, handle, kStatus_LPUART_RxIdle, handle->userData);
+            }
+        }
+    }
+
+    /* If use RX ring buffer, receive data to ring buffer. */
+    if (NULL != handle->rxRingBuffer)
+    {
+        while (0U != count)
+        {
+            count--;
+            /* If RX ring buffer is full, trigger callback to notify over run. */
+            if (LPUART_TransferIsRxRingBufferFull(base, handle))
+            {
+                if (NULL != handle->callback)
+                {
+                    handle->callback(base, handle, kStatus_LPUART_RxRingBufferOverrun, handle->userData);
+                }
+            }
+
+            /* If ring buffer is still full after callback function, the oldest data is overridden. */
+            if (LPUART_TransferIsRxRingBufferFull(base, handle))
+            {
+                /* Increase handle->rxRingBufferTail to make room for new data. */
+                if (((uint32_t)handle->rxRingBufferTail + 1U) == handle->rxRingBufferSize)
+                {
+                    handle->rxRingBufferTail = 0U;
+                }
+                else
+                {
+                    handle->rxRingBufferTail++;
+                }
+            }
+
+            /* Read data. */
+            tpmRxRingBufferHead = handle->rxRingBufferHead;
+            tpmData             = base->DATA;
+#if defined(FSL_FEATURE_LPUART_HAS_7BIT_DATA_SUPPORT) && FSL_FEATURE_LPUART_HAS_7BIT_DATA_SUPPORT
+            if (handle->isSevenDataBits)
+            {
+                handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)(tpmData & 0x7FU);
+            }
+            else
+            {
+                if (!handle->is16bitData)
+                {
+                    handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)tpmData;
+                }
+                else
+                {
+                    handle->rxRingBuffer16[tpmRxRingBufferHead] = (uint16_t)(tpmData & 0x3FFU);
+                }
+            }
+#else
+            if (!handle->is16bitData)
+            {
+                handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)tpmData;
+            }
+            else
+            {
+                handle->rxRingBuffer16[tpmRxRingBufferHead] = (uint16_t)(tpmData & 0x3FFU);
+            }
+#endif
+
+            /* Increase handle->rxRingBufferHead. */
+            if (((uint32_t)handle->rxRingBufferHead + 1U) == handle->rxRingBufferSize)
+            {
+                handle->rxRingBufferHead = 0U;
+            }
+            else
+            {
+                handle->rxRingBufferHead++;
+            }
+        }
+    }
+    /* If no receive requst pending, stop RX interrupt. */
+    else if (0U == handle->rxDataSize)
+    {
+        /* Disable and re-enable the global interrupt to protect the interrupt enable register during
+         * read-modify-wrte. */
+        irqMask = DisableGlobalIRQ();
+        base->CTRL &= ~(uint32_t)(LPUART_CTRL_RIE_MASK | LPUART_CTRL_ORIE_MASK | LPUART_CTRL_ILIE_MASK);
+        EnableGlobalIRQ(irqMask);
+    }
+    else
+    {
+        /* Avoid MISRA C-2012 15.7 voiation */
+        return;
+    }
+}
+
+static void LPUART_TransferHandleSendDataEmpty(LPUART_Type *base, lpuart_handle_t *handle)
+{
+    uint8_t count;
+    uint8_t tempCount;
+    uint32_t irqMask;
+/* Get the bytes that available at this moment. */
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+    assert(FSL_FEATURE_LPUART_FIFO_SIZEn(base) > 0);
+    count = (uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) -
+            (uint8_t)((base->WATER & LPUART_WATER_TXCOUNT_MASK) >> LPUART_WATER_TXCOUNT_SHIFT);
+#else
+    count = 1;
+#endif
+
+    while ((0U != handle->txDataSize) && (0U != count))
+    {
+#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
+        tempCount = (uint8_t)MIN(handle->txDataSize, count);
+#else
+        tempCount = 1;
+#endif
+
+        /* Using non block API to write the data to the registers. */
+        if (!handle->is16bitData)
+        {
+            LPUART_WriteNonBlocking(base, handle->txData, tempCount);
+            handle->txData = &handle->txData[tempCount];
+        }
+        else
+        {
+            LPUART_WriteNonBlocking16bit(base, handle->txData16, tempCount);
+            handle->txData16 = &handle->txData16[tempCount];
+        }
+        handle->txDataSize -= tempCount;
+        count -= tempCount;
+
+        /* If all the data are written to data register, notify user with the callback, then TX finished. */
+        if (0U == handle->txDataSize)
+        {
+            /* Disable and re-enable the global interrupt to protect the interrupt enable register during
+             * read-modify-wrte. */
+            irqMask = DisableGlobalIRQ();
+            /* Disable TX register empty interrupt and enable transmission completion interrupt. */
+            base->CTRL = (base->CTRL & ~LPUART_CTRL_TIE_MASK) | LPUART_CTRL_TCIE_MASK;
+            EnableGlobalIRQ(irqMask);
+        }
+    }
+}
+
+static void LPUART_TransferHandleTransmissionComplete(LPUART_Type *base, lpuart_handle_t *handle)
+{
+    uint32_t irqMask;
+    /* Set txState to idle only when all data has been sent out to bus. */
+    handle->txState = (uint8_t)kLPUART_TxIdle;
+
+    /* Disable and re-enable the global interrupt to protect the interrupt enable register during read-modify-wrte.
+     */
+    irqMask = DisableGlobalIRQ();
+    /* Disable transmission complete interrupt. */
+    base->CTRL &= ~(uint32_t)LPUART_CTRL_TCIE_MASK;
+    EnableGlobalIRQ(irqMask);
+
+    /* Trigger callback. */
+    if (NULL != handle->callback)
+    {
+        handle->callback(base, handle, kStatus_LPUART_TxIdle, handle->userData);
+    }
+}
+
 /*!
  * brief LPUART IRQ handle function.
  *
@@ -1557,13 +2226,9 @@ void LPUART_TransferHandleIRQ(LPUART_Type *base, void *irqHandle)
 {
     assert(NULL != irqHandle);
 
-    uint8_t count;
-    uint8_t tempCount;
     uint32_t status            = LPUART_GetStatusFlags(base);
     uint32_t enabledInterrupts = LPUART_GetEnabledInterrupts(base);
-    uint16_t tpmRxRingBufferHead;
-    uint32_t tpmData;
-    uint32_t irqMask;
+
     lpuart_handle_t *handle = (lpuart_handle_t *)irqHandle;
 
     /* If RX overrun. */
@@ -1583,218 +2248,27 @@ void LPUART_TransferHandleIRQ(LPUART_Type *base, void *irqHandle)
     if ((0U != ((uint32_t)kLPUART_IdleLineFlag & status)) &&
         (0U != ((uint32_t)kLPUART_IdleLineInterruptEnable & enabledInterrupts)))
     {
-#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-        count = ((uint8_t)((base->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT));
-
-        while ((0U != handle->rxDataSize) && (0U != count))
-        {
-            tempCount = (uint8_t)MIN(handle->rxDataSize, count);
-
-            /* Using non block API to read the data from the registers. */
-            LPUART_ReadNonBlocking(base, handle->rxData, tempCount);
-            handle->rxData = &handle->rxData[tempCount];
-            handle->rxDataSize -= tempCount;
-            count -= tempCount;
-
-            /* If rxDataSize is 0, invoke rx idle callback.*/
-            if (0U == (handle->rxDataSize))
-            {
-                handle->rxState = (uint8_t)kLPUART_RxIdle;
-
-                if (NULL != handle->callback)
-                {
-                    handle->callback(base, handle, kStatus_LPUART_RxIdle, handle->userData);
-                }
-            }
-        }
-#endif
-        /* Clear IDLE flag.*/
-        base->STAT = ((base->STAT & 0x3FE00000U) | LPUART_STAT_IDLE_MASK);
-
-        /* If rxDataSize is 0, disable rx ready, overrun and idle line interrupt.*/
-        if (0U == handle->rxDataSize)
-        {
-            /* Disable and re-enable the global interrupt to protect the interrupt enable register during
-             * read-modify-wrte. */
-            irqMask = DisableGlobalIRQ();
-            base->CTRL &= ~(uint32_t)(LPUART_CTRL_RIE_MASK | LPUART_CTRL_ILIE_MASK | LPUART_CTRL_ORIE_MASK);
-            EnableGlobalIRQ(irqMask);
-        }
-        /* Invoke callback if callback is not NULL and rxDataSize is not 0. */
-        else if (NULL != handle->callback)
-        {
-            handle->callback(base, handle, kStatus_LPUART_IdleLineDetected, handle->userData);
-        }
-        else
-        {
-            /* Avoid MISRA 15.7 */
-        }
+        LPUART_TransferHandleIDLEReady(base, handle);
     }
     /* Receive data register full */
     if ((0U != ((uint32_t)kLPUART_RxDataRegFullFlag & status)) &&
         (0U != ((uint32_t)kLPUART_RxDataRegFullInterruptEnable & enabledInterrupts)))
     {
-        /* Get the size that can be stored into buffer for this interrupt. */
-#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-        count = ((uint8_t)((base->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT));
-#else
-        count = 1;
-#endif
-
-        /* If handle->rxDataSize is not 0, first save data to handle->rxData. */
-        while ((0U != handle->rxDataSize) && (0U != count))
-        {
-#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-            tempCount = (uint8_t)MIN(handle->rxDataSize, count);
-#else
-            tempCount = 1;
-#endif
-
-            /* Using non block API to read the data from the registers. */
-            LPUART_ReadNonBlocking(base, handle->rxData, tempCount);
-            handle->rxData = &handle->rxData[tempCount];
-            handle->rxDataSize -= tempCount;
-            count -= tempCount;
-
-            /* If all the data required for upper layer is ready, trigger callback. */
-            if (0U == handle->rxDataSize)
-            {
-                handle->rxState = (uint8_t)kLPUART_RxIdle;
-
-                if (NULL != handle->callback)
-                {
-                    handle->callback(base, handle, kStatus_LPUART_RxIdle, handle->userData);
-                }
-            }
-        }
-
-        /* If use RX ring buffer, receive data to ring buffer. */
-        if (NULL != handle->rxRingBuffer)
-        {
-            while (0U != count--)
-            {
-                /* If RX ring buffer is full, trigger callback to notify over run. */
-                if (LPUART_TransferIsRxRingBufferFull(base, handle))
-                {
-                    if (NULL != handle->callback)
-                    {
-                        handle->callback(base, handle, kStatus_LPUART_RxRingBufferOverrun, handle->userData);
-                    }
-                }
-
-                /* If ring buffer is still full after callback function, the oldest data is overridden. */
-                if (LPUART_TransferIsRxRingBufferFull(base, handle))
-                {
-                    /* Increase handle->rxRingBufferTail to make room for new data. */
-                    if (((uint32_t)handle->rxRingBufferTail + 1U) == handle->rxRingBufferSize)
-                    {
-                        handle->rxRingBufferTail = 0U;
-                    }
-                    else
-                    {
-                        handle->rxRingBufferTail++;
-                    }
-                }
-
-                /* Read data. */
-                tpmRxRingBufferHead = handle->rxRingBufferHead;
-                tpmData             = base->DATA;
-#if defined(FSL_FEATURE_LPUART_HAS_7BIT_DATA_SUPPORT) && FSL_FEATURE_LPUART_HAS_7BIT_DATA_SUPPORT
-                if (handle->isSevenDataBits)
-                {
-                    handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)(tpmData & 0x7FU);
-                }
-                else
-                {
-                    handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)tpmData;
-                }
-#else
-                handle->rxRingBuffer[tpmRxRingBufferHead] = (uint8_t)tpmData;
-#endif
-
-                /* Increase handle->rxRingBufferHead. */
-                if (((uint32_t)handle->rxRingBufferHead + 1U) == handle->rxRingBufferSize)
-                {
-                    handle->rxRingBufferHead = 0U;
-                }
-                else
-                {
-                    handle->rxRingBufferHead++;
-                }
-            }
-        }
-        /* If no receive requst pending, stop RX interrupt. */
-        else if (0U == handle->rxDataSize)
-        {
-            /* Disable and re-enable the global interrupt to protect the interrupt enable register during
-             * read-modify-wrte. */
-            irqMask = DisableGlobalIRQ();
-            base->CTRL &= ~(uint32_t)(LPUART_CTRL_RIE_MASK | LPUART_CTRL_ORIE_MASK | LPUART_CTRL_ILIE_MASK);
-            EnableGlobalIRQ(irqMask);
-        }
-        else
-        {
-        }
+        LPUART_TransferHandleReceiveDataFull(base, handle);
     }
 
     /* Send data register empty and the interrupt is enabled. */
     if ((0U != ((uint32_t)kLPUART_TxDataRegEmptyFlag & status)) &&
         (0U != ((uint32_t)kLPUART_TxDataRegEmptyInterruptEnable & enabledInterrupts)))
     {
-/* Get the bytes that available at this moment. */
-#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-        count = (uint8_t)FSL_FEATURE_LPUART_FIFO_SIZEn(base) -
-                (uint8_t)((base->WATER & LPUART_WATER_TXCOUNT_MASK) >> LPUART_WATER_TXCOUNT_SHIFT);
-#else
-        count = 1;
-#endif
-
-        while ((0U != handle->txDataSize) && (0U != count))
-        {
-#if defined(FSL_FEATURE_LPUART_HAS_FIFO) && FSL_FEATURE_LPUART_HAS_FIFO
-            tempCount = (uint8_t)MIN(handle->txDataSize, count);
-#else
-            tempCount = 1;
-#endif
-
-            /* Using non block API to write the data to the registers. */
-            LPUART_WriteNonBlocking(base, handle->txData, tempCount);
-            handle->txData = &handle->txData[tempCount];
-            handle->txDataSize -= tempCount;
-            count -= tempCount;
-
-            /* If all the data are written to data register, notify user with the callback, then TX finished. */
-            if (0U == handle->txDataSize)
-            {
-                /* Disable and re-enable the global interrupt to protect the interrupt enable register during
-                 * read-modify-wrte. */
-                irqMask = DisableGlobalIRQ();
-                /* Disable TX register empty interrupt and enable transmission completion interrupt. */
-                base->CTRL = (base->CTRL & ~LPUART_CTRL_TIE_MASK) | LPUART_CTRL_TCIE_MASK;
-                EnableGlobalIRQ(irqMask);
-            }
-        }
+        LPUART_TransferHandleSendDataEmpty(base, handle);
     }
 
     /* Transmission complete and the interrupt is enabled. */
     if ((0U != ((uint32_t)kLPUART_TransmissionCompleteFlag & status)) &&
         (0U != ((uint32_t)kLPUART_TransmissionCompleteInterruptEnable & enabledInterrupts)))
     {
-        /* Set txState to idle only when all data has been sent out to bus. */
-        handle->txState = (uint8_t)kLPUART_TxIdle;
-
-        /* Disable and re-enable the global interrupt to protect the interrupt enable register during read-modify-wrte.
-         */
-        irqMask = DisableGlobalIRQ();
-        /* Disable transmission complete interrupt. */
-        base->CTRL &= ~(uint32_t)LPUART_CTRL_TCIE_MASK;
-        EnableGlobalIRQ(irqMask);
-
-        /* Trigger callback. */
-        if (NULL != handle->callback)
-        {
-            handle->callback(base, handle, kStatus_LPUART_TxIdle, handle->userData);
-        }
+        LPUART_TransferHandleTransmissionComplete(base, handle);
     }
 }
 
@@ -1810,6 +2284,16 @@ void LPUART_TransferHandleErrorIRQ(LPUART_Type *base, void *irqHandle)
 {
     /* To be implemented by User. */
 }
+
+void LPUART_DriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(s_lpuartBases))
+    {
+        s_lpuartIsr[instance](s_lpuartBases[instance], s_lpuartHandle[instance]);
+    }
+    SDK_ISR_EXIT_BARRIER;
+}
+
 #if defined(FSL_FEATURE_LPUART_HAS_SHARED_IRQ0_IRQ1) && FSL_FEATURE_LPUART_HAS_SHARED_IRQ0_IRQ1
 #if defined(FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ) && FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ
 void LPUART0_LPUART1_RX_DriverIRQHandler(void);
@@ -1818,11 +2302,11 @@ void LPUART0_LPUART1_RX_DriverIRQHandler(void)
     /* If handle is registered, treat the transfer function is enabled. */
     if (NULL != s_lpuartHandle[0])
     {
-        s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+        s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     }
     if (NULL != s_lpuartHandle[1])
     {
-        s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+        s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     }
     SDK_ISR_EXIT_BARRIER;
 }
@@ -1832,11 +2316,11 @@ void LPUART0_LPUART1_TX_DriverIRQHandler(void)
     /* If handle is registered, treat the transfer function is enabled. */
     if (NULL != s_lpuartHandle[0])
     {
-        s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+        s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     }
     if (NULL != s_lpuartHandle[1])
     {
-        s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+        s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     }
     SDK_ISR_EXIT_BARRIER;
 }
@@ -1847,11 +2331,11 @@ void LPUART0_LPUART1_DriverIRQHandler(void)
     /* If handle is registered, treat the transfer function is enabled. */
     if (NULL != s_lpuartHandle[0])
     {
-        s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+        s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     }
     if (NULL != s_lpuartHandle[1])
     {
-        s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+        s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     }
     SDK_ISR_EXIT_BARRIER;
 }
@@ -1864,20 +2348,20 @@ void LPUART0_LPUART1_DriverIRQHandler(void)
 void LPUART0_TX_DriverIRQHandler(void);
 void LPUART0_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+    s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART0_RX_DriverIRQHandler(void);
 void LPUART0_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+    s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART0_DriverIRQHandler(void);
 void LPUART0_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART0, s_lpuartHandle[0]);
+    s_lpuartIsr[0](LPUART0, s_lpuartHandle[0]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1890,20 +2374,20 @@ void LPUART0_DriverIRQHandler(void)
 void LPUART1_TX_DriverIRQHandler(void);
 void LPUART1_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+    s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART1_RX_DriverIRQHandler(void);
 void LPUART1_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+    s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART1_DriverIRQHandler(void);
 void LPUART1_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART1, s_lpuartHandle[1]);
+    s_lpuartIsr[1](LPUART1, s_lpuartHandle[1]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1915,20 +2399,20 @@ void LPUART1_DriverIRQHandler(void)
 void LPUART2_TX_DriverIRQHandler(void);
 void LPUART2_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART2, s_lpuartHandle[2]);
+    s_lpuartIsr[2](LPUART2, s_lpuartHandle[2]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART2_RX_DriverIRQHandler(void);
 void LPUART2_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART2, s_lpuartHandle[2]);
+    s_lpuartIsr[2](LPUART2, s_lpuartHandle[2]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART2_DriverIRQHandler(void);
 void LPUART2_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART2, s_lpuartHandle[2]);
+    s_lpuartIsr[2](LPUART2, s_lpuartHandle[2]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1939,20 +2423,20 @@ void LPUART2_DriverIRQHandler(void)
 void LPUART3_TX_DriverIRQHandler(void);
 void LPUART3_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART3, s_lpuartHandle[3]);
+    s_lpuartIsr[3](LPUART3, s_lpuartHandle[3]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART3_RX_DriverIRQHandler(void);
 void LPUART3_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART3, s_lpuartHandle[3]);
+    s_lpuartIsr[3](LPUART3, s_lpuartHandle[3]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART3_DriverIRQHandler(void);
 void LPUART3_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART3, s_lpuartHandle[3]);
+    s_lpuartIsr[3](LPUART3, s_lpuartHandle[3]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1963,20 +2447,20 @@ void LPUART3_DriverIRQHandler(void)
 void LPUART4_TX_DriverIRQHandler(void);
 void LPUART4_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART4, s_lpuartHandle[4]);
+    s_lpuartIsr[4](LPUART4, s_lpuartHandle[4]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART4_RX_DriverIRQHandler(void);
 void LPUART4_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART4, s_lpuartHandle[4]);
+    s_lpuartIsr[4](LPUART4, s_lpuartHandle[4]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART4_DriverIRQHandler(void);
 void LPUART4_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART4, s_lpuartHandle[4]);
+    s_lpuartIsr[4](LPUART4, s_lpuartHandle[4]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1987,20 +2471,20 @@ void LPUART4_DriverIRQHandler(void)
 void LPUART5_TX_DriverIRQHandler(void);
 void LPUART5_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART5, s_lpuartHandle[5]);
+    s_lpuartIsr[5](LPUART5, s_lpuartHandle[5]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART5_RX_DriverIRQHandler(void);
 void LPUART5_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART5, s_lpuartHandle[5]);
+    s_lpuartIsr[5](LPUART5, s_lpuartHandle[5]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART5_DriverIRQHandler(void);
 void LPUART5_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART5, s_lpuartHandle[5]);
+    s_lpuartIsr[5](LPUART5, s_lpuartHandle[5]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2011,20 +2495,20 @@ void LPUART5_DriverIRQHandler(void)
 void LPUART6_TX_DriverIRQHandler(void);
 void LPUART6_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART6, s_lpuartHandle[6]);
+    s_lpuartIsr[6](LPUART6, s_lpuartHandle[6]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART6_RX_DriverIRQHandler(void);
 void LPUART6_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART6, s_lpuartHandle[6]);
+    s_lpuartIsr[6](LPUART6, s_lpuartHandle[6]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART6_DriverIRQHandler(void);
 void LPUART6_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART6, s_lpuartHandle[6]);
+    s_lpuartIsr[6](LPUART6, s_lpuartHandle[6]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2035,20 +2519,20 @@ void LPUART6_DriverIRQHandler(void)
 void LPUART7_TX_DriverIRQHandler(void);
 void LPUART7_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART7, s_lpuartHandle[7]);
+    s_lpuartIsr[7](LPUART7, s_lpuartHandle[7]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART7_RX_DriverIRQHandler(void);
 void LPUART7_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART7, s_lpuartHandle[7]);
+    s_lpuartIsr[7](LPUART7, s_lpuartHandle[7]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART7_DriverIRQHandler(void);
 void LPUART7_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART7, s_lpuartHandle[7]);
+    s_lpuartIsr[7](LPUART7, s_lpuartHandle[7]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2059,20 +2543,20 @@ void LPUART7_DriverIRQHandler(void)
 void LPUART8_TX_DriverIRQHandler(void);
 void LPUART8_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART8, s_lpuartHandle[8]);
+    s_lpuartIsr[8](LPUART8, s_lpuartHandle[8]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART8_RX_DriverIRQHandler(void);
 void LPUART8_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART8, s_lpuartHandle[8]);
+    s_lpuartIsr[8](LPUART8, s_lpuartHandle[8]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART8_DriverIRQHandler(void);
 void LPUART8_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART8, s_lpuartHandle[8]);
+    s_lpuartIsr[8](LPUART8, s_lpuartHandle[8]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2083,20 +2567,20 @@ void LPUART8_DriverIRQHandler(void)
 void LPUART9_TX_DriverIRQHandler(void);
 void LPUART9_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART9, s_lpuartHandle[9]);
+    s_lpuartIsr[9](LPUART9, s_lpuartHandle[9]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART9_RX_DriverIRQHandler(void);
 void LPUART9_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART9, s_lpuartHandle[9]);
+    s_lpuartIsr[9](LPUART9, s_lpuartHandle[9]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART9_DriverIRQHandler(void);
 void LPUART9_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART9, s_lpuartHandle[9]);
+    s_lpuartIsr[9](LPUART9, s_lpuartHandle[9]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2107,20 +2591,20 @@ void LPUART9_DriverIRQHandler(void)
 void LPUART10_TX_DriverIRQHandler(void);
 void LPUART10_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART10, s_lpuartHandle[10]);
+    s_lpuartIsr[10](LPUART10, s_lpuartHandle[10]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART10_RX_DriverIRQHandler(void);
 void LPUART10_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART10, s_lpuartHandle[10]);
+    s_lpuartIsr[10](LPUART10, s_lpuartHandle[10]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART10_DriverIRQHandler(void);
 void LPUART10_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART10, s_lpuartHandle[10]);
+    s_lpuartIsr[10](LPUART10, s_lpuartHandle[10]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2131,20 +2615,44 @@ void LPUART10_DriverIRQHandler(void)
 void LPUART11_TX_DriverIRQHandler(void);
 void LPUART11_TX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART11, s_lpuartHandle[11]);
+    s_lpuartIsr[11](LPUART11, s_lpuartHandle[11]);
     SDK_ISR_EXIT_BARRIER;
 }
 void LPUART11_RX_DriverIRQHandler(void);
 void LPUART11_RX_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART11, s_lpuartHandle[11]);
+    s_lpuartIsr[11](LPUART11, s_lpuartHandle[11]);
     SDK_ISR_EXIT_BARRIER;
 }
 #else
 void LPUART11_DriverIRQHandler(void);
 void LPUART11_DriverIRQHandler(void)
 {
-    s_lpuartIsr(LPUART11, s_lpuartHandle[11]);
+    s_lpuartIsr[11](LPUART11, s_lpuartHandle[11]);
+    SDK_ISR_EXIT_BARRIER;
+}
+#endif
+#endif
+
+#if defined(LPUART12)
+#if defined(FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ) && FSL_FEATURE_LPUART_HAS_SEPARATE_RX_TX_IRQ
+void LPUART12_TX_DriverIRQHandler(void);
+void LPUART12_TX_DriverIRQHandler(void)
+{
+    s_lpuartIsr[12](LPUART12, s_lpuartHandle[12]);
+    SDK_ISR_EXIT_BARRIER;
+}
+void LPUART12_RX_DriverIRQHandler(void);
+void LPUART12_RX_DriverIRQHandler(void)
+{
+    s_lpuartIsr[12](LPUART12, s_lpuartHandle[12]);
+    SDK_ISR_EXIT_BARRIER;
+}
+#else
+void LPUART12_DriverIRQHandler(void);
+void LPUART12_DriverIRQHandler(void)
+{
+    s_lpuartIsr[12](LPUART12, s_lpuartHandle[12]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2154,7 +2662,7 @@ void LPUART11_DriverIRQHandler(void)
 void M4_0_LPUART_DriverIRQHandler(void);
 void M4_0_LPUART_DriverIRQHandler(void)
 {
-    s_lpuartIsr(CM4_0__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4_0__LPUART)]);
+    s_lpuartIsr[LPUART_GetInstance(CM4_0__LPUART)](CM4_0__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4_0__LPUART)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2163,7 +2671,7 @@ void M4_0_LPUART_DriverIRQHandler(void)
 void M4_1_LPUART_DriverIRQHandler(void);
 void M4_1_LPUART_DriverIRQHandler(void)
 {
-    s_lpuartIsr(CM4_1__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4_1__LPUART)]);
+    s_lpuartIsr[LPUART_GetInstance(CM4_1__LPUART)](CM4_1__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4_1__LPUART)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2172,7 +2680,7 @@ void M4_1_LPUART_DriverIRQHandler(void)
 void M4_LPUART_DriverIRQHandler(void);
 void M4_LPUART_DriverIRQHandler(void)
 {
-    s_lpuartIsr(CM4__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4__LPUART)]);
+    s_lpuartIsr[LPUART_GetInstance(CM4__LPUART)](CM4__LPUART, s_lpuartHandle[LPUART_GetInstance(CM4__LPUART)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2181,7 +2689,7 @@ void M4_LPUART_DriverIRQHandler(void)
 void DMA_UART0_INT_DriverIRQHandler(void);
 void DMA_UART0_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(DMA__LPUART0, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART0)]);
+    s_lpuartIsr[LPUART_GetInstance(DMA__LPUART0)](DMA__LPUART0, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART0)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2190,7 +2698,7 @@ void DMA_UART0_INT_DriverIRQHandler(void)
 void DMA_UART1_INT_DriverIRQHandler(void);
 void DMA_UART1_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(DMA__LPUART1, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART1)]);
+    s_lpuartIsr[LPUART_GetInstance(DMA__LPUART1)](DMA__LPUART1, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART1)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2199,7 +2707,7 @@ void DMA_UART1_INT_DriverIRQHandler(void)
 void DMA_UART2_INT_DriverIRQHandler(void);
 void DMA_UART2_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(DMA__LPUART2, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART2)]);
+    s_lpuartIsr[LPUART_GetInstance(DMA__LPUART2)](DMA__LPUART2, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART2)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2208,7 +2716,7 @@ void DMA_UART2_INT_DriverIRQHandler(void)
 void DMA_UART3_INT_DriverIRQHandler(void);
 void DMA_UART3_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(DMA__LPUART3, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART3)]);
+    s_lpuartIsr[LPUART_GetInstance(DMA__LPUART3)](DMA__LPUART3, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART3)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2217,7 +2725,7 @@ void DMA_UART3_INT_DriverIRQHandler(void)
 void DMA_UART4_INT_DriverIRQHandler(void);
 void DMA_UART4_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(DMA__LPUART4, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART4)]);
+    s_lpuartIsr[LPUART_GetInstance(DMA__LPUART4)](DMA__LPUART4, s_lpuartHandle[LPUART_GetInstance(DMA__LPUART4)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2226,7 +2734,7 @@ void DMA_UART4_INT_DriverIRQHandler(void)
 void ADMA_UART0_INT_DriverIRQHandler(void);
 void ADMA_UART0_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(ADMA__LPUART0, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART0)]);
+    s_lpuartIsr[LPUART_GetInstance(ADMA__LPUART0)](ADMA__LPUART0, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART0)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2235,7 +2743,7 @@ void ADMA_UART0_INT_DriverIRQHandler(void)
 void ADMA_UART1_INT_DriverIRQHandler(void);
 void ADMA_UART1_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(ADMA__LPUART1, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART1)]);
+    s_lpuartIsr[LPUART_GetInstance(ADMA__LPUART1)](ADMA__LPUART1, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART1)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2244,7 +2752,7 @@ void ADMA_UART1_INT_DriverIRQHandler(void)
 void ADMA_UART2_INT_DriverIRQHandler(void);
 void ADMA_UART2_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(ADMA__LPUART2, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART2)]);
+    s_lpuartIsr[LPUART_GetInstance(ADMA__LPUART2)](ADMA__LPUART2, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART2)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -2253,7 +2761,7 @@ void ADMA_UART2_INT_DriverIRQHandler(void)
 void ADMA_UART3_INT_DriverIRQHandler(void);
 void ADMA_UART3_INT_DriverIRQHandler(void)
 {
-    s_lpuartIsr(ADMA__LPUART3, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART3)]);
+    s_lpuartIsr[LPUART_GetInstance(ADMA__LPUART3)](ADMA__LPUART3, s_lpuartHandle[LPUART_GetInstance(ADMA__LPUART3)]);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
